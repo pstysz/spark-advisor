@@ -1,0 +1,98 @@
+"""Console output formatting using Rich.
+
+Rich provides beautiful terminal output — tables, colors, panels,
+progress bars. This is what makes the CLI tool look professional.
+"""
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+from spark_advisor.models import AdvisorReport, JobAnalysis, RuleResult, Severity
+
+console = Console()
+
+SEVERITY_ICONS = {
+    Severity.CRITICAL: "[bold red]🔴 CRITICAL[/]",
+    Severity.WARNING: "[bold yellow]🟡 WARNING[/]",
+    Severity.INFO: "[bold blue]🔵 INFO[/]",
+}
+
+
+def print_job_overview(job: JobAnalysis) -> None:
+    duration_min = job.duration_ms / 60_000
+    stage_count = len(job.stages)
+    total_tasks = sum(s.tasks.task_count for s in job.stages)
+
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="bold")
+    table.add_column()
+    table.add_row("App ID", job.app_id)
+    if job.app_name:
+        table.add_row("App Name", job.app_name)
+    table.add_row("Duration", f"{duration_min:.1f} min ({job.duration_ms / 1000:.0f}s)")
+    table.add_row("Stages", str(stage_count))
+    table.add_row("Total Tasks", str(total_tasks))
+    if job.config.shuffle_partitions:
+        table.add_row("Shuffle Partitions", str(job.config.shuffle_partitions))
+    if job.executors:
+        table.add_row("Executors", str(job.executors.executor_count))
+
+    console.print(Panel(table, title="[bold]Spark Job Analysis[/]", border_style="blue"))
+
+
+def print_rule_results(results: list[RuleResult]) -> None:
+    if not results:
+        console.print("\n[green]✅ No issues detected by rules engine[/]\n")
+        return
+
+    console.print("\n[bold]Issues Found[/]\n")
+
+    for result in results:
+        icon = SEVERITY_ICONS.get(result.severity, "")
+        console.print(f"  {icon}: {result.title}")
+        console.print(f"    {result.message}", style="dim")
+        if result.recommended_value:
+            console.print(f"    → {result.recommended_value}", style="green")
+        console.print()
+
+
+def print_ai_report(report: AdvisorReport) -> None:
+    if not report.recommendations:
+        return
+
+    console.print(Panel(report.summary, title="[bold]🤖 AI Analysis[/]", border_style="magenta"))
+
+    if report.causal_chain:
+        console.print(f"\n[bold]Causal Chain:[/] {report.causal_chain}\n")
+
+    table = Table(title="Recommendations", show_lines=True)
+    table.add_column("#", style="bold", width=3)
+    table.add_column("Recommendation", min_width=30)
+    table.add_column("Change", min_width=25)
+    table.add_column("Impact", min_width=20)
+
+    for rec in report.recommendations:
+        change = ""
+        if rec.parameter and rec.current_value and rec.recommended_value:
+            change = (
+                f"[red]{rec.parameter}\n{rec.current_value}[/]"
+                f" → [green]{rec.recommended_value}[/]"
+            )
+        elif rec.recommended_value:
+            change = f"[green]{rec.recommended_value}[/]"
+
+        table.add_row(
+            str(rec.priority),
+            f"[bold]{rec.title}[/]\n{rec.explanation}",
+            change,
+            rec.estimated_impact,
+        )
+
+    console.print(table)
+
+    if report.suggested_config:
+        console.print("\n[bold]Suggested spark-defaults.conf:[/]\n")
+        for key, value in report.suggested_config.items():
+            console.print(f"  {key} = [green]{value}[/]")
+        console.print()
