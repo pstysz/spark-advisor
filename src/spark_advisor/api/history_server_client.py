@@ -2,28 +2,14 @@ from typing import Any
 
 import httpx
 
-from spark_advisor.core import (
-    ExecutorMetrics,
-    JobAnalysis,
-    SparkConfig,
-    StageMetrics,
-    TaskMetrics,
-)
-
-
-def history_server_client(base_url: str, timeout: float = 30.0) -> "HistoryServerClient":
-    return HistoryServerClient(base_url, timeout)
+from spark_advisor.model import SparkConfig
+from spark_advisor.model.metrics import ExecutorMetrics, JobAnalysis, StageMetrics, TaskMetrics
 
 
 class HistoryServerClient:
-    """Fetches job data from Spark History Server REST API.
-
-    This is the preferred source — no need to manually copy event logs.
-    History Server aggregates data for you.
-
-    Usage:
-        with history_server_client("http://yarn-master:18080") as client:
-            job = client.fetch("application_1234567890_0001")
+    """Usage:
+    with HistoryServerClient("http://yarn-master:18080") as client:
+        job = client.fetch("application_1234567890_0001")
     """
 
     def __init__(self, base_url: str, timeout: float = 30.0) -> None:
@@ -170,6 +156,8 @@ class HistoryServerClient:
                 e.get("peakMemoryMetrics", {}).get("JVMHeapMemory", 0) for e in non_driver
             ),
             allocated_memory_bytes=sum(e.get("maxMemory", 0) for e in non_driver),
+            # History Server REST API does not expose per-executor CPU time separately.
+            # Using totalDuration (wall-clock) for both — cpu_utilization_percent will be ~100%.
             total_cpu_time_ms=sum(e.get("totalDuration", 0) for e in non_driver),
             total_run_time_ms=sum(e.get("totalDuration", 0) for e in non_driver),
         )
@@ -180,7 +168,6 @@ class HistoryServerClient:
 
 
 def _percentile_value(summary: dict[str, Any], metric: str, quantile: float) -> int:
-    """Extract a percentile value from History Server task summary response."""
     values = summary.get(metric, [])
     if not values:
         return 0

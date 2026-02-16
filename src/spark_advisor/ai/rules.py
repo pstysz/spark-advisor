@@ -1,25 +1,14 @@
-"""Deterministic rules engine for Spark job analysis.
-
-Each rule encodes expert knowledge about Spark performance problems.
-Rules are fast, free (no API calls), and always correct.
-The AI layer builds on top of these results.
-"""
-
 from abc import ABC, abstractmethod
 
-from spark_advisor.analysis.config import RuleThresholds
-from spark_advisor.core import JobAnalysis, RuleResult, Severity
-
-# ──────────────────────────────────────────────
-# Base rule
-# ──────────────────────────────────────────────
+from spark_advisor.ai.config import Thresholds
+from spark_advisor.model import RuleResult
+from spark_advisor.model.metrics import JobAnalysis
+from spark_advisor.model.results import Severity
 
 
 class Rule(ABC):
-    """Base class for all analysis rules — equivalent of Kotlin abstract class."""
-
-    def __init__(self, thresholds: RuleThresholds | None = None) -> None:
-        self._t = thresholds or RuleThresholds()
+    def __init__(self, thresholds: Thresholds | None = None) -> None:
+        self._t = thresholds or Thresholds()
 
     @property
     @abstractmethod
@@ -29,14 +18,7 @@ class Rule(ABC):
     def evaluate(self, job: JobAnalysis) -> list[RuleResult]: ...
 
 
-# ──────────────────────────────────────────────
-# Concrete rules
-# ──────────────────────────────────────────────
-
-
 class DataSkewRule(Rule):
-    """Detects data skew — when some tasks process much more data than others."""
-
     @property
     def rule_id(self) -> str:
         return "data_skew"
@@ -83,8 +65,6 @@ class DataSkewRule(Rule):
 
 
 class SpillToDiskRule(Rule):
-    """Detects disk spill — data that doesn't fit in memory during shuffle/aggregation."""
-
     @property
     def rule_id(self) -> str:
         return "spill_to_disk"
@@ -124,8 +104,6 @@ class SpillToDiskRule(Rule):
 
 
 class GCPressureRule(Rule):
-    """Detects excessive garbage collection time."""
-
     @property
     def rule_id(self) -> str:
         return "gc_pressure"
@@ -160,8 +138,6 @@ class GCPressureRule(Rule):
 
 
 class ShufflePartitionsRule(Rule):
-    """Checks if shuffle partition count is appropriate for the data volume."""
-
     @property
     def rule_id(self) -> str:
         return "shuffle_partitions"
@@ -204,8 +180,6 @@ class ShufflePartitionsRule(Rule):
 
 
 class ExecutorIdleRule(Rule):
-    """Detects over-provisioned executors based on CPU utilization."""
-
     @property
     def rule_id(self) -> str:
         return "executor_idle"
@@ -234,8 +208,6 @@ class ExecutorIdleRule(Rule):
 
 
 class TaskFailureRule(Rule):
-    """Detects stages with failed tasks."""
-
     @property
     def rule_id(self) -> str:
         return "task_failures"
@@ -252,9 +224,7 @@ class TaskFailureRule(Rule):
                     rule_id=self.rule_id,
                     severity=Severity.WARNING,
                     title=f"Task failures in Stage {stage.stage_id}",
-                    message=(
-                        f"{failed} of {stage.tasks.task_count} tasks failed"
-                    ),
+                    message=(f"{failed} of {stage.tasks.task_count} tasks failed"),
                     stage_id=stage.stage_id,
                     current_value=f"{failed} failed tasks",
                     recommended_value="Check executor logs for OOM or fetch failures",
@@ -264,11 +234,7 @@ class TaskFailureRule(Rule):
         return results
 
 
-# ──────────────────────────────────────────────
-# Engine
-# ──────────────────────────────────────────────
-
-_DEFAULT_THRESHOLDS = RuleThresholds()
+_DEFAULT_THRESHOLDS = Thresholds()
 
 DEFAULT_RULES: list[Rule] = [
     DataSkewRule(_DEFAULT_THRESHOLDS),
@@ -281,7 +247,6 @@ DEFAULT_RULES: list[Rule] = [
 
 
 def apply_static_rules(job: JobAnalysis, rules: list[Rule] | None = None) -> list[RuleResult]:
-    """Execute all rules against a job and return combined results, sorted by severity."""
     active_rules = rules or DEFAULT_RULES
 
     all_results: list[RuleResult] = []

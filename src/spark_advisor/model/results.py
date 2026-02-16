@@ -1,6 +1,14 @@
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict, Field
 
-from spark_advisor.core.models import JobAnalysis, Severity
+from spark_advisor.model.metrics import JobAnalysis
+
+
+class Severity(StrEnum):
+    CRITICAL = "critical"
+    WARNING = "warning"
+    INFO = "info"
 
 
 class RuleResult(BaseModel):
