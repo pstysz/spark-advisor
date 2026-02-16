@@ -1,10 +1,4 @@
-"""Tests for the rules engine.
-
-Uses pytest — Python's standard test framework.
-Tests are discovered by filename (test_*.py) and function name (test_*).
-"""
-
-from spark_advisor.analysis.rules import (
+from spark_advisor.ai.rules import (
     DataSkewRule,
     GCPressureRule,
     ShufflePartitionsRule,
@@ -12,82 +6,35 @@ from spark_advisor.analysis.rules import (
     TaskFailureRule,
     apply_static_rules,
 )
-from spark_advisor.core import (
-    ExecutorMetrics,
-    JobAnalysis,
-    Severity,
-    SparkConfig,
-    StageMetrics,
-    TaskMetrics,
-)
-
-
-def _make_job(
-    stages: list[StageMetrics] | None = None,
-    config: dict[str, str] | None = None,
-    executors: ExecutorMetrics | None = None,
-) -> JobAnalysis:
-    """Helper to create a JobAnalysis with sensible defaults."""
-    return JobAnalysis(
-        app_id="test-app-001",
-        app_name="Test Application",
-        duration_ms=600_000,
-        config=SparkConfig(raw=config or {"spark.sql.shuffle.partitions": "200"}),
-        stages=stages or [],
-        executors=executors,
-    )
-
-
-def _make_stage(
-    stage_id: int = 0,
-    median_ms: int = 100,
-    max_ms: int = 100,
-    gc_time_ms: int = 0,
-    task_count: int = 200,
-    shuffle_read: int = 0,
-    spill_disk: int = 0,
-) -> StageMetrics:
-    return StageMetrics(
-        stage_id=stage_id,
-        stage_name=f"Stage {stage_id}",
-        duration_ms=median_ms * task_count,
-        tasks=TaskMetrics(
-            task_count=task_count,
-            median_duration_ms=median_ms,
-            max_duration_ms=max_ms,
-            min_duration_ms=median_ms // 2,
-            total_gc_time_ms=gc_time_ms,
-            total_shuffle_read_bytes=shuffle_read,
-            spill_to_disk_bytes=spill_disk,
-        ),
-    )
+from spark_advisor.model import Severity
+from tests.conftest import make_job, make_stage
 
 
 class TestDataSkewRule:
     def test_no_skew(self):
-        stage = _make_stage(median_ms=100, max_ms=200)
-        job = _make_job(stages=[stage])
+        stage = make_stage(median_duration_ms=100, max_duration_ms=200)
+        job = make_job(stages=[stage])
         results = DataSkewRule().evaluate(job)
         assert results == []
 
     def test_detects_moderate_skew(self):
-        stage = _make_stage(median_ms=100, max_ms=800)
-        job = _make_job(stages=[stage])
+        stage = make_stage(median_duration_ms=100, max_duration_ms=800)
+        job = make_job(stages=[stage])
         results = DataSkewRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
 
     def test_detects_critical_skew(self):
-        stage = _make_stage(stage_id=4, median_ms=12, max_ms=340)
-        job = _make_job(stages=[stage])
+        stage = make_stage(stage_id=4, median_duration_ms=12, max_duration_ms=340)
+        job = make_job(stages=[stage])
         results = DataSkewRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.CRITICAL
         assert "Stage 4" in results[0].title
 
     def test_suggests_aqe_when_disabled(self):
-        stage = _make_stage(median_ms=10, max_ms=100)
-        job = _make_job(
+        stage = make_stage(median_duration_ms=10, max_duration_ms=100)
+        job = make_job(
             stages=[stage],
             config={"spark.sql.adaptive.enabled": "false"},
         )
@@ -98,13 +45,13 @@ class TestDataSkewRule:
 
 class TestSpillToDiskRule:
     def test_no_spill(self):
-        stage = _make_stage(spill_disk=0)
-        job = _make_job(stages=[stage])
+        stage = make_stage(spill_to_disk_bytes=0)
+        job = make_job(stages=[stage])
         assert SpillToDiskRule().evaluate(job) == []
 
     def test_detects_spill(self):
-        stage = _make_stage(spill_disk=2 * 1024**3)
-        job = _make_job(stages=[stage])
+        stage = make_stage(spill_to_disk_bytes=2 * 1024**3)
+        job = make_job(stages=[stage])
         results = SpillToDiskRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.CRITICAL
@@ -112,13 +59,13 @@ class TestSpillToDiskRule:
 
 class TestGCPressureRule:
     def test_no_gc_pressure(self):
-        stage = _make_stage(task_count=100, median_ms=1000, gc_time_ms=5000)
-        job = _make_job(stages=[stage])
+        stage = make_stage(task_count=100, median_duration_ms=1000, total_gc_time_ms=5000)
+        job = make_job(stages=[stage])
         assert GCPressureRule().evaluate(job) == []
 
     def test_detects_high_gc(self):
-        stage = _make_stage(task_count=100, median_ms=1000, gc_time_ms=50_000)
-        job = _make_job(stages=[stage])
+        stage = make_stage(task_count=100, median_duration_ms=1000, total_gc_time_ms=50_000)
+        job = make_job(stages=[stage])
         results = GCPressureRule().evaluate(job)
         assert len(results) == 1
         assert "GC" in results[0].title
@@ -126,13 +73,19 @@ class TestGCPressureRule:
 
 class TestShufflePartitionsRule:
     def test_optimal_partitions(self):
-        stage = _make_stage(shuffle_read=200 * 128 * 1024 * 1024)
-        job = _make_job(stages=[stage], config={"spark.sql.shuffle.partitions": "200"})
+        stage = make_stage(total_shuffle_read_bytes=200 * 128 * 1024 * 1024)
+        job = make_job(
+            stages=[stage],
+            config={"spark.sql.shuffle.partitions": "200"},
+        )
         assert ShufflePartitionsRule().evaluate(job) == []
 
     def test_too_few_partitions(self):
-        stage = _make_stage(shuffle_read=800 * 128 * 1024 * 1024)
-        job = _make_job(stages=[stage], config={"spark.sql.shuffle.partitions": "200"})
+        stage = make_stage(total_shuffle_read_bytes=800 * 128 * 1024 * 1024)
+        job = make_job(
+            stages=[stage],
+            config={"spark.sql.shuffle.partitions": "200"},
+        )
         results = ShufflePartitionsRule().evaluate(job)
         assert len(results) == 1
         assert "800" in results[0].recommended_value
@@ -140,22 +93,22 @@ class TestShufflePartitionsRule:
 
 class TestSpillToDiskSeverityLevels:
     def test_small_spill_is_info(self):
-        stage = _make_stage(spill_disk=50 * 1024**2)
-        job = _make_job(stages=[stage])
+        stage = make_stage(spill_to_disk_bytes=50 * 1024**2)
+        job = make_job(stages=[stage])
         results = SpillToDiskRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.INFO
 
     def test_medium_spill_is_warning(self):
-        stage = _make_stage(spill_disk=500 * 1024**2)
-        job = _make_job(stages=[stage])
+        stage = make_stage(spill_to_disk_bytes=500 * 1024**2)
+        job = make_job(stages=[stage])
         results = SpillToDiskRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
 
     def test_large_spill_is_critical(self):
-        stage = _make_stage(spill_disk=2 * 1024**3)
-        job = _make_job(stages=[stage])
+        stage = make_stage(spill_to_disk_bytes=2 * 1024**3)
+        job = make_job(stages=[stage])
         results = SpillToDiskRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.CRITICAL
@@ -163,31 +116,13 @@ class TestSpillToDiskSeverityLevels:
 
 class TestTaskFailureRule:
     def test_no_failures(self):
-        stage = _make_stage()
-        job = _make_job(stages=[stage])
+        stage = make_stage()
+        job = make_job(stages=[stage])
         assert TaskFailureRule().evaluate(job) == []
 
     def test_detects_failures(self):
-        stage = _make_stage()
-        job = _make_job(stages=[stage])
-        # _make_stage doesn't support failed tasks param, build manually
-        from spark_advisor.core import StageMetrics, TaskMetrics
-
-        tasks = TaskMetrics(
-            task_count=100,
-            median_duration_ms=100,
-            max_duration_ms=100,
-            min_duration_ms=100,
-            total_gc_time_ms=0,
-            failed_task_count=3,
-        )
-        stage_with_failures = StageMetrics(
-            stage_id=0,
-            stage_name="Stage 0",
-            duration_ms=10_000,
-            tasks=tasks,
-        )
-        job = _make_job(stages=[stage_with_failures])
+        stage = make_stage(failed_task_count=3)
+        job = make_job(stages=[stage])
         results = TaskFailureRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
@@ -197,15 +132,26 @@ class TestTaskFailureRule:
 class TestRunRules:
     def test_returns_sorted_by_severity(self):
         stages = [
-            _make_stage(stage_id=0, median_ms=100, max_ms=200, gc_time_ms=50_000, task_count=100),
-            _make_stage(stage_id=1, median_ms=10, max_ms=500, spill_disk=5 * 1024**3),
+            make_stage(
+                stage_id=0,
+                median_duration_ms=100,
+                max_duration_ms=200,
+                total_gc_time_ms=50_000,
+                task_count=100,
+            ),
+            make_stage(
+                stage_id=1,
+                median_duration_ms=10,
+                max_duration_ms=500,
+                spill_to_disk_bytes=5 * 1024**3,
+            ),
         ]
-        job = _make_job(stages=stages)
+        job = make_job(stages=stages)
         results = apply_static_rules(job)
         severities = [r.severity for r in results]
         assert severities[0] == Severity.CRITICAL
 
     def test_empty_job(self):
-        job = _make_job(stages=[])
+        job = make_job(stages=[])
         results = apply_static_rules(job)
         assert results == []

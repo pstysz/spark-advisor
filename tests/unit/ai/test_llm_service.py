@@ -1,51 +1,11 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from anthropic.types import Message, ToolUseBlock, Usage
 
 from spark_advisor.ai.llm_service import LlmService
-from spark_advisor.core import (
-    JobAnalysis,
-    RuleResult,
-    Severity,
-    SparkConfig,
-    StageMetrics,
-    TaskMetrics,
-)
-
-
-def _make_job() -> JobAnalysis:
-    return JobAnalysis(
-        app_id="app-test-001",
-        app_name="TestJob",
-        duration_ms=300_000,
-        config=SparkConfig(raw={"spark.executor.memory": "4g"}),
-        stages=[
-            StageMetrics(
-                stage_id=0,
-                stage_name="Stage 0",
-                duration_ms=100_000,
-                tasks=TaskMetrics(
-                    task_count=100,
-                    median_duration_ms=1000,
-                    max_duration_ms=5000,
-                    min_duration_ms=500,
-                    total_gc_time_ms=5000,
-                ),
-            )
-        ],
-    )
-
-
-def _make_rule_results() -> list[RuleResult]:
-    return [
-        RuleResult(
-            rule_id="data_skew",
-            severity=Severity.WARNING,
-            title="Data skew in Stage 0",
-            message="Max task duration is 5.0x the median",
-        )
-    ]
+from spark_advisor.model import Severity
+from tests.conftest import make_job, make_rule_result
 
 
 def _fake_tool_response(tool_input: dict) -> Message:
@@ -67,22 +27,15 @@ def _fake_tool_response(tool_input: dict) -> Message:
     )
 
 
+def _make_service(tool_input: dict) -> LlmService:
+    mock_client = MagicMock()
+    mock_client.create_message.return_value = _fake_tool_response(tool_input)
+    return LlmService(mock_client)
+
+
 class TestLlmService:
-    def test_requires_api_key(self) -> None:
-        with patch.dict("os.environ", {}, clear=True), pytest.raises(
-            ValueError, match="ANTHROPIC_API_KEY"
-        ):
-            LlmService()
-
-    def test_must_be_used_in_with_block(self) -> None:
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
-            service = LlmService()
-            with pytest.raises(RuntimeError, match="within 'with' block"):
-                service._get_client()
-
-    @patch("spark_advisor.ai.llm_service.anthropic.Anthropic")
-    def test_analyze_returns_advisor_report(self, mock_anthropic_cls: MagicMock) -> None:
-        tool_input = {
+    def test_analyze_returns_advisor_report(self) -> None:
+        service = _make_service({
             "summary": "Data skew detected in Stage 0.",
             "severity": "warning",
             "recommendations": [
@@ -98,13 +51,9 @@ class TestLlmService:
                 }
             ],
             "causal_chain": "Skew in Stage 0 causes uneven task distribution.",
-        }
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = _fake_tool_response(tool_input)
-        mock_anthropic_cls.return_value = mock_client
+        })
 
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}), LlmService() as service:
-                report = service.analyze(_make_job(), _make_rule_results())
+        report = service.analyze(make_job(), [make_rule_result()])
 
         assert report.app_id == "app-test-001"
         assert report.severity == Severity.WARNING
@@ -113,9 +62,8 @@ class TestLlmService:
         assert report.recommendations[0].title == "Enable AQE skew join"
         assert report.causal_chain == "Skew in Stage 0 causes uneven task distribution."
 
-    @patch("spark_advisor.ai.llm_service.anthropic.Anthropic")
-    def test_suggested_config_extracted(self, mock_anthropic_cls: MagicMock) -> None:
-        tool_input = {
+    def test_suggested_config_extracted(self) -> None:
+        service = _make_service({
             "summary": "Multiple issues found.",
             "severity": "critical",
             "recommendations": [
@@ -141,31 +89,22 @@ class TestLlmService:
                 },
             ],
             "causal_chain": "",
-        }
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = _fake_tool_response(tool_input)
-        mock_anthropic_cls.return_value = mock_client
+        })
 
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}), LlmService() as service:
-                report = service.analyze(_make_job(), _make_rule_results())
+        report = service.analyze(make_job(), [make_rule_result()])
 
         assert report.suggested_config == {"spark.sql.shuffle.partitions": "800"}
         assert len(report.recommendations) == 2
 
-    @patch("spark_advisor.ai.llm_service.anthropic.Anthropic")
-    def test_empty_recommendations(self, mock_anthropic_cls: MagicMock) -> None:
-        tool_input = {
+    def test_empty_recommendations(self) -> None:
+        service = _make_service({
             "summary": "Job looks healthy.",
             "severity": "info",
             "recommendations": [],
             "causal_chain": "",
-        }
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = _fake_tool_response(tool_input)
-        mock_anthropic_cls.return_value = mock_client
+        })
 
-        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}), LlmService() as service:
-                report = service.analyze(_make_job(), [])
+        report = service.analyze(make_job(), [])
 
         assert report.severity == Severity.INFO
         assert report.recommendations == []

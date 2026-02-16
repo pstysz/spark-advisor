@@ -5,7 +5,7 @@ DEFAULT_MAX_TOKENS = 4096
 
 
 @dataclass(frozen=True)
-class RuleThresholds:
+class Thresholds:
     skew_warning_ratio: float = 5.0
     skew_critical_ratio: float = 10.0
 

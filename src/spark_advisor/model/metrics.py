@@ -1,12 +1,6 @@
-from enum import StrEnum
+from pydantic import BaseModel, ConfigDict
 
-from pydantic import BaseModel, ConfigDict, Field
-
-
-class Severity(StrEnum):
-    CRITICAL = "critical"
-    WARNING = "warning"
-    INFO = "info"
+from spark_advisor.model.spark_config import SparkConfig
 
 
 class TaskMetrics(BaseModel):
@@ -22,7 +16,6 @@ class TaskMetrics(BaseModel):
     spill_to_disk_bytes: int = 0
     spill_to_memory_bytes: int = 0
     failed_task_count: int = 0
-    speculative_task_count: int = 0
 
     @property
     def skew_ratio(self) -> float:
@@ -71,35 +64,6 @@ class ExecutorMetrics(BaseModel):
         return (self.total_cpu_time_ms / self.total_run_time_ms) * 100
 
 
-class SparkConfig(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    raw: dict[str, str] = Field(default_factory=dict)
-
-    def get(self, key: str, default: str = "") -> str:
-        return self.raw.get(key, default)
-
-    @property
-    def executor_memory(self) -> str:
-        return self.get("spark.executor.memory", "1g")
-
-    @property
-    def executor_cores(self) -> int:
-        return int(self.get("spark.executor.cores", "1"))
-
-    @property
-    def shuffle_partitions(self) -> int:
-        return int(self.get("spark.sql.shuffle.partitions", "200"))
-
-    @property
-    def dynamic_allocation_enabled(self) -> bool:
-        return self.get("spark.dynamicAllocation.enabled", "false").lower() == "true"
-
-    @property
-    def aqe_enabled(self) -> bool:
-        return self.get("spark.sql.adaptive.enabled", "false").lower() == "true"
-
-
 class JobAnalysis(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -110,4 +74,3 @@ class JobAnalysis(BaseModel):
     config: SparkConfig
     stages: list[StageMetrics]
     executors: ExecutorMetrics | None = None
-    environment: str = ""

@@ -4,13 +4,18 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from spark_advisor.analysis.config import DEFAULT_MODEL
-from spark_advisor.output.console import (
+from spark_advisor import SparkAdvisor
+from spark_advisor.ai.llm_service import LlmService
+from spark_advisor.api.anthropic_client import AnthropicClient
+from spark_advisor.api.history_server_client import HistoryServerClient
+from spark_advisor.config import DEFAULT_MODEL
+from spark_advisor.model.metrics import JobAnalysis
+from spark_advisor.util.console import (
     print_analysis_result,
     print_job_overview,
     print_scan_results,
 )
-from spark_advisor.services.job_service import JobService
+from spark_advisor.util.event_parser import parse_event_log
 
 app = typer.Typer(
     name="spark-advisor",
@@ -18,6 +23,16 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def _load_job(source: str, history_server: str | None) -> JobAnalysis:
+    if history_server:
+        with HistoryServerClient(history_server) as client:
+            return client.fetch(source)
+    path = Path(source)
+    if not path.exists():
+        raise FileNotFoundError(f"Event log file not found: {source}")
+    return parse_event_log(path)
 
 
 @app.command()
@@ -47,11 +62,9 @@ def analyze(
     ] = None,
 ) -> None:
     """Analyze a Spark job and get optimization recommendations."""
-    job_service = JobService(history_server)
-
     with console.status("[bold blue]Loading job data...[/]"):
         try:
-            job = job_service.load_job(source)
+            job = _load_job(source, history_server)
         except FileNotFoundError as e:
             console.print(f"[red]Error: {e}[/]")
             raise typer.Exit(code=1) from e
@@ -59,7 +72,12 @@ def analyze(
     print_job_overview(job)
 
     with console.status("[bold blue]Running analysis...[/]"):
-        result = job_service.analyze(job, ai_enabled, model)
+        if ai_enabled:
+            with AnthropicClient() as api_client:
+                advisor = SparkAdvisor(LlmService(api_client))
+                result = advisor.run(job, ai_enabled=True, model=model)
+        else:
+            result = SparkAdvisor().run(job)
 
     print_analysis_result(result, use_ai=ai_enabled, output_config=output_config)
 
@@ -76,7 +94,8 @@ def scan(
     ] = 10,
 ) -> None:
     """Scan recent Spark applications and flag potential issues."""
-    apps = JobService(history_server).list_applications(limit=limit)
+    with HistoryServerClient(history_server) as client:
+        apps = client.list_applications(limit=limit)
     print_scan_results(apps, limit=limit)
 
 
