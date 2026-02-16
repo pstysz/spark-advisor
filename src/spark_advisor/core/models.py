@@ -1,27 +1,16 @@
-"""Domain models for Spark job analysis.
-
-Pydantic models serve the same role as Kotlin data classes:
-- Immutable by default (frozen=True)
-- Built-in validation
-- JSON serialization/deserialization
-- IDE autocompletion and type checking
-"""
-
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Severity(StrEnum):
-    """Rule result severity — equivalent of Kotlin enum class."""
-
     CRITICAL = "critical"
     WARNING = "warning"
     INFO = "info"
 
 
-class TaskMetrics(BaseModel, frozen=True):
-    """Aggregated metrics for all tasks within a single stage."""
+class TaskMetrics(BaseModel):
+    model_config = ConfigDict(frozen=True)
 
     task_count: int
     median_duration_ms: int
@@ -49,8 +38,8 @@ class TaskMetrics(BaseModel, frozen=True):
         return (self.total_gc_time_ms / total_time) * 100
 
 
-class StageMetrics(BaseModel, frozen=True):
-    """Metrics for a single Spark stage."""
+class StageMetrics(BaseModel):
+    model_config = ConfigDict(frozen=True)
 
     stage_id: int
     stage_name: str
@@ -60,8 +49,8 @@ class StageMetrics(BaseModel, frozen=True):
     tasks: TaskMetrics
 
 
-class ExecutorMetrics(BaseModel, frozen=True):
-    """Aggregated executor-level metrics."""
+class ExecutorMetrics(BaseModel):
+    model_config = ConfigDict(frozen=True)
 
     executor_count: int
     peak_memory_bytes: int
@@ -82,8 +71,8 @@ class ExecutorMetrics(BaseModel, frozen=True):
         return (self.total_cpu_time_ms / self.total_run_time_ms) * 100
 
 
-class SparkConfig(BaseModel, frozen=True):
-    """Spark configuration extracted from event log or History Server."""
+class SparkConfig(BaseModel):
+    model_config = ConfigDict(frozen=True)
 
     raw: dict[str, str] = Field(default_factory=dict)
 
@@ -111,11 +100,8 @@ class SparkConfig(BaseModel, frozen=True):
         return self.get("spark.sql.adaptive.enabled", "false").lower() == "true"
 
 
-class JobAnalysis(BaseModel, frozen=True):
-    """Complete analysis of a single Spark job.
-
-    Main data object passed through the pipeline.
-    """
+class JobAnalysis(BaseModel):
+    model_config = ConfigDict(frozen=True)
 
     app_id: str
     app_name: str = ""
@@ -125,41 +111,3 @@ class JobAnalysis(BaseModel, frozen=True):
     stages: list[StageMetrics]
     executors: ExecutorMetrics | None = None
     environment: str = ""
-
-
-class RuleResult(BaseModel, frozen=True):
-    """Output from a single rule evaluation."""
-
-    rule_id: str
-    severity: Severity
-    title: str
-    message: str
-    stage_id: int | None = None
-    current_value: str = ""
-    recommended_value: str = ""
-    estimated_impact: str = ""
-
-
-class Recommendation(BaseModel, frozen=True):
-    """AI-generated recommendation."""
-
-    priority: int
-    title: str
-    parameter: str = ""
-    current_value: str = ""
-    recommended_value: str = ""
-    explanation: str = ""
-    estimated_impact: str = ""
-    risk: str = ""
-
-
-class AdvisorReport(BaseModel, frozen=True):
-    """Final report combining rules engine results and AI analysis."""
-
-    app_id: str
-    summary: str
-    severity: Severity
-    rule_results: list[RuleResult]
-    recommendations: list[Recommendation]
-    causal_chain: str = ""
-    suggested_config: dict[str, str] = Field(default_factory=dict)

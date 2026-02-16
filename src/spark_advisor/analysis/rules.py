@@ -7,7 +7,8 @@ The AI layer builds on top of these results.
 
 from abc import ABC, abstractmethod
 
-from spark_advisor.models import JobAnalysis, RuleResult, Severity
+from spark_advisor.analysis.config import RuleThresholds
+from spark_advisor.core import JobAnalysis, RuleResult, Severity
 
 # ──────────────────────────────────────────────
 # Base rule
@@ -16,6 +17,9 @@ from spark_advisor.models import JobAnalysis, RuleResult, Severity
 
 class Rule(ABC):
     """Base class for all analysis rules — equivalent of Kotlin abstract class."""
+
+    def __init__(self, thresholds: RuleThresholds | None = None) -> None:
+        self._t = thresholds or RuleThresholds()
 
     @property
     @abstractmethod
@@ -33,8 +37,6 @@ class Rule(ABC):
 class DataSkewRule(Rule):
     """Detects data skew — when some tasks process much more data than others."""
 
-    SKEW_THRESHOLD = 5.0
-
     @property
     def rule_id(self) -> str:
         return "data_skew"
@@ -43,12 +45,13 @@ class DataSkewRule(Rule):
         results: list[RuleResult] = []
         for stage in job.stages:
             ratio = stage.tasks.skew_ratio
-            if ratio < self.SKEW_THRESHOLD:
+            if ratio < self._t.skew_warning_ratio:
                 continue
 
-            severity = Severity.CRITICAL if ratio > 10 else Severity.WARNING
+            severity = (
+                Severity.CRITICAL if ratio > self._t.skew_critical_ratio else Severity.WARNING
+            )
 
-            aqe_fix = ""
             if not job.config.aqe_enabled:
                 aqe_fix = (
                     "Enable AQE: spark.sql.adaptive.enabled=true, "
@@ -71,7 +74,7 @@ class DataSkewRule(Rule):
                     recommended_value=aqe_fix,
                     estimated_impact=(
                         f"Stage {stage.stage_id} duration could decrease"
-                        f" ~{int((1 - 1/ratio) * 100)}%"
+                        f" ~{int((1 - 1 / ratio) * 100)}%"
                     ),
                 )
             )
@@ -98,14 +101,17 @@ class SpillToDiskRule(Rule):
             results.append(
                 RuleResult(
                     rule_id=self.rule_id,
-                    severity=Severity.CRITICAL if spill_gb > 1 else Severity.WARNING,
+                    severity=(
+                        Severity.CRITICAL
+                        if spill_gb > self._t.spill_critical_gb
+                        else Severity.WARNING
+                    ),
                     title=f"Disk spill in Stage {stage.stage_id}",
                     message=f"{spill_gb:.1f} GB spilled to disk — data doesn't fit in memory",
                     stage_id=stage.stage_id,
                     current_value=f"{spill_gb:.1f} GB spill",
                     recommended_value=(
-                        "Increase spark.executor.memory"
-                        " or spark.sql.shuffle.partitions"
+                        "Increase spark.executor.memory or spark.sql.shuffle.partitions"
                     ),
                     estimated_impact="Eliminating spill can speed up stage 2-10x",
                 )
@@ -117,8 +123,6 @@ class SpillToDiskRule(Rule):
 class GCPressureRule(Rule):
     """Detects excessive garbage collection time."""
 
-    GC_THRESHOLD_PERCENT = 20.0
-
     @property
     def rule_id(self) -> str:
         return "gc_pressure"
@@ -127,21 +131,24 @@ class GCPressureRule(Rule):
         results: list[RuleResult] = []
         for stage in job.stages:
             gc_pct = stage.tasks.gc_time_percent
-            if gc_pct < self.GC_THRESHOLD_PERCENT:
+            if gc_pct < self._t.gc_warning_percent:
                 continue
 
             results.append(
                 RuleResult(
                     rule_id=self.rule_id,
-                    severity=Severity.CRITICAL if gc_pct > 40 else Severity.WARNING,
+                    severity=(
+                        Severity.CRITICAL
+                        if gc_pct > self._t.gc_critical_percent
+                        else Severity.WARNING
+                    ),
                     title=f"High GC pressure in Stage {stage.stage_id}",
                     message=f"GC time is {gc_pct:.0f}% of total task time",
                     stage_id=stage.stage_id,
                     current_value=f"{gc_pct:.0f}% GC time",
                     recommended_value="Increase executor memory or reduce data cached per task",
                     estimated_impact=(
-                        f"Reducing GC to <10% could save"
-                        f" ~{int(gc_pct - 10)}% stage time"
+                        f"Reducing GC to <10% could save ~{int(gc_pct - 10)}% stage time"
                     ),
                 )
             )
@@ -151,8 +158,6 @@ class GCPressureRule(Rule):
 
 class ShufflePartitionsRule(Rule):
     """Checks if shuffle partition count is appropriate for the data volume."""
-
-    TARGET_PARTITION_SIZE_BYTES = 128 * 1024 * 1024  # 128 MB
 
     @property
     def rule_id(self) -> str:
@@ -168,25 +173,18 @@ class ShufflePartitionsRule(Rule):
         if max_shuffle == 0:
             return []
 
-        optimal = max(1, int(max_shuffle / self.TARGET_PARTITION_SIZE_BYTES))
+        optimal = max(1, int(max_shuffle / self._t.target_partition_size_bytes))
 
         ratio = current_partitions / optimal if optimal > 0 else 1.0
-        if 0.5 <= ratio <= 2.0:
+        if self._t.partition_ratio_min <= ratio <= self._t.partition_ratio_max:
             return []
 
-        if ratio < 0.5:
-            shuffle_gb = max_shuffle / (1024**3)
-            msg = (
-                f"Too few partitions: {current_partitions}"
-                f" for {shuffle_gb:.1f} GB shuffle"
-            )
+        shuffle_gb = max_shuffle / (1024**3)
+        if ratio < self._t.partition_ratio_min:
+            msg = f"Too few partitions: {current_partitions} for {shuffle_gb:.1f} GB shuffle"
             severity = Severity.WARNING
         else:
-            shuffle_gb = max_shuffle / (1024**3)
-            msg = (
-                f"Too many partitions: {current_partitions}"
-                f" for {shuffle_gb:.1f} GB shuffle"
-            )
+            msg = f"Too many partitions: {current_partitions} for {shuffle_gb:.1f} GB shuffle"
             severity = Severity.INFO
 
         return [
@@ -205,8 +203,6 @@ class ShufflePartitionsRule(Rule):
 class ExecutorIdleRule(Rule):
     """Detects over-provisioned executors based on CPU utilization."""
 
-    IDLE_THRESHOLD_PERCENT = 60.0
-
     @property
     def rule_id(self) -> str:
         return "executor_idle"
@@ -216,7 +212,7 @@ class ExecutorIdleRule(Rule):
             return []
 
         cpu_pct = job.executors.cpu_utilization_percent
-        if cpu_pct == 0 or cpu_pct > (100 - self.IDLE_THRESHOLD_PERCENT):
+        if cpu_pct == 0 or cpu_pct > (100 - self._t.executor_idle_percent):
             return []
 
         idle_pct = 100 - cpu_pct
@@ -238,16 +234,18 @@ class ExecutorIdleRule(Rule):
 # Engine
 # ──────────────────────────────────────────────
 
+_DEFAULT_THRESHOLDS = RuleThresholds()
+
 DEFAULT_RULES: list[Rule] = [
-    DataSkewRule(),
-    SpillToDiskRule(),
-    GCPressureRule(),
-    ShufflePartitionsRule(),
-    ExecutorIdleRule(),
+    DataSkewRule(_DEFAULT_THRESHOLDS),
+    SpillToDiskRule(_DEFAULT_THRESHOLDS),
+    GCPressureRule(_DEFAULT_THRESHOLDS),
+    ShufflePartitionsRule(_DEFAULT_THRESHOLDS),
+    ExecutorIdleRule(_DEFAULT_THRESHOLDS),
 ]
 
 
-def run_rules(job: JobAnalysis, rules: list[Rule] | None = None) -> list[RuleResult]:
+def apply_static_rules(job: JobAnalysis, rules: list[Rule] | None = None) -> list[RuleResult]:
     """Execute all rules against a job and return combined results, sorted by severity."""
     active_rules = rules or DEFAULT_RULES
 

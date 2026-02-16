@@ -9,9 +9,9 @@ from spark_advisor.analysis.rules import (
     GCPressureRule,
     ShufflePartitionsRule,
     SpillToDiskRule,
-    run_rules,
+    apply_static_rules,
 )
-from spark_advisor.models import (
+from spark_advisor.core import (
     ExecutorMetrics,
     JobAnalysis,
     Severity,
@@ -144,11 +144,11 @@ class TestRunRules:
             _make_stage(stage_id=1, median_ms=10, max_ms=500, spill_disk=5 * 1024**3),
         ]
         job = _make_job(stages=stages)
-        results = run_rules(job)
+        results = apply_static_rules(job)
         severities = [r.severity for r in results]
         assert severities[0] == Severity.CRITICAL
 
     def test_empty_job(self):
         job = _make_job(stages=[])
-        results = run_rules(job)
+        results = apply_static_rules(job)
         assert results == []
