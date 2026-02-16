@@ -10,10 +10,11 @@ import gzip
 from collections import defaultdict
 from pathlib import Path
 from statistics import median
+from typing import Any
 
 import orjson
 
-from spark_advisor.models import (
+from spark_advisor.core import (
     ExecutorMetrics,
     JobAnalysis,
     SparkConfig,
@@ -30,7 +31,8 @@ class EventLogParser:
         job = parser.parse(Path("/path/to/event-log.json.gz"))
     """
 
-    def parse(self, path: Path) -> JobAnalysis:
+    @staticmethod
+    def parse(path: Path) -> JobAnalysis:
         state = _ParserState()
 
         open_fn = gzip.open if path.suffix == ".gz" else open
@@ -55,7 +57,7 @@ class _ParserState:
         self.start_time: int = 0
         self.end_time: int = 0
         self.config: dict[str, str] = {}
-        self.stage_data: dict[int, dict] = {}
+        self.stage_data: dict[int, dict[str, Any]] = {}
         self.task_durations: dict[int, list[int]] = defaultdict(list)
         self.task_gc_times: dict[int, int] = defaultdict(int)
         self.task_counts: dict[int, int] = defaultdict(int)
@@ -118,7 +120,7 @@ class _ParserState:
         )
 
 
-def _process_event(event: dict, state: _ParserState) -> None:
+def _process_event(event: dict[str, Any], state: _ParserState) -> None:
     event_type = event.get("Event", "")
 
     match event_type:

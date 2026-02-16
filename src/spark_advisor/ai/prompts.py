@@ -1,23 +1,4 @@
-"""AI-powered advisor using Claude API.
-
-This module is the LLM integration layer. It takes deterministic
-results from the rules engine and enriches them with AI analysis:
-- Human-readable explanations
-- Causal chain identification
-- Priority recommendations
-- Edge cases the rules might miss
-"""
-
-
-import anthropic
-
-from spark_advisor.models import (
-    AdvisorReport,
-    JobAnalysis,
-    Recommendation,
-    RuleResult,
-    Severity,
-)
+from spark_advisor.core import JobAnalysis, RuleResult
 
 SYSTEM_PROMPT = """\
 You are an expert Apache Spark performance engineer with 15 years of experience \
@@ -72,58 +53,9 @@ TECHNICAL CONTEXT:
 """
 
 
-class AiAdvisor:
-    """Generates AI-powered analysis using Claude API.
+def build_user_message(job: JobAnalysis, rule_results: list[RuleResult]) -> str:
+    lines: list[str] = ["Analyze this Spark job and suggest optimizations.\n", "## Configuration"]
 
-    Usage:
-        advisor = AiAdvisor(api_key="sk-ant-...")
-        report = advisor.analyze(job_analysis, rule_results)
-    """
-
-    def __init__(
-        self,
-        api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
-    ) -> None:
-        self._client = anthropic.Anthropic(api_key=api_key)
-        self._model = model
-
-    def analyze(
-        self,
-        job: JobAnalysis,
-        rule_results: list[RuleResult],
-    ) -> AdvisorReport:
-        user_message = _build_user_message(job, rule_results)
-
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
-        )
-
-        response_text = response.content[0].text
-        parsed = _parse_ai_response(response_text)
-
-        return AdvisorReport(
-            app_id=job.app_id,
-            summary=parsed.get("summary", ""),
-            severity=Severity(parsed.get("severity", "info")),
-            rule_results=rule_results,
-            recommendations=[
-                Recommendation(**rec) for rec in parsed.get("recommendations", [])
-            ],
-            causal_chain=parsed.get("causal_chain", ""),
-            suggested_config=_extract_suggested_config(parsed),
-        )
-
-
-def _build_user_message(job: JobAnalysis, rule_results: list[RuleResult]) -> str:
-    """Dynamically build the user message from job metrics and rule results."""
-    lines: list[str] = []
-    lines.append("Analyze this Spark job and suggest optimizations.\n")
-
-    lines.append("## Configuration")
     important_keys = [
         "spark.executor.memory",
         "spark.executor.cores",
@@ -163,12 +95,12 @@ def _build_user_message(job: JobAnalysis, rule_results: list[RuleResult]) -> str
         lines.append(f"- Median task duration: {stage.tasks.median_duration_ms}ms")
         lines.append(f"- Max task duration: {stage.tasks.max_duration_ms}ms")
         if stage.tasks.skew_ratio > 3:
-            lines.append(f"  ← SKEW ({stage.tasks.skew_ratio:.1f}x median)")
+            lines.append(f"  <- SKEW ({stage.tasks.skew_ratio:.1f}x median)")
         lines.append(f"- Shuffle read: {_human_bytes(stage.tasks.total_shuffle_read_bytes)}")
         lines.append(f"- Shuffle write: {_human_bytes(stage.tasks.total_shuffle_write_bytes)}")
         if stage.tasks.spill_to_disk_bytes > 0:
             spill = _human_bytes(stage.tasks.spill_to_disk_bytes)
-            lines.append(f"- Spill to disk: {spill}  ← SPILL")
+            lines.append(f"- Spill to disk: {spill}  <- SPILL")
         lines.append(f"- GC time: {stage.tasks.gc_time_percent:.0f}% of task time")
 
     if job.executors:
@@ -183,32 +115,6 @@ def _build_user_message(job: JobAnalysis, rule_results: list[RuleResult]) -> str
             lines.append(f"{i}. {rule.severity.upper()}: {rule.title} — {rule.message}")
 
     return "\n".join(lines)
-
-
-def _parse_ai_response(text: str) -> dict:
-    """Parse JSON from AI response, handling potential formatting issues."""
-    import json
-
-    cleaned = text.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    if cleaned.startswith("```"):
-        cleaned = cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-
-    return json.loads(cleaned.strip())
-
-
-def _extract_suggested_config(parsed: dict) -> dict[str, str]:
-    """Extract concrete config changes from recommendations."""
-    config: dict[str, str] = {}
-    for rec in parsed.get("recommendations", []):
-        param = rec.get("parameter", "")
-        value = rec.get("recommended_value", "")
-        if param.startswith("spark.") and value:
-            config[param] = value
-    return config
 
 
 def _human_bytes(n: int) -> str:

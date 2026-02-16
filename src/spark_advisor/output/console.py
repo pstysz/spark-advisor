@@ -1,14 +1,16 @@
-"""Console output formatting using Rich.
-
-Rich provides beautiful terminal output — tables, colors, panels,
-progress bars. This is what makes the CLI tool look professional.
-"""
+from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from spark_advisor.models import AdvisorReport, JobAnalysis, RuleResult, Severity
+from spark_advisor.core import (
+    AdvisorReport,
+    AnalysisResult,
+    JobAnalysis,
+    RuleResult,
+    Severity,
+)
 
 console = Console()
 
@@ -41,9 +43,56 @@ def print_job_overview(job: JobAnalysis) -> None:
     console.print(Panel(table, title="[bold]Spark Job Analysis[/]", border_style="blue"))
 
 
-def print_rule_results(results: list[RuleResult]) -> None:
+def print_analysis_result(
+    result: AnalysisResult,
+    *,
+    use_ai: bool = True,
+    output_config: Path | None = None,
+) -> None:
+    _print_rule_results(result.rule_results)
+
+    if result.ai_report:
+        _print_ai_report(result.ai_report)
+        if output_config and result.ai_report.suggested_config:
+            _save_config_file(output_config, result.ai_report)
+    elif use_ai and not result.rule_results:
+        console.print("[green]No issues found — skipping AI analysis.[/]")
+
+    if not use_ai:
+        console.print("[dim]AI analysis disabled. Use --ai to enable.[/]")
+
+
+def print_scan_results(apps: list[dict[str, str]], *, limit: int = 10) -> None:
+    if not apps:
+        console.print("[yellow]No applications found.[/]")
+        return
+
+    table = Table(title=f"Recent Spark Applications (last {limit})")
+    table.add_column("App ID", min_width=30)
+    table.add_column("Name")
+    table.add_column("Duration")
+    table.add_column("Started")
+
+    for app_info in apps:
+        duration_ms = int(app_info.get("duration_ms", "0"))
+        duration_str = f"{duration_ms / 60000:.1f} min" if duration_ms > 0 else "—"
+
+        table.add_row(
+            app_info["app_id"],
+            app_info.get("name", ""),
+            duration_str,
+            app_info.get("start", ""),
+        )
+
+    console.print(table)
+    console.print(
+        "\n[dim]Use 'spark-advisor analyze <app-id> -s <url>' to analyze a specific job.[/]"
+    )
+
+
+def _print_rule_results(results: list[RuleResult]) -> None:
     if not results:
-        console.print("\n[green]✅ No issues detected by rules engine[/]\n")
+        console.print("\n[green] No issues detected by rules engine[/]\n")
         return
 
     console.print("\n[bold]Issues Found[/]\n")
@@ -57,11 +106,11 @@ def print_rule_results(results: list[RuleResult]) -> None:
         console.print()
 
 
-def print_ai_report(report: AdvisorReport) -> None:
+def _print_ai_report(report: AdvisorReport) -> None:
     if not report.recommendations:
         return
 
-    console.print(Panel(report.summary, title="[bold]🤖 AI Analysis[/]", border_style="magenta"))
+    console.print(Panel(report.summary, title="[bold] AI Analysis[/]", border_style="magenta"))
 
     if report.causal_chain:
         console.print(f"\n[bold]Causal Chain:[/] {report.causal_chain}\n")
@@ -76,8 +125,7 @@ def print_ai_report(report: AdvisorReport) -> None:
         change = ""
         if rec.parameter and rec.current_value and rec.recommended_value:
             change = (
-                f"[red]{rec.parameter}\n{rec.current_value}[/]"
-                f" → [green]{rec.recommended_value}[/]"
+                f"[red]{rec.parameter}\n{rec.current_value}[/] → [green]{rec.recommended_value}[/]"
             )
         elif rec.recommended_value:
             change = f"[green]{rec.recommended_value}[/]"
@@ -96,3 +144,8 @@ def print_ai_report(report: AdvisorReport) -> None:
         for key, value in report.suggested_config.items():
             console.print(f"  {key} = [green]{value}[/]")
         console.print()
+
+
+def _save_config_file(path: Path, report: AdvisorReport) -> None:
+    path.write_text("\n".join(f"{k} = {v}" for k, v in report.suggested_config.items()) + "\n")
+    console.print(f"[green]Config written to {path}[/]")

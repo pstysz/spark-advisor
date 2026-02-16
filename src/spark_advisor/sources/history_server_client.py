@@ -1,14 +1,8 @@
-"""Data sources for fetching Spark job metrics.
-
-Protocol = Python equivalent of Kotlin/Java interface.
-Each source knows how to fetch job data and convert it to our domain model.
-"""
-
-from typing import Protocol
+from typing import Any
 
 import httpx
 
-from spark_advisor.models import (
+from spark_advisor.core import (
     ExecutorMetrics,
     JobAnalysis,
     SparkConfig,
@@ -17,35 +11,45 @@ from spark_advisor.models import (
 )
 
 
-class DataSource(Protocol):
-    """Interface for fetching Spark job metrics — equivalent of Kotlin interface."""
-
-    def fetch(self, app_id: str) -> JobAnalysis: ...
-
-    def list_applications(self, limit: int = 20) -> list[dict[str, str]]: ...
+def history_server_client(base_url: str, timeout: float = 30.0) -> "HistoryServerClient":
+    return HistoryServerClient(base_url, timeout)
 
 
-class HistoryServerSource:
+class HistoryServerClient:
     """Fetches job data from Spark History Server REST API.
 
     This is the preferred source — no need to manually copy event logs.
     History Server aggregates data for you.
 
     Usage:
-        source = HistoryServerSource("http://yarn-master:18080")
-        job = source.fetch("application_1234567890_0001")
+        with history_server_client("http://yarn-master:18080") as client:
+            job = client.fetch("application_1234567890_0001")
     """
 
     def __init__(self, base_url: str, timeout: float = 30.0) -> None:
         self._base_url = base_url.rstrip("/")
-        self._client = httpx.Client(
-            base_url=f"{self._base_url}/api/v1",
-            timeout=timeout,
-            headers={"Accept": "application/json"},
-        )
+        self._timeout = timeout
+        self._client: httpx.Client | None = None
+
+    def __enter__(self) -> "HistoryServerClient":
+        if self._client is None:
+            self._client = httpx.Client(
+                base_url=f"{self._base_url}/api/v1",
+                timeout=self._timeout,
+                headers={"Accept": "application/json"},
+            )
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    def _get_client(self) -> httpx.Client:
+        if self._client is None:
+            raise RuntimeError("HistoryServerClient must be used within 'with' block")
+        return self._client
 
     def list_applications(self, limit: int = 20) -> list[dict[str, str]]:
-        response = self._client.get("/applications", params={"limit": limit})
+        response = self._get_client().get("/applications", params={"limit": limit})
         response.raise_for_status()
         return [
             {
@@ -74,13 +78,13 @@ class HistoryServerSource:
             executors=executors,
         )
 
-    def _fetch_app_info(self, app_id: str) -> dict:
-        response = self._client.get(f"/applications/{app_id}")
+    def _fetch_app_info(self, app_id: str) -> dict[str, Any]:
+        response = self._get_client().get(f"/applications/{app_id}")
         response.raise_for_status()
-        return response.json()
+        return response.json()  # type: ignore[no-any-return]
 
     def _fetch_config(self, app_id: str) -> SparkConfig:
-        response = self._client.get(f"/applications/{app_id}/environment")
+        response = self._get_client().get(f"/applications/{app_id}/environment")
         response.raise_for_status()
         env = response.json()
 
@@ -92,7 +96,7 @@ class HistoryServerSource:
         return SparkConfig(raw=spark_props)
 
     def _fetch_stages(self, app_id: str) -> list[StageMetrics]:
-        response = self._client.get(
+        response = self._get_client().get(
             f"/applications/{app_id}/stages",
             params={"status": "complete"},
         )
@@ -128,18 +132,18 @@ class HistoryServerSource:
 
         return stages
 
-    def _fetch_task_summary(self, app_id: str, stage_id: int) -> dict:
-        response = self._client.get(
+    def _fetch_task_summary(self, app_id: str, stage_id: int) -> dict[str, Any]:
+        response = self._get_client().get(
             f"/applications/{app_id}/stages/{stage_id}/0/taskSummary",
             params={"quantiles": "0.0,0.25,0.5,0.75,1.0"},
         )
         if response.status_code == 404:
             return {}
         response.raise_for_status()
-        return response.json()
+        return response.json()  # type: ignore[no-any-return]
 
     def _fetch_executors(self, app_id: str) -> ExecutorMetrics:
-        response = self._client.get(f"/applications/{app_id}/executors")
+        response = self._get_client().get(f"/applications/{app_id}/executors")
         response.raise_for_status()
         executors = response.json()
 
@@ -148,8 +152,7 @@ class HistoryServerSource:
         return ExecutorMetrics(
             executor_count=len(non_driver),
             peak_memory_bytes=sum(
-                e.get("peakMemoryMetrics", {}).get("JVMHeapMemory", 0)
-                for e in non_driver
+                e.get("peakMemoryMetrics", {}).get("JVMHeapMemory", 0) for e in non_driver
             ),
             allocated_memory_bytes=sum(e.get("maxMemory", 0) for e in non_driver),
             total_cpu_time_ms=sum(e.get("totalDuration", 0) for e in non_driver),
@@ -157,16 +160,11 @@ class HistoryServerSource:
         )
 
     def close(self) -> None:
-        self._client.close()
-
-    def __enter__(self) -> "HistoryServerSource":
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        self.close()
+        if self._client is not None:
+            self._client.close()
 
 
-def _percentile_value(summary: dict, metric: str, quantile: float) -> int:
+def _percentile_value(summary: dict[str, Any], metric: str, quantile: float) -> int:
     """Extract a percentile value from History Server task summary response."""
     values = summary.get(metric, [])
     if not values:
