@@ -132,10 +132,12 @@ def _process_event(event: dict[str, Any], state: _ParserState) -> None:
         case "SparkListenerApplicationEnd":
             state.end_time = event.get("Timestamp", 0)
 
+        case "SparkListenerLogStart":
+            state.spark_version = event.get("Spark Version", "")
+
         case "SparkListenerEnvironmentUpdate":
             for key, value in event.get("Spark Properties", {}).items():
                 state.config[key] = value
-            state.spark_version = state.config.get("spark.app.version", "")
 
         case "SparkListenerStageCompleted":
             stage_info = event.get("Stage Info", {})
