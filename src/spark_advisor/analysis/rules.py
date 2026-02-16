@@ -98,14 +98,17 @@ class SpillToDiskRule(Rule):
 
             spill_gb = spill_bytes / (1024**3)
 
+            if spill_gb > self._t.spill_critical_gb:
+                severity = Severity.CRITICAL
+            elif spill_gb > self._t.spill_warning_gb:
+                severity = Severity.WARNING
+            else:
+                severity = Severity.INFO
+
             results.append(
                 RuleResult(
                     rule_id=self.rule_id,
-                    severity=(
-                        Severity.CRITICAL
-                        if spill_gb > self._t.spill_critical_gb
-                        else Severity.WARNING
-                    ),
+                    severity=severity,
                     title=f"Disk spill in Stage {stage.stage_id}",
                     message=f"{spill_gb:.1f} GB spilled to disk — data doesn't fit in memory",
                     stage_id=stage.stage_id,
@@ -212,7 +215,7 @@ class ExecutorIdleRule(Rule):
             return []
 
         cpu_pct = job.executors.cpu_utilization_percent
-        if cpu_pct == 0 or cpu_pct > (100 - self._t.executor_idle_percent):
+        if cpu_pct == 0 or cpu_pct > self._t.min_cpu_utilization_percent:
             return []
 
         idle_pct = 100 - cpu_pct
@@ -230,6 +233,37 @@ class ExecutorIdleRule(Rule):
         ]
 
 
+class TaskFailureRule(Rule):
+    """Detects stages with failed tasks."""
+
+    @property
+    def rule_id(self) -> str:
+        return "task_failures"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        results: list[RuleResult] = []
+        for stage in job.stages:
+            failed = stage.tasks.failed_task_count
+            if failed < self._t.task_failure_warning_count:
+                continue
+
+            results.append(
+                RuleResult(
+                    rule_id=self.rule_id,
+                    severity=Severity.WARNING,
+                    title=f"Task failures in Stage {stage.stage_id}",
+                    message=(
+                        f"{failed} of {stage.tasks.task_count} tasks failed"
+                    ),
+                    stage_id=stage.stage_id,
+                    current_value=f"{failed} failed tasks",
+                    recommended_value="Check executor logs for OOM or fetch failures",
+                )
+            )
+
+        return results
+
+
 # ──────────────────────────────────────────────
 # Engine
 # ──────────────────────────────────────────────
@@ -242,6 +276,7 @@ DEFAULT_RULES: list[Rule] = [
     GCPressureRule(_DEFAULT_THRESHOLDS),
     ShufflePartitionsRule(_DEFAULT_THRESHOLDS),
     ExecutorIdleRule(_DEFAULT_THRESHOLDS),
+    TaskFailureRule(_DEFAULT_THRESHOLDS),
 ]
 
 

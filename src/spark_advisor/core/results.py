@@ -19,8 +19,8 @@ class RuleResult(BaseModel):
 class Recommendation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    priority: int
-    title: str
+    priority: int = 0
+    title: str = ""
     parameter: str = ""
     current_value: str = ""
     recommended_value: str = ""

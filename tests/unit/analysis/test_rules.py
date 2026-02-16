@@ -9,6 +9,7 @@ from spark_advisor.analysis.rules import (
     GCPressureRule,
     ShufflePartitionsRule,
     SpillToDiskRule,
+    TaskFailureRule,
     apply_static_rules,
 )
 from spark_advisor.core import (
@@ -135,6 +136,62 @@ class TestShufflePartitionsRule:
         results = ShufflePartitionsRule().evaluate(job)
         assert len(results) == 1
         assert "800" in results[0].recommended_value
+
+
+class TestSpillToDiskSeverityLevels:
+    def test_small_spill_is_info(self):
+        stage = _make_stage(spill_disk=50 * 1024**2)
+        job = _make_job(stages=[stage])
+        results = SpillToDiskRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
+
+    def test_medium_spill_is_warning(self):
+        stage = _make_stage(spill_disk=500 * 1024**2)
+        job = _make_job(stages=[stage])
+        results = SpillToDiskRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+
+    def test_large_spill_is_critical(self):
+        stage = _make_stage(spill_disk=2 * 1024**3)
+        job = _make_job(stages=[stage])
+        results = SpillToDiskRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.CRITICAL
+
+
+class TestTaskFailureRule:
+    def test_no_failures(self):
+        stage = _make_stage()
+        job = _make_job(stages=[stage])
+        assert TaskFailureRule().evaluate(job) == []
+
+    def test_detects_failures(self):
+        stage = _make_stage()
+        job = _make_job(stages=[stage])
+        # _make_stage doesn't support failed tasks param, build manually
+        from spark_advisor.core import StageMetrics, TaskMetrics
+
+        tasks = TaskMetrics(
+            task_count=100,
+            median_duration_ms=100,
+            max_duration_ms=100,
+            min_duration_ms=100,
+            total_gc_time_ms=0,
+            failed_task_count=3,
+        )
+        stage_with_failures = StageMetrics(
+            stage_id=0,
+            stage_name="Stage 0",
+            duration_ms=10_000,
+            tasks=tasks,
+        )
+        job = _make_job(stages=[stage_with_failures])
+        results = TaskFailureRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+        assert "3 of 100" in results[0].message
 
 
 class TestRunRules:

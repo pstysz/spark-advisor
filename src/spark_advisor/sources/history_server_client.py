@@ -63,15 +63,28 @@ class HistoryServerClient:
 
     def fetch(self, app_id: str) -> JobAnalysis:
         app_info = self._fetch_app_info(app_id)
-        config = self._fetch_config(app_id)
-        stages = self._fetch_stages(app_id)
-        executors = self._fetch_executors(app_id)
 
-        duration = app_info.get("attempts", [{}])[0].get("duration", 0)
+        attempts = app_info.get("attempts", [])
+        latest = attempts[-1] if attempts else {}
+        attempt_id: str | None = None
+        if "attemptId" in latest:
+            attempt_id = str(latest["attemptId"])
+
+        if attempt_id:
+            base_path = f"/applications/{app_id}/{attempt_id}"
+        else:
+            base_path = f"/applications/{app_id}"
+
+        config, spark_version = self._fetch_environment(base_path)
+        stages = self._fetch_stages(base_path)
+        executors = self._fetch_executors(base_path)
+
+        duration = latest.get("duration", 0)
 
         return JobAnalysis(
             app_id=app_id,
             app_name=app_info.get("name", ""),
+            spark_version=spark_version,
             duration_ms=duration,
             config=config,
             stages=stages,
@@ -83,8 +96,8 @@ class HistoryServerClient:
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
 
-    def _fetch_config(self, app_id: str) -> SparkConfig:
-        response = self._get_client().get(f"/applications/{app_id}/environment")
+    def _fetch_environment(self, base_path: str) -> tuple[SparkConfig, str]:
+        response = self._get_client().get(f"{base_path}/environment")
         response.raise_for_status()
         env = response.json()
 
@@ -93,18 +106,20 @@ class HistoryServerClient:
             if len(prop) >= 2:
                 spark_props[prop[0]] = prop[1]
 
-        return SparkConfig(raw=spark_props)
+        spark_version = env.get("runtime", {}).get("sparkVersion", "")
 
-    def _fetch_stages(self, app_id: str) -> list[StageMetrics]:
+        return SparkConfig(raw=spark_props), spark_version
+
+    def _fetch_stages(self, base_path: str) -> list[StageMetrics]:
         response = self._get_client().get(
-            f"/applications/{app_id}/stages",
+            f"{base_path}/stages",
             params={"status": "complete"},
         )
         response.raise_for_status()
 
         stages: list[StageMetrics] = []
         for stage_data in response.json():
-            task_summary = self._fetch_task_summary(app_id, stage_data["stageId"])
+            task_summary = self._fetch_task_summary(base_path, stage_data["stageId"])
 
             tasks = TaskMetrics(
                 task_count=stage_data.get("numTasks", 0),
@@ -132,9 +147,9 @@ class HistoryServerClient:
 
         return stages
 
-    def _fetch_task_summary(self, app_id: str, stage_id: int) -> dict[str, Any]:
+    def _fetch_task_summary(self, base_path: str, stage_id: int) -> dict[str, Any]:
         response = self._get_client().get(
-            f"/applications/{app_id}/stages/{stage_id}/0/taskSummary",
+            f"{base_path}/stages/{stage_id}/0/taskSummary",
             params={"quantiles": "0.0,0.25,0.5,0.75,1.0"},
         )
         if response.status_code == 404:
@@ -142,8 +157,8 @@ class HistoryServerClient:
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
 
-    def _fetch_executors(self, app_id: str) -> ExecutorMetrics:
-        response = self._get_client().get(f"/applications/{app_id}/executors")
+    def _fetch_executors(self, base_path: str) -> ExecutorMetrics:
+        response = self._get_client().get(f"{base_path}/executors")
         response.raise_for_status()
         executors = response.json()
 
