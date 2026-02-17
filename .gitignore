@@ -10,6 +10,7 @@ build/
 
 # Virtual environment
 .venv/
+.envrc
 
 # uv
 uv.lock

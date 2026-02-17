@@ -1,11 +1,11 @@
-from spark_advisor.ai.config import ANALYSIS_TOOL, SYSTEM_PROMPT, build_system_prompt
-from spark_advisor.ai.prompts_builder import build_user_message
+from spark_advisor.ai.config import ANALYSIS_TOOL
+from spark_advisor.ai.prompts_builder import SYSTEM_PROMPT, build_system_prompt, build_user_message
 from spark_advisor.config import Thresholds
 from spark_advisor.model import (
     RuleResult,
     Severity,
 )
-from tests.conftest import make_executors, make_job, make_stage
+from tests.factories import make_executors, make_job, make_stage
 
 
 class TestAnalysisTool:
@@ -17,8 +17,8 @@ class TestAnalysisTool:
         assert "causal_chain" in required
 
     def test_recommendation_has_all_required_fields(self) -> None:
-        rec_schema = ANALYSIS_TOOL["input_schema"]["properties"]["recommendations"]
-        required = rec_schema["items"]["required"]
+        rec_schema = ANALYSIS_TOOL["input_schema"]["$defs"]["RecommendationInput"]
+        required = rec_schema["required"]
         assert "priority" in required
         assert "title" in required
         assert "parameter" in required
@@ -27,6 +27,7 @@ class TestAnalysisTool:
     def test_severity_enum_values(self) -> None:
         severity = ANALYSIS_TOOL["input_schema"]["properties"]["severity"]
         assert severity["enum"] == ["critical", "warning", "info"]
+        assert severity["type"] == "string"
 
 
 class TestBuildSystemPrompt:

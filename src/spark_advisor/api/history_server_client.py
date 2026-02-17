@@ -1,9 +1,11 @@
 from typing import Any
 
 import httpx
+from pydantic import TypeAdapter
 
 from spark_advisor.model import SparkConfig
 from spark_advisor.model.metrics import ExecutorMetrics, JobAnalysis, StageMetrics, TaskMetrics
+from spark_advisor.model.output import ApplicationSummary
 
 
 class HistoryServerClient:
@@ -34,18 +36,10 @@ class HistoryServerClient:
             raise RuntimeError("HistoryServerClient must be used within 'with' block")
         return self._client
 
-    def list_applications(self, limit: int = 20) -> list[dict[str, str]]:
+    def list_applications(self, limit: int = 20) -> list[ApplicationSummary]:
         response = self._get_client().get("/applications", params={"limit": limit})
         response.raise_for_status()
-        return [
-            {
-                "app_id": app["id"],
-                "name": app.get("name", ""),
-                "start": app.get("attempts", [{}])[0].get("startTime", ""),
-                "duration_ms": str(app.get("attempts", [{}])[0].get("duration", 0)),
-            }
-            for app in response.json()
-        ]
+        return TypeAdapter(list[ApplicationSummary]).validate_json(response.text)
 
     def fetch(self, app_id: str) -> JobAnalysis:
         app_info = self._fetch_app_info(app_id)
@@ -56,10 +50,7 @@ class HistoryServerClient:
         if "attemptId" in latest:
             attempt_id = str(latest["attemptId"])
 
-        if attempt_id:
-            base_path = f"/applications/{app_id}/{attempt_id}"
-        else:
-            base_path = f"/applications/{app_id}"
+        base_path = f"/applications/{app_id}/{attempt_id}" if attempt_id else f"/applications/{app_id}"
 
         config, spark_version = self._fetch_environment(base_path)
         stages = self._fetch_stages(base_path)
@@ -156,10 +147,8 @@ class HistoryServerClient:
                 e.get("peakMemoryMetrics", {}).get("JVMHeapMemory", 0) for e in non_driver
             ),
             allocated_memory_bytes=sum(e.get("maxMemory", 0) for e in non_driver),
-            # History Server REST API does not expose per-executor CPU time separately.
-            # Using totalDuration (wall-clock) for both — cpu_utilization_percent will be ~100%.
-            total_cpu_time_ms=sum(e.get("totalDuration", 0) for e in non_driver),
-            total_run_time_ms=sum(e.get("totalDuration", 0) for e in non_driver),
+            total_cpu_time_ms=None,
+            total_run_time_ms=None,
         )
 
     def close(self) -> None:

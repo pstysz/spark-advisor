@@ -47,7 +47,7 @@ packages = ["src/spark_advisor"]
 # ──────────────────────────────────────────────
 [tool.ruff]
 target-version = "py312"
-line-length = 100
+line-length = 120
 src = ["src", "tests"]
 
 [tool.ruff.lint]

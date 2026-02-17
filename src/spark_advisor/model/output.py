@@ -6,9 +6,9 @@ from spark_advisor.model.metrics import JobAnalysis
 
 
 class Severity(StrEnum):
-    CRITICAL = "critical"
-    WARNING = "warning"
-    INFO = "info"
+    CRITICAL = "CRITICAL"
+    WARNING = "WARNING"
+    INFO = "INFO"
 
 
 class RuleResult(BaseModel):
@@ -55,3 +55,29 @@ class AnalysisResult(BaseModel):
     job: JobAnalysis
     rule_results: list[RuleResult]
     ai_report: AdvisorReport | None = None
+
+
+class Attempt(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    attemptId: str
+    startTime: str
+    endTime: str
+    lastUpdated: str
+    duration: int
+    sparkUser: str
+    completed: bool
+    appSparkVersion: str
+    logPath: str
+    startTimeEpoch: int
+    endTimeEpoch: int
+    lastUpdatedEpoch: int
+
+
+class ApplicationSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str
+    attempts: list[Attempt]
+    driverHost: str

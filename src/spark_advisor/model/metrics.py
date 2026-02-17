@@ -48,8 +48,8 @@ class ExecutorMetrics(BaseModel):
     executor_count: int
     peak_memory_bytes: int
     allocated_memory_bytes: int
-    total_cpu_time_ms: int
-    total_run_time_ms: int
+    total_cpu_time_ms: int | None = None
+    total_run_time_ms: int | None = None
 
     @property
     def memory_utilization_percent(self) -> float:
@@ -58,11 +58,12 @@ class ExecutorMetrics(BaseModel):
         return (self.peak_memory_bytes / self.allocated_memory_bytes) * 100
 
     @property
-    def cpu_utilization_percent(self) -> float:
+    def cpu_utilization_percent(self) -> float | None:
+        if self.total_cpu_time_ms is None or self.total_run_time_ms is None:
+            return None
         if self.total_run_time_ms == 0:
             return 0.0
         return (self.total_cpu_time_ms / self.total_run_time_ms) * 100
-
 
 class JobAnalysis(BaseModel):
     model_config = ConfigDict(frozen=True)
