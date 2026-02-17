@@ -11,8 +11,7 @@ from spark_advisor.model import (
     RuleResult,
     Severity,
 )
-
-console = Console()
+from spark_advisor.model.output import ApplicationSummary
 
 SEVERITY_ICONS = {
     Severity.CRITICAL: "[bold red]🔴 CRITICAL[/]",
@@ -21,7 +20,7 @@ SEVERITY_ICONS = {
 }
 
 
-def print_job_overview(job: JobAnalysis) -> None:
+def print_job_overview(console: Console, job: JobAnalysis) -> None:
     duration_min = job.duration_ms / 60_000
     stage_count = len(job.stages)
     total_tasks = sum(s.tasks.task_count for s in job.stages)
@@ -44,17 +43,18 @@ def print_job_overview(job: JobAnalysis) -> None:
 
 
 def print_analysis_result(
-    result: AnalysisResult,
-    *,
-    use_ai: bool = True,
-    output_config: Path | None = None,
+        console: Console,
+        result: AnalysisResult,
+        *,
+        use_ai: bool = True,
+        output_config: Path | None = None,
 ) -> None:
-    _print_rule_results(result.rule_results)
+    _print_rule_results(console, result.rule_results)
 
     if result.ai_report:
-        _print_ai_report(result.ai_report)
+        _print_ai_report(console, result.ai_report)
         if output_config and result.ai_report.suggested_config:
-            _save_config_file(output_config, result.ai_report)
+            _save_config_file(console, output_config, result.ai_report)
     elif use_ai and not result.rule_results:
         console.print("[green]No issues found — skipping AI analysis.[/]")
 
@@ -62,7 +62,7 @@ def print_analysis_result(
         console.print("[dim]AI analysis disabled. Use --ai to enable.[/]")
 
 
-def print_scan_results(apps: list[dict[str, str]], *, limit: int = 10) -> None:
+def print_scan_results(console: Console, apps: list[ApplicationSummary], *, limit: int = 10) -> None:
     if not apps:
         console.print("[yellow]No applications found.[/]")
         return
@@ -74,14 +74,16 @@ def print_scan_results(apps: list[dict[str, str]], *, limit: int = 10) -> None:
     table.add_column("Started")
 
     for app_info in apps:
-        duration_ms = int(app_info.get("duration_ms", "0"))
+        first_attempt = app_info.attempts[0]
+
+        duration_ms = int(first_attempt.duration)
         duration_str = f"{duration_ms / 60000:.1f} min" if duration_ms > 0 else "—"
 
         table.add_row(
-            app_info["app_id"],
-            app_info.get("name", ""),
+            app_info.id,
+            app_info.name,
             duration_str,
-            app_info.get("start", ""),
+            first_attempt.startTime,
         )
 
     console.print(table)
@@ -90,7 +92,7 @@ def print_scan_results(apps: list[dict[str, str]], *, limit: int = 10) -> None:
     )
 
 
-def _print_rule_results(results: list[RuleResult]) -> None:
+def _print_rule_results(console: Console, results: list[RuleResult]) -> None:
     if not results:
         console.print("\n[green] No issues detected by rules engine[/]\n")
         return
@@ -106,7 +108,7 @@ def _print_rule_results(results: list[RuleResult]) -> None:
         console.print()
 
 
-def _print_ai_report(report: AdvisorReport) -> None:
+def _print_ai_report(console: Console, report: AdvisorReport) -> None:
     if not report.recommendations:
         return
 
@@ -146,6 +148,6 @@ def _print_ai_report(report: AdvisorReport) -> None:
         console.print()
 
 
-def _save_config_file(path: Path, report: AdvisorReport) -> None:
+def _save_config_file(console: Console, path: Path, report: AdvisorReport) -> None:
     path.write_text("\n".join(f"{k} = {v}" for k, v in report.suggested_config.items()) + "\n")
     console.print(f"[green]Config written to {path}[/]")

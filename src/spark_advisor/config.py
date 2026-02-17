@@ -1,11 +1,12 @@
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict
 
 DEFAULT_MODEL = "claude-sonnet-4-5"
 DEFAULT_MAX_TOKENS = 4096
 
 
-@dataclass(frozen=True)
-class Thresholds:
+class Thresholds(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     skew_warning_ratio: float = 5.0
     skew_critical_ratio: float = 10.0
 

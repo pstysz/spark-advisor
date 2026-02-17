@@ -1,87 +1,14 @@
 from anthropic.types import ToolParam
 
-from spark_advisor.config import Thresholds as Thresholds
+from spark_advisor.model import AnalysisToolInput
 
 ANALYSIS_TOOL: ToolParam = {
     "name": "submit_analysis",
     "description": "Submit the Spark job analysis results.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "summary": {
-                "type": "string",
-                "description": "1-2 sentence overview of the job's health and key issues.",
-            },
-            "severity": {
-                "type": "string",
-                "enum": ["critical", "warning", "info"],
-                "description": "Overall severity: critical, warning, or info.",
-            },
-            "recommendations": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "priority": {
-                            "type": "integer",
-                            "description": "Priority rank (1 = highest impact).",
-                        },
-                        "title": {
-                            "type": "string",
-                            "description": "Short title for the recommendation.",
-                        },
-                        "parameter": {
-                            "type": "string",
-                            "description": (
-                                "Spark config parameter (e.g. spark.sql.shuffle.partitions). "
-                                'Use "code_change" for non-config recommendations.'
-                            ),
-                        },
-                        "current_value": {
-                            "type": "string",
-                            "description": "Current value of the parameter.",
-                        },
-                        "recommended_value": {
-                            "type": "string",
-                            "description": "Recommended new value.",
-                        },
-                        "explanation": {
-                            "type": "string",
-                            "description": "Brief explanation of the mechanism (2-3 sentences).",
-                        },
-                        "estimated_impact": {
-                            "type": "string",
-                            "description": (
-                                'Quantified estimate (e.g. "~30% reduction in Stage 4 duration").'
-                            ),
-                        },
-                        "risk": {
-                            "type": "string",
-                            "description": "Potential downsides of this change.",
-                        },
-                    },
-                    "required": [
-                        "priority",
-                        "title",
-                        "parameter",
-                        "current_value",
-                        "recommended_value",
-                        "explanation",
-                        "estimated_impact",
-                        "risk",
-                    ],
-                },
-            },
-            "causal_chain": {
-                "type": "string",
-                "description": "Description of how problems are related, if applicable.",
-            },
-        },
-        "required": ["summary", "severity", "recommendations", "causal_chain"],
-    },
+    "input_schema": AnalysisToolInput.model_json_schema(),
 }
 
-_SYSTEM_PROMPT_TEMPLATE = """\
+SYSTEM_PROMPT_TEMPLATE = """\
 You are an expert Apache Spark performance engineer with 15 years of experience \
 tuning Spark jobs on YARN and Kubernetes.
 
@@ -118,18 +45,3 @@ TECHNICAL CONTEXT:
 - Executor CPU utilization < {min_cpu}% = over-provisioning
 - AQE (Adaptive Query Execution) can auto-handle skew if enabled (default since Spark 3.2)
 """
-
-
-def build_system_prompt(thresholds: Thresholds | None = None) -> str:
-    t = thresholds or Thresholds()
-    return _SYSTEM_PROMPT_TEMPLATE.format(
-        target_partition_mb=t.target_partition_size_bytes // (1024 * 1024),
-        skew_warning=t.skew_warning_ratio,
-        skew_critical=t.skew_critical_ratio,
-        gc_warning=t.gc_warning_percent,
-        gc_critical=t.gc_critical_percent,
-        min_cpu=t.min_cpu_utilization_percent,
-    )
-
-
-SYSTEM_PROMPT = build_system_prompt()

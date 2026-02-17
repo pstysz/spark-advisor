@@ -3,9 +3,9 @@ from unittest.mock import MagicMock
 import pytest
 from anthropic.types import Message, ToolUseBlock, Usage
 
-from spark_advisor.ai.llm_service import LlmService
+from spark_advisor.ai.llm_analysis_service import LlmAnalysisService
 from spark_advisor.model import Severity
-from tests.conftest import make_job, make_rule_result
+from tests.factories import make_job, make_rule_result
 
 
 def _fake_tool_response(tool_input: dict) -> Message:
@@ -27,13 +27,13 @@ def _fake_tool_response(tool_input: dict) -> Message:
     )
 
 
-def _make_service(tool_input: dict) -> LlmService:
+def _make_service(tool_input: dict) -> LlmAnalysisService:
     mock_client = MagicMock()
     mock_client.create_message.return_value = _fake_tool_response(tool_input)
-    return LlmService(mock_client)
+    return LlmAnalysisService(mock_client)
 
 
-class TestLlmService:
+class TestLlmAnalysisService:
     def test_analyze_returns_advisor_report(self) -> None:
         service = _make_service({
             "summary": "Data skew detected in Stage 0.",
@@ -112,4 +112,4 @@ class TestLlmService:
 
     def test_extract_tool_input_raises_on_missing_tool(self) -> None:
         with pytest.raises(ValueError, match="did not call submit_analysis"):
-            LlmService._extract_tool_input([])
+            LlmAnalysisService._extract_tool_input([])

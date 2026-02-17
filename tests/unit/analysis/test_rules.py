@@ -1,13 +1,13 @@
-from spark_advisor.ai.rules import (
+from spark_advisor.analysis.rules import (
     DataSkewRule,
     GCPressureRule,
     ShufflePartitionsRule,
     SpillToDiskRule,
     TaskFailureRule,
-    apply_static_rules,
 )
+from spark_advisor.analysis.static_analysis_service import StaticAnalysisService
 from spark_advisor.model import Severity
-from tests.conftest import make_job, make_stage
+from tests.factories import make_job, make_stage
 
 
 class TestDataSkewRule:
@@ -147,11 +147,11 @@ class TestRunRules:
             ),
         ]
         job = make_job(stages=stages)
-        results = apply_static_rules(job)
+        results = StaticAnalysisService().analyze(job)
         severities = [r.severity for r in results]
         assert severities[0] == Severity.CRITICAL
 
     def test_empty_job(self):
         job = make_job(stages=[])
-        results = apply_static_rules(job)
+        results = StaticAnalysisService().analyze(job)
         assert results == []

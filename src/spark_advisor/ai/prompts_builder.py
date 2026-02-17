@@ -1,13 +1,14 @@
-from spark_advisor.ai.config import Thresholds
+from spark_advisor.ai.config import SYSTEM_PROMPT_TEMPLATE
+from spark_advisor.config import Thresholds
 from spark_advisor.model import RuleResult
 from spark_advisor.model.metrics import JobAnalysis
-from spark_advisor.util.bytes_helper import BytesHelper
+from spark_advisor.util.bytes_helper import format_bytes
 
 
 def build_user_message(
-    job: JobAnalysis,
-    rule_results: list[RuleResult],
-    thresholds: Thresholds | None = None,
+        job: JobAnalysis,
+        rule_results: list[RuleResult],
+        thresholds: Thresholds | None = None,
 ) -> str:
     t = thresholds or Thresholds()
     lines: list[str] = ["Analyze this Spark job and suggest optimizations.\n", "## Configuration"]
@@ -40,11 +41,11 @@ def build_user_message(
     total_shuffle_write = sum(s.tasks.total_shuffle_write_bytes for s in job.stages)
     total_spill = sum(s.tasks.spill_to_disk_bytes for s in job.stages)
     lines.append(f"Total tasks: {total_tasks}")
-    lines.append(f"Total input: {BytesHelper.to_human_bytes(total_input)}")
-    lines.append(f"Total shuffle read: {BytesHelper.to_human_bytes(total_shuffle_read)}")
-    lines.append(f"Total shuffle write: {BytesHelper.to_human_bytes(total_shuffle_write)}")
+    lines.append(f"Total input: {format_bytes(total_input)}")
+    lines.append(f"Total shuffle read: {format_bytes(total_shuffle_read)}")
+    lines.append(f"Total shuffle write: {format_bytes(total_shuffle_write)}")
     if total_spill > 0:
-        lines.append(f"Total spill to disk: {BytesHelper.to_human_bytes(total_spill)}")
+        lines.append(f"Total spill to disk: {format_bytes(total_spill)}")
 
     lines.append("\n## Stage Metrics")
     for stage in job.stages:
@@ -69,17 +70,17 @@ def build_user_message(
             f"median={stage.tasks.median_duration_ms}ms "
             f"max={stage.tasks.max_duration_ms}ms"
         )
-        lines.append(f"- Input: {BytesHelper.to_human_bytes(stage.input_bytes)}")
-        lines.append(f"- Output: {BytesHelper.to_human_bytes(stage.output_bytes)}")
+        lines.append(f"- Input: {format_bytes(stage.input_bytes)}")
+        lines.append(f"- Output: {format_bytes(stage.output_bytes)}")
         lines.append(
-            f"- Shuffle read: {BytesHelper.to_human_bytes(stage.tasks.total_shuffle_read_bytes)}"
+            f"- Shuffle read: {format_bytes(stage.tasks.total_shuffle_read_bytes)}"
         )
         lines.append(
-            f"- Shuffle write: {BytesHelper.to_human_bytes(stage.tasks.total_shuffle_write_bytes)}"
+            f"- Shuffle write: {format_bytes(stage.tasks.total_shuffle_write_bytes)}"
         )
         if stage.tasks.spill_to_disk_bytes > 0:
             lines.append(
-                f"- Spill to disk: {BytesHelper.to_human_bytes(stage.tasks.spill_to_disk_bytes)}"
+                f"- Spill to disk: {format_bytes(stage.tasks.spill_to_disk_bytes)}"
             )
         lines.append(f"- GC time: {stage.tasks.gc_time_percent:.0f}% of task time")
 
@@ -87,11 +88,28 @@ def build_user_message(
         lines.append("\n## Executor Metrics")
         lines.append(f"- Count: {job.executors.executor_count}")
         lines.append(f"- Memory utilization: {job.executors.memory_utilization_percent:.0f}%")
-        lines.append(f"- CPU utilization: {job.executors.cpu_utilization_percent:.0f}%")
+        cpu_pct = job.executors.cpu_utilization_percent
+        if cpu_pct is not None:
+            lines.append(f"- CPU utilization: {cpu_pct:.0f}%")
 
     if rule_results:
         lines.append("\n## Issues Detected by Rules Engine")
         for i, rule in enumerate(rule_results, 1):
-            lines.append(f"{i}. {rule.severity.upper()}: {rule.title} — {rule.message}")
+            lines.append(f"{i}. {rule.severity.name}: {rule.title} — {rule.message}")
 
     return "\n".join(lines)
+
+
+def build_system_prompt(thresholds: Thresholds | None = None) -> str:
+    t = thresholds or Thresholds()
+    return SYSTEM_PROMPT_TEMPLATE.format(
+        target_partition_mb=t.target_partition_size_bytes // (1024 * 1024),
+        skew_warning=t.skew_warning_ratio,
+        skew_critical=t.skew_critical_ratio,
+        gc_warning=t.gc_warning_percent,
+        gc_critical=t.gc_critical_percent,
+        min_cpu=t.min_cpu_utilization_percent,
+    )
+
+
+SYSTEM_PROMPT = build_system_prompt()

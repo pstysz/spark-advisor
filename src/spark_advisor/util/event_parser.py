@@ -93,8 +93,6 @@ class _ParserState:
                 executor_count=self.executor_count,
                 peak_memory_bytes=0,
                 allocated_memory_bytes=0,
-                total_cpu_time_ms=0,
-                total_run_time_ms=0,
             ),
         )
 
@@ -125,7 +123,8 @@ def _process_event(event: dict[str, Any], state: _ParserState) -> None:
                 "name": stage_info.get("Stage Name", ""),
                 "submission_time": stage_info.get("Submission Time", 0),
                 "completion_time": stage_info.get("Completion Time", 0),
-                "input_bytes": stage_info.get("Accumulables", [{}])[0].get("Value", 0)
+                "input_bytes": _extract_accumulator(stage_info, "internal.metrics.input.bytesRead"),
+                "output_bytes": _extract_accumulator(stage_info, "internal.metrics.output.bytesWritten")
                 if stage_info.get("Accumulables")
                 else 0,
             }
@@ -159,3 +158,9 @@ def _process_event(event: dict[str, Any], state: _ParserState) -> None:
 
         case "SparkListenerExecutorAdded":
             state.executor_count += 1
+
+def _extract_accumulator(stage_info: dict[str, Any], name: str) -> int:
+    for acc in stage_info.get("Accumulables", []):
+        if acc.get("Name") == name:
+            return int(acc.get("Value", 0))
+    return 0
