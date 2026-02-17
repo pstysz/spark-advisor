@@ -2,13 +2,12 @@ from typing import Any
 
 from anthropic.types import MessageParam, ToolChoiceToolParam, ToolUseBlock
 
-from spark_advisor.ai.config import ANALYSIS_TOOL, AnalysisToolInput
+from spark_advisor.ai.config import ANALYSIS_TOOL
 from spark_advisor.ai.prompts_builder import SYSTEM_PROMPT, build_user_message
 from spark_advisor.api.anthropic_client import AnthropicClient
 from spark_advisor.config import DEFAULT_MAX_TOKENS, DEFAULT_MODEL
-from spark_advisor.model import AdvisorReport, RuleResult
+from spark_advisor.model import AdvisorReport, AnalysisToolInput, Recommendation, RuleResult, Severity
 from spark_advisor.model.metrics import JobAnalysis
-from spark_advisor.model.output import Recommendation, Severity
 
 
 class LlmAnalysisService:
