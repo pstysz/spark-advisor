@@ -1,39 +1,36 @@
-.PHONY: install dev test lint format check all clean
+.PHONY: install dev test lint format check demo clean
 
-# Install production dependencies
+PACKAGES = packages/spark-advisor packages/spark-advisor-shared packages/spark-advisor-hs-poller
+
 install:
 	uv sync
 
-# Install with dev dependencies
 dev:
 	uv sync --group dev
 
-# Run tests
 test:
-	uv run pytest
+	@for pkg in $(PACKAGES); do \
+		echo "\n=== Testing $$pkg ==="; \
+		cd $(CURDIR)/$$pkg && uv run pytest || exit 1; \
+	done
 
-# Run linter
 lint:
-	uv run ruff check src/ tests/
-	uv run mypy src/
+	@for pkg in $(PACKAGES); do \
+		echo "\n=== Linting $$pkg ==="; \
+		cd $(CURDIR)/$$pkg && uv run ruff check src/ tests/ && uv run mypy src/ || exit 1; \
+	done
 
-# Auto-format code
 format:
-	uv run ruff format src/ tests/
-	uv run ruff check --fix src/ tests/
+	@for pkg in $(PACKAGES); do \
+		echo "\n=== Formatting $$pkg ==="; \
+		cd $(CURDIR)/$$pkg && uv run ruff format src/ tests/ && uv run ruff check --fix src/ tests/ || exit 1; \
+	done
 
-# Run all checks (CI-ready)
 check: lint test
 
-# Run the CLI
-run:
-	uv run spark-advisor
-
-# Analyze sample event log
 demo:
-	uv run spark-advisor analyze sample_event_logs/sample_etl_job.json --no-ai
+	cd $(CURDIR)/packages/spark-advisor && uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json --no-ai
 
-# Clean build artifacts
 clean:
 	rm -rf dist/ build/ *.egg-info .mypy_cache .pytest_cache .ruff_cache htmlcov/
 	find . -type d -name __pycache__ -exec rm -rf {} +
