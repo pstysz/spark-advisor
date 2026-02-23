@@ -1,5 +1,12 @@
 from spark_advisor.model.input import AnalysisToolInput, RecommendationInput
-from spark_advisor.model.metrics import ExecutorMetrics, JobAnalysis, StageMetrics, TaskMetrics
+from spark_advisor.model.metrics import (
+    ExecutorMetrics,
+    JobAnalysis,
+    Quantiles,
+    StageMetrics,
+    TaskMetrics,
+    TaskMetricsDistributions,
+)
 from spark_advisor.model.output import AdvisorReport, AnalysisResult, Recommendation, RuleResult, Severity
 from spark_advisor.model.spark_config import SparkConfig
 
@@ -9,6 +16,7 @@ __all__ = [
     "AnalysisToolInput",
     "ExecutorMetrics",
     "JobAnalysis",
+    "Quantiles",
     "Recommendation",
     "RecommendationInput",
     "RuleResult",
@@ -16,4 +24,5 @@ __all__ = [
     "SparkConfig",
     "StageMetrics",
     "TaskMetrics",
+    "TaskMetricsDistributions",
 ]

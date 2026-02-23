@@ -8,15 +8,15 @@ from spark_advisor_hs_poller.model.spark_config import SparkConfig
 class Quantiles(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    min: int = 0
-    p25: int = 0
-    median: int = 0
-    p75: int = 0
-    max: int = 0
+    min: float = 0.0
+    p25: float = 0.0
+    median: float = 0.0
+    p75: float = 0.0
+    max: float = 0.0
 
     @property
-    def iqr(self) -> int:
-        return max(0, self.p75 - self.p25)
+    def iqr(self) -> float:
+        return max(0.0, self.p75 - self.p25)
 
     @property
     def skew_ratio(self) -> float:
@@ -112,7 +112,12 @@ class StageMetrics(BaseModel):
     failed_task_count: int = 0
 
     input_bytes: int = 0
+    input_records: int = 0
     output_bytes: int = 0
+    output_records: int = 0
+    shuffle_read_records: int = 0
+    shuffle_write_records: int = 0
+    killed_task_count: int = 0
 
     # task distributions
     tasks: TaskMetrics = Field(default_factory=TaskMetrics)
@@ -130,6 +135,12 @@ class ExecutorMetrics(BaseModel):
     executor_count: int
     peak_memory_bytes_sum: int
     allocated_memory_bytes_sum: int
+    total_task_time_ms: int = 0
+    total_gc_time_ms: int = 0
+    total_shuffle_read_bytes: int = 0
+    total_shuffle_write_bytes: int = 0
+    failed_tasks: int = 0
+    total_cores: int = 0
 
     @property
     def memory_utilization_percent(self) -> float:

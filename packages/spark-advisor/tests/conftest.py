@@ -16,7 +16,7 @@ def job_with_executors() -> JobAnalysis:
 
 @pytest.fixture
 def skewed_stage() -> StageMetrics:
-    return make_stage(stage_id=0, median_duration_ms=10, max_duration_ms=500)
+    return make_stage(stage_id=0, run_time_median=10, run_time_max=500)
 
 
 @pytest.fixture
@@ -26,4 +26,4 @@ def spilling_stage() -> StageMetrics:
 
 @pytest.fixture
 def high_gc_stage() -> StageMetrics:
-    return make_stage(stage_id=0, task_count=100, median_duration_ms=1000, total_gc_time_ms=50_000)
+    return make_stage(stage_id=0, task_count=100, sum_executor_run_time_ms=100_000, total_gc_time_ms=50_000)

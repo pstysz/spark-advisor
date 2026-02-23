@@ -12,6 +12,7 @@ APP_INFO: dict[str, Any] = {
             "duration": 300000,
             "sparkUser": "user",
             "completed": True,
+            "appSparkVersion": "3.5.0",
         }
     ],
 }
@@ -39,6 +40,11 @@ STAGES: list[dict[str, Any]] = [
         "diskBytesSpilled": 1024,
         "memoryBytesSpilled": 2048,
         "numFailedTasks": 3,
+        "inputRecords": 10_000,
+        "outputRecords": 5_000,
+        "shuffleReadRecords": 2_000,
+        "shuffleWriteRecords": 1_000,
+        "numKilledTasks": 1,
     }
 ]
 
@@ -70,9 +76,29 @@ TASK_SUMMARIES: dict[int, dict[str, Any]] = {
 }
 
 EXECUTORS: list[dict[str, Any]] = [
-    {"id": "driver", "maxMemory": 1073741824},
-    {"id": "1", "maxMemory": 4294967296, "peakMemoryMetrics": {"JVMHeapMemory": 2147483648}},
-    {"id": "2", "maxMemory": 4294967296, "peakMemoryMetrics": {"JVMHeapMemory": 1073741824}},
+    {"id": "driver", "maxMemory": 1073741824, "totalDuration": 5000, "totalGCTime": 100},
+    {
+        "id": "1",
+        "maxMemory": 4294967296,
+        "peakMemoryMetrics": {"JVMHeapMemory": 2147483648},
+        "totalDuration": 120000,
+        "totalGCTime": 3000,
+        "totalShuffleRead": 500_000,
+        "totalShuffleWrite": 200_000,
+        "failedTasks": 2,
+        "totalCores": 4,
+    },
+    {
+        "id": "2",
+        "maxMemory": 4294967296,
+        "peakMemoryMetrics": {"JVMHeapMemory": 1073741824},
+        "totalDuration": 80000,
+        "totalGCTime": 1000,
+        "totalShuffleRead": 300_000,
+        "totalShuffleWrite": 100_000,
+        "failedTasks": 0,
+        "totalCores": 4,
+    },
 ]
 
 
@@ -116,6 +142,11 @@ class TestMapJobAnalysis:
         assert stage.spill_to_disk_bytes == 1024
         assert stage.spill_to_memory_bytes == 2048
         assert stage.failed_task_count == 3
+        assert stage.input_records == 10_000
+        assert stage.output_records == 5_000
+        assert stage.shuffle_read_records == 2_000
+        assert stage.shuffle_write_records == 1_000
+        assert stage.killed_task_count == 1
 
     def test_task_count(self) -> None:
         job = _map_full()
@@ -197,6 +228,12 @@ class TestMapJobAnalysis:
         assert job.executors.executor_count == 2
         assert job.executors.peak_memory_bytes_sum == 2147483648 + 1073741824
         assert job.executors.allocated_memory_bytes_sum == 4294967296 * 2
+        assert job.executors.total_task_time_ms == 120000 + 80000
+        assert job.executors.total_gc_time_ms == 3000 + 1000
+        assert job.executors.total_shuffle_read_bytes == 500_000 + 300_000
+        assert job.executors.total_shuffle_write_bytes == 200_000 + 100_000
+        assert job.executors.failed_tasks == 2
+        assert job.executors.total_cores == 8
 
     def test_executors_exclude_driver(self) -> None:
         job = _map_full()
@@ -239,8 +276,34 @@ class TestMapJobAnalysis:
             task_summaries={},
             executors_data=[],
         )
-        assert job.spark_version == ""
+        assert job.spark_version == "3.5.0"
         assert job.config.raw == {}
+
+    def test_spark_version_from_app_info_not_environment(self) -> None:
+        env_without_runtime: dict[str, Any] = {
+            "sparkProperties": [["spark.executor.memory", "4g"]],
+        }
+        job = map_job_analysis(
+            app_id="app-005",
+            app_info=APP_INFO,
+            environment=env_without_runtime,
+            stages_data=[],
+            task_summaries={},
+            executors_data=[],
+        )
+        assert job.spark_version == "3.5.0"
+
+    def test_spark_version_empty_without_attempts(self) -> None:
+        app_info: dict[str, Any] = {"name": "NoAttempts"}
+        job = map_job_analysis(
+            app_id="app-006",
+            app_info=app_info,
+            environment=ENVIRONMENT,
+            stages_data=[],
+            task_summaries={},
+            executors_data=[],
+        )
+        assert job.spark_version == ""
 
     def test_gc_time_percent(self) -> None:
         job = _map_full()
@@ -279,7 +342,23 @@ class TestNullSafety:
         assert job.executors.peak_memory_bytes_sum == 0
         assert job.executors.allocated_memory_bytes_sum == 4294967296 * 2
 
-    def test_runtime_null_in_environment(self) -> None:
+    def test_total_duration_missing_defaults_to_zero(self) -> None:
+        executors = [
+            {"id": "1", "maxMemory": 4294967296},
+            {"id": "2", "maxMemory": 4294967296},
+        ]
+        job = map_job_analysis(
+            app_id="app-no-duration",
+            app_info=APP_INFO,
+            environment=ENVIRONMENT,
+            stages_data=[],
+            task_summaries={},
+            executors_data=executors,
+        )
+        assert job.executors is not None
+        assert job.executors.total_task_time_ms == 0
+
+    def test_runtime_null_in_environment_still_gets_version(self) -> None:
         env: dict[str, Any] = {
             "sparkProperties": [["spark.executor.memory", "4g"]],
             "runtime": None,
@@ -292,7 +371,7 @@ class TestNullSafety:
             task_summaries={},
             executors_data=[],
         )
-        assert job.spark_version == ""
+        assert job.spark_version == "3.5.0"
 
     def test_null_nested_metrics_in_task_summary(self) -> None:
         task_summaries: dict[int, dict[str, Any]] = {

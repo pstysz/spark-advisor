@@ -21,7 +21,7 @@ class SparkAdvisor:
     ) -> AnalysisResult:
         ai_report = None
         rule_results = self._static.analyze(job)
-        if self._llm and rule_results:
+        if self._llm:
             ai_report = self._llm.analyze(job, rule_results, model)
 
         return AnalysisResult(

@@ -11,7 +11,6 @@ from spark_advisor.model import (
     RuleResult,
     Severity,
 )
-from spark_advisor.model.output import ApplicationSummary
 
 SEVERITY_ICONS = {
     Severity.CRITICAL: "[bold red]🔴 CRITICAL[/]",
@@ -60,34 +59,6 @@ def print_analysis_result(
 
     if not use_ai:
         console.print("[dim]AI analysis disabled. Use --ai to enable.[/]")
-
-
-def print_scan_results(console: Console, apps: list[ApplicationSummary], *, limit: int = 10) -> None:
-    if not apps:
-        console.print("[yellow]No applications found.[/]")
-        return
-
-    table = Table(title=f"Recent Spark Applications (last {limit})")
-    table.add_column("App ID", min_width=30)
-    table.add_column("Name")
-    table.add_column("Duration")
-    table.add_column("Started")
-
-    for app_info in apps:
-        first_attempt = app_info.attempts[0]
-
-        duration_ms = int(first_attempt.duration)
-        duration_str = f"{duration_ms / 60000:.1f} min" if duration_ms > 0 else "—"
-
-        table.add_row(
-            app_info.id,
-            app_info.name,
-            duration_str,
-            first_attempt.startTime,
-        )
-
-    console.print(table)
-    console.print("\n[dim]Use 'spark-advisor analyze <app-id> -s <url>' to analyze a specific job.[/]")
 
 
 def _print_rule_results(console: Console, results: list[RuleResult]) -> None:

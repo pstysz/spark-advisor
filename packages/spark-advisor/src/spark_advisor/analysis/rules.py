@@ -49,12 +49,11 @@ class Rule(ABC):
 
 # Detects stages where the slowest task takes disproportionately longer than the median,
 # which means one partition holds much more data than others (e.g. hot key in a join).
-# skew_ratio = max_task_duration / median_task_duration
 class DataSkewRule(Rule):
     rule_id: ClassVar[str] = "data_skew"
 
     def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
-        ratio = stage.tasks.skew_ratio
+        ratio = stage.tasks.duration_skew_ratio
         if ratio < self._thresholds.skew_warning_ratio:
             return None
 
@@ -65,9 +64,10 @@ class DataSkewRule(Rule):
         else:
             fix = "Enable AQE: spark.sql.adaptive.enabled=true, spark.sql.adaptive.skewJoin.enabled=true"
 
+        run_time = stage.tasks.distributions.executor_run_time
         msg = (
-            f"Max task duration ({stage.tasks.max_duration_ms}ms) is "
-            f"{ratio:.1f}x the median ({stage.tasks.median_duration_ms}ms)"
+            f"Max task duration ({run_time.max}ms) is "
+            f"{ratio:.1f}x the median ({run_time.median}ms)"
         )
         impact = f"Stage {stage.stage_id} duration could decrease ~{int((1 - 1 / ratio) * 100)}%"
 
@@ -89,7 +89,7 @@ class SpillToDiskRule(Rule):
     rule_id: ClassVar[str] = "spill_to_disk"
 
     def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
-        spill_bytes = stage.tasks.spill_to_disk_bytes
+        spill_bytes = stage.spill_to_disk_bytes
         if spill_bytes == 0:
             return None
 
@@ -120,12 +120,13 @@ class GCPressureRule(Rule):
     rule_id: ClassVar[str] = "gc_pressure"
 
     def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
-        gc_pct = stage.tasks.gc_time_percent
+        gc_pct = stage.gc_time_percent
         if gc_pct < self._thresholds.gc_warning_percent:
             return None
 
         severity = Severity.CRITICAL if gc_pct > self._thresholds.gc_critical_percent else Severity.WARNING
-        impact = f"Reducing GC to <10% could save ~{int(gc_pct - 10)}% stage time"
+        target = self._thresholds.gc_target_percent
+        impact = f"Reducing GC to <{target:.0f}% could save ~{int(gc_pct - target)}% stage time"
 
         return self._result(
             severity,
@@ -149,7 +150,7 @@ class ShufflePartitionsRule(Rule):
         current_partitions = job.config.shuffle_partitions
 
         max_shuffle = max(
-            (s.tasks.total_shuffle_read_bytes for s in job.stages),
+            (s.total_shuffle_read_bytes for s in job.stages),
             default=0,
         )
         if max_shuffle == 0:
@@ -184,28 +185,33 @@ class ShufflePartitionsRule(Rule):
         return None
 
 
-# Detects over-provisioned clusters where executors sit idle most of the time.
-# CPU utilization below 40% means you're paying for compute that's not doing work —
-# either reduce executor count or increase parallelism (more partitions).
+# Detects over-provisioned clusters where executor slots sit idle most of the time.
+# Slot utilization = total_task_time / (executor_count * cores * job_duration).
+# Below 40% means you're paying for compute that's not doing work.
 class ExecutorIdleRule(Rule):
     rule_id: ClassVar[str] = "executor_idle"
 
     def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
-        if job.executors is None:
+        if job.executors is None or job.executors.total_task_time_ms == 0 or job.duration_ms == 0:
             return []
 
-        cpu_pct = job.executors.cpu_utilization_percent
-        if cpu_pct is None or cpu_pct == 0 or cpu_pct > self._thresholds.min_cpu_utilization_percent:
+        cores = job.config.executor_cores
+        total_slot_time = job.executors.executor_count * cores * job.duration_ms
+        if total_slot_time == 0:
             return []
 
-        idle_pct = 100 - cpu_pct
+        utilization = (job.executors.total_task_time_ms / total_slot_time) * 100
+        if utilization > self._thresholds.min_slot_utilization_percent:
+            return []
+
+        idle_pct = 100 - utilization
 
         return [
             self._result(
                 Severity.WARNING,
                 "Executor over-provisioning",
-                f"CPU utilization is only {cpu_pct:.0f}% — {idle_pct:.0f}% idle time",
-                current_value=f"{job.executors.executor_count} executors, {cpu_pct:.0f}% CPU",
+                f"Slot utilization is only {utilization:.0f}% — {idle_pct:.0f}% idle",
+                current_value=f"{job.executors.executor_count} executors x {cores} cores, {utilization:.0f}% utilized",
                 recommended_value="Reduce executor count or increase parallelism",
                 estimated_impact="Right-sizing can reduce cloud compute costs 30-50%",
             )
@@ -222,7 +228,7 @@ class TaskFailureRule(Rule):
     rule_id: ClassVar[str] = "task_failures"
 
     def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
-        failed = stage.tasks.failed_task_count
+        failed = stage.failed_task_count
         if failed < self._thresholds.task_failure_warning_count:
             return None
 
