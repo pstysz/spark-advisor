@@ -2,13 +2,19 @@ import gzip
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from statistics import median
 from typing import Any
 
 import orjson
 
 from spark_advisor.model import SparkConfig
-from spark_advisor.model.metrics import ExecutorMetrics, JobAnalysis, StageMetrics, TaskMetrics
+from spark_advisor.model.metrics import (
+    ExecutorMetrics,
+    JobAnalysis,
+    Quantiles,
+    StageMetrics,
+    TaskMetrics,
+    TaskMetricsDistributions,
+)
 
 
 def parse_event_log(path: Path) -> JobAnalysis:
@@ -26,16 +32,38 @@ def parse_event_log(path: Path) -> JobAnalysis:
     return state.build()
 
 
+def _quantiles_from_list(values: list[int]) -> Quantiles:
+    if not values:
+        return Quantiles()
+    s = sorted(values)
+    n = len(s)
+    return Quantiles(
+        min=s[0],
+        p25=s[n // 4] if n >= 4 else s[0],
+        median=s[n // 2],
+        p75=s[(3 * n) // 4] if n >= 4 else s[-1],
+        max=s[-1],
+    )
+
+
 @dataclass
 class _StageAccumulator:
     durations: list[int] = field(default_factory=list)
-    gc_time_ms: int = 0
+    executor_run_times: list[int] = field(default_factory=list)
+    gc_times: list[int] = field(default_factory=list)
     task_count: int = 0
+    total_gc_time_ms: int = 0
+    total_executor_run_time_ms: int = 0
     shuffle_read_bytes: int = 0
     shuffle_write_bytes: int = 0
     spill_disk_bytes: int = 0
     spill_memory_bytes: int = 0
     failed_count: int = 0
+    killed_count: int = 0
+    input_records: int = 0
+    output_records: int = 0
+    shuffle_read_records: int = 0
+    shuffle_write_records: int = 0
 
 
 class _ParserState:
@@ -54,33 +82,43 @@ class _ParserState:
         stages = []
         for stage_id, info in sorted(self.stage_info.items()):
             acc = self.stage_tasks[stage_id]
-            median_dur = int(median(acc.durations)) if acc.durations else 0
-            max_dur = max(acc.durations) if acc.durations else 0
-            min_dur = min(acc.durations) if acc.durations else 0
 
-            tasks = TaskMetrics(
-                task_count=acc.task_count,
-                median_duration_ms=median_dur,
-                max_duration_ms=max_dur,
-                min_duration_ms=min_dur,
-                total_gc_time_ms=acc.gc_time_ms,
-                total_shuffle_read_bytes=acc.shuffle_read_bytes,
-                total_shuffle_write_bytes=acc.shuffle_write_bytes,
-                spill_to_disk_bytes=acc.spill_disk_bytes,
-                spill_to_memory_bytes=acc.spill_memory_bytes,
-                failed_task_count=acc.failed_count,
+            duration_q = _quantiles_from_list(acc.durations)
+            run_time_q = _quantiles_from_list(acc.executor_run_times)
+            gc_q = _quantiles_from_list(acc.gc_times)
+
+            distributions = TaskMetricsDistributions(
+                duration=duration_q,
+                executor_run_time=run_time_q,
+                jvm_gc_time=gc_q,
             )
 
             stages.append(
                 StageMetrics(
                     stage_id=stage_id,
                     stage_name=info.get("name", f"Stage {stage_id}"),
-                    duration_ms=info.get("completion_time", 0) - info.get("submission_time", 0),
+                    sum_executor_run_time_ms=acc.total_executor_run_time_ms,
+                    total_gc_time_ms=acc.total_gc_time_ms,
+                    total_shuffle_read_bytes=acc.shuffle_read_bytes,
+                    total_shuffle_write_bytes=acc.shuffle_write_bytes,
+                    spill_to_disk_bytes=acc.spill_disk_bytes,
+                    spill_to_memory_bytes=acc.spill_memory_bytes,
+                    failed_task_count=acc.failed_count,
+                    killed_task_count=acc.killed_count,
                     input_bytes=info.get("input_bytes", 0),
+                    input_records=acc.input_records,
                     output_bytes=info.get("output_bytes", 0),
-                    tasks=tasks,
+                    output_records=acc.output_records,
+                    shuffle_read_records=acc.shuffle_read_records,
+                    shuffle_write_records=acc.shuffle_write_records,
+                    tasks=TaskMetrics(
+                        task_count=acc.task_count,
+                        distributions=distributions,
+                    ),
                 )
             )
+
+        total_task_time = sum(acc.total_executor_run_time_ms for acc in self.stage_tasks.values())
 
         return JobAnalysis(
             app_id=self.app_id,
@@ -91,8 +129,9 @@ class _ParserState:
             stages=stages,
             executors=ExecutorMetrics(
                 executor_count=self.executor_count,
-                peak_memory_bytes=0,
-                allocated_memory_bytes=0,
+                peak_memory_bytes_sum=0,
+                allocated_memory_bytes_sum=0,
+                total_task_time_ms=total_task_time,
             ),
         )
 
@@ -142,16 +181,36 @@ def _process_event(event: dict[str, Any], state: _ParserState) -> None:
             if task_info.get("Failed", False):
                 acc.failed_count += 1
 
+            task_end_reason = event.get("Task End Reason", {})
+            if task_end_reason.get("Reason") == "TaskKilled":
+                acc.killed_count += 1
+
             duration = task_info.get("Finish Time", 0) - task_info.get("Launch Time", 0)
             acc.durations.append(duration)
             acc.task_count += 1
-            acc.gc_time_ms += task_metrics.get("JVM GC Time", 0)
+
+            gc_time = task_metrics.get("JVM GC Time", 0)
+            acc.gc_times.append(gc_time)
+            acc.total_gc_time_ms += gc_time
+
+            executor_run_time = task_metrics.get("Executor Run Time", 0)
+            acc.executor_run_times.append(executor_run_time)
+            acc.total_executor_run_time_ms += executor_run_time
 
             shuffle_read = task_metrics.get("Shuffle Read Metrics", {})
             acc.shuffle_read_bytes += shuffle_read.get("Remote Bytes Read", 0)
+            acc.shuffle_read_bytes += shuffle_read.get("Local Bytes Read", 0)
+            acc.shuffle_read_records += shuffle_read.get("Total Records Read", 0)
 
             shuffle_write = task_metrics.get("Shuffle Write Metrics", {})
             acc.shuffle_write_bytes += shuffle_write.get("Shuffle Bytes Written", 0)
+            acc.shuffle_write_records += shuffle_write.get("Shuffle Records Written", 0)
+
+            input_metrics = task_metrics.get("Input Metrics", {})
+            acc.input_records += input_metrics.get("Records Read", 0)
+
+            output_metrics = task_metrics.get("Output Metrics", {})
+            acc.output_records += output_metrics.get("Records Written", 0)
 
             acc.spill_disk_bytes += task_metrics.get("Disk Bytes Spilled", 0)
             acc.spill_memory_bytes += task_metrics.get("Memory Bytes Spilled", 0)

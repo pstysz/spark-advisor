@@ -55,29 +55,3 @@ class AnalysisResult(BaseModel):
     job: JobAnalysis
     rule_results: list[RuleResult]
     ai_report: AdvisorReport | None = None
-
-
-class Attempt(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    attemptId: str
-    startTime: str
-    endTime: str
-    lastUpdated: str
-    duration: int
-    sparkUser: str
-    completed: bool
-    appSparkVersion: str
-    logPath: str
-    startTimeEpoch: int
-    endTimeEpoch: int
-    lastUpdatedEpoch: int
-
-
-class ApplicationSummary(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    id: str
-    name: str
-    attempts: list[Attempt]
-    driverHost: str

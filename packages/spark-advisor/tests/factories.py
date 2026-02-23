@@ -2,33 +2,87 @@ from spark_advisor.model import RuleResult, Severity, SparkConfig
 from spark_advisor.model.metrics import (
     ExecutorMetrics,
     JobAnalysis,
+    Quantiles,
     StageMetrics,
     TaskMetrics,
+    TaskMetricsDistributions,
 )
 
 
-def make_tasks(**overrides: object) -> TaskMetrics:
-    defaults: dict[str, object] = {
-        "task_count": 100,
-        "median_duration_ms": 1000,
-        "max_duration_ms": 2000,
-        "min_duration_ms": 500,
-        "total_gc_time_ms": 5000,
-        "total_shuffle_read_bytes": 1024 * 1024 * 100,
-        "total_shuffle_write_bytes": 1024 * 1024 * 50,
-    }
-    defaults.update(overrides)
-    return TaskMetrics(**defaults)  # type: ignore[arg-type]
+def make_quantiles(
+    min: int = 0, p25: int = 0, median: int = 0, p75: int = 0, max: int = 0
+) -> Quantiles:
+    return Quantiles(min=min, p25=p25, median=median, p75=p75, max=max)
 
 
-def make_stage(stage_id: int = 0, **task_overrides: object) -> StageMetrics:
+def make_stage(
+    stage_id: int = 0,
+    *,
+    task_count: int = 100,
+    run_time_min: int = 500,
+    run_time_median: int = 1000,
+    run_time_max: int = 2000,
+    sum_executor_run_time_ms: int | None = None,
+    total_gc_time_ms: int = 5000,
+    total_shuffle_read_bytes: int = 100 * 1024 * 1024,
+    total_shuffle_write_bytes: int = 50 * 1024 * 1024,
+    spill_to_disk_bytes: int = 0,
+    spill_to_memory_bytes: int = 0,
+    failed_task_count: int = 0,
+    killed_task_count: int = 0,
+    input_bytes: int = 200 * 1024 * 1024,
+    input_records: int = 0,
+    output_bytes: int = 50 * 1024 * 1024,
+    output_records: int = 0,
+    shuffle_read_records: int = 0,
+    shuffle_write_records: int = 0,
+    peak_memory_max: int = 0,
+    scheduler_delay_max: int = 0,
+) -> StageMetrics:
+    run_time = make_quantiles(
+        min=run_time_min,
+        p25=(run_time_min + run_time_median) // 2,
+        median=run_time_median,
+        p75=(run_time_median + run_time_max) // 2,
+        max=run_time_max,
+    )
+    computed_sum = sum_executor_run_time_ms if sum_executor_run_time_ms is not None else task_count * run_time_median
+
+    peak_mem = (
+        make_quantiles(max=peak_memory_max, median=peak_memory_max // 2) if peak_memory_max else Quantiles()
+    )
+    sched = (
+        make_quantiles(max=scheduler_delay_max, median=scheduler_delay_max // 4)
+        if scheduler_delay_max
+        else Quantiles()
+    )
+
     return StageMetrics(
         stage_id=stage_id,
         stage_name=f"Stage {stage_id}",
-        duration_ms=100_000,
-        input_bytes=1024 * 1024 * 200,
-        output_bytes=1024 * 1024 * 50,
-        tasks=make_tasks(**task_overrides),
+        sum_executor_run_time_ms=computed_sum,
+        total_gc_time_ms=total_gc_time_ms,
+        total_shuffle_read_bytes=total_shuffle_read_bytes,
+        total_shuffle_write_bytes=total_shuffle_write_bytes,
+        spill_to_disk_bytes=spill_to_disk_bytes,
+        spill_to_memory_bytes=spill_to_memory_bytes,
+        failed_task_count=failed_task_count,
+        killed_task_count=killed_task_count,
+        input_bytes=input_bytes,
+        input_records=input_records,
+        output_bytes=output_bytes,
+        output_records=output_records,
+        shuffle_read_records=shuffle_read_records,
+        shuffle_write_records=shuffle_write_records,
+        tasks=TaskMetrics(
+            task_count=task_count,
+            distributions=TaskMetricsDistributions(
+                duration=run_time,
+                executor_run_time=run_time,
+                peak_execution_memory=peak_mem,
+                scheduler_delay=sched,
+            ),
+        ),
     )
 
 
@@ -49,10 +103,9 @@ def make_job(**overrides: object) -> JobAnalysis:
 def make_executors(**overrides: object) -> ExecutorMetrics:
     defaults: dict[str, object] = {
         "executor_count": 10,
-        "peak_memory_bytes": 1024 * 1024 * 1024 * 2,
-        "allocated_memory_bytes": 1024 * 1024 * 1024 * 4,
-        "total_cpu_time_ms": 500_000,
-        "total_run_time_ms": 1_000_000,
+        "peak_memory_bytes_sum": 1024 * 1024 * 1024 * 2,
+        "allocated_memory_bytes_sum": 1024 * 1024 * 1024 * 4,
+        "total_task_time_ms": 500_000,
     }
     defaults.update(overrides)
     return ExecutorMetrics(**defaults)  # type: ignore[arg-type]

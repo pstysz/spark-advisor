@@ -26,7 +26,8 @@ def map_job_analysis(
     attempts = app_info.get("attempts", [])
     latest = attempts[-1] if attempts else {}
 
-    config, spark_version = _map_environment(environment)
+    config = _map_environment(environment)
+    spark_version = latest.get("appSparkVersion", "")
     stages = _map_stages(stages_data, task_summaries)
     executors = _map_executors(executors_data)
 
@@ -41,14 +42,13 @@ def map_job_analysis(
     )
 
 
-def _map_environment(env: dict[str, Any]) -> tuple[SparkConfig, str]:
+def _map_environment(env: dict[str, Any]) -> SparkConfig:
     spark_props: dict[str, str] = {}
     for prop in env.get("sparkProperties", []):
         if len(prop) >= 2:
             spark_props[prop[0]] = prop[1]
 
-    spark_version = (env.get("runtime") or {}).get("sparkVersion", "")
-    return SparkConfig(raw=spark_props), spark_version
+    return SparkConfig(raw=spark_props)
 
 
 def _map_stages(
@@ -77,7 +77,12 @@ def _map_stages(
                 spill_to_memory_bytes=stage_data.get("memoryBytesSpilled", 0),
                 failed_task_count=stage_data.get("numFailedTasks", 0),
                 input_bytes=stage_data.get("inputBytes", 0),
+                input_records=stage_data.get("inputRecords", 0),
                 output_bytes=stage_data.get("outputBytes", 0),
+                output_records=stage_data.get("outputRecords", 0),
+                shuffle_read_records=stage_data.get("shuffleReadRecords", 0),
+                shuffle_write_records=stage_data.get("shuffleWriteRecords", 0),
+                killed_task_count=stage_data.get("numKilledTasks", 0),
                 tasks=tasks,
             )
         )
@@ -155,4 +160,10 @@ def _map_executors(executors_data: list[dict[str, Any]]) -> ExecutorMetrics:
             (e.get("peakMemoryMetrics") or {}).get("JVMHeapMemory", 0) for e in non_driver
         ),
         allocated_memory_bytes_sum=sum(e.get("maxMemory", 0) for e in non_driver),
+        total_task_time_ms=sum(e.get("totalDuration", 0) for e in non_driver),
+        total_gc_time_ms=sum(e.get("totalGCTime", 0) for e in non_driver),
+        total_shuffle_read_bytes=sum(e.get("totalShuffleRead", 0) for e in non_driver),
+        total_shuffle_write_bytes=sum(e.get("totalShuffleWrite", 0) for e in non_driver),
+        failed_tasks=sum(e.get("failedTasks", 0) for e in non_driver),
+        total_cores=sum(e.get("totalCores", 0) for e in non_driver),
     )

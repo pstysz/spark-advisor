@@ -183,6 +183,30 @@ class TestHistoryServerClientListApplications:
         assert apps[0].attempts[0].attemptId == "1"
 
     @respx.mock
+    def test_list_applications_with_null_attempt_id(self) -> None:
+        app_no_attempt_id = [
+            {
+                "id": "app-002",
+                "name": "ClientModeJob",
+                "attempts": [
+                    {
+                        "attemptId": None,
+                        "startTime": "2026-01-01T00:00:00.000GMT",
+                        "duration": 60000,
+                        "sparkUser": "user",
+                        "completed": True,
+                    }
+                ],
+            }
+        ]
+        respx.get(f"{BASE}/applications").respond(content=json.dumps(app_no_attempt_id).encode())
+        with HistoryServerClient("http://spark-hs:18080") as client:
+            apps = client.list_applications(limit=10)
+
+        assert len(apps) == 1
+        assert apps[0].attempts[0].attemptId is None
+
+    @respx.mock
     def test_list_applications_empty(self) -> None:
         respx.get(f"{BASE}/applications").respond(content=b"[]")
         with HistoryServerClient("http://spark-hs:18080") as client:

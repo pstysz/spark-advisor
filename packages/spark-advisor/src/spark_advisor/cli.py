@@ -9,14 +9,12 @@ from spark_advisor.ai.llm_analysis_service import LlmAnalysisService
 from spark_advisor.analysis.rules import rules_for_threshold
 from spark_advisor.analysis.static_analysis_service import StaticAnalysisService
 from spark_advisor.api.anthropic_client import AnthropicClient
-from spark_advisor.api.history_server_client import HistoryServerClient
 from spark_advisor.config import DEFAULT_MODEL, Thresholds
 from spark_advisor.model import AnalysisResult
 from spark_advisor.model.metrics import JobAnalysis
 from spark_advisor.util.console import (
     print_analysis_result,
     print_job_overview,
-    print_scan_results,
 )
 from spark_advisor.util.event_parser import parse_event_log
 
@@ -28,10 +26,7 @@ app = typer.Typer(
 console = Console()
 
 
-def _load_job(source: str, history_server: str | None) -> JobAnalysis:
-    if history_server:
-        with HistoryServerClient(history_server) as client:
-            return client.fetch(source)
+def _load_job(source: str) -> JobAnalysis:
     path = Path(source)
     if not path.exists():
         raise FileNotFoundError(f"Event log file not found: {source}")
@@ -53,12 +48,8 @@ def _run_analysis(
 def analyze(
     source: Annotated[
         str,
-        typer.Argument(help="Path to event log file OR Spark application ID"),
+        typer.Argument(help="Path to event log file (.json or .json.gz)"),
     ],
-    history_server: Annotated[
-        str | None,
-        typer.Option("--history-server", "-s", help="Spark History Server URL"),
-    ] = None,
     ai_enabled: Annotated[
         bool,
         typer.Option(
@@ -78,7 +69,7 @@ def analyze(
     """Analyze a Spark job and get optimization recommendations."""
     with console.status("[bold blue]Loading job data...[/]"):
         try:
-            job = _load_job(source, history_server)
+            job = _load_job(source)
         except FileNotFoundError as e:
             console.print(f"[red]Error: {e}[/]")
             raise typer.Exit(code=1) from e
@@ -90,23 +81,6 @@ def analyze(
         result = _run_analysis(job, ai_enabled=ai_enabled, model=model, thresholds=t)
 
     print_analysis_result(console, result, use_ai=ai_enabled, output_config=output_config)
-
-
-@app.command()
-def scan(
-    history_server: Annotated[
-        str,
-        typer.Option("--history-server", "-s", help="Spark History Server URL"),
-    ],
-    limit: Annotated[
-        int,
-        typer.Option("--limit", "-n", help="Number of recent applications to scan"),
-    ] = 10,
-) -> None:
-    """Scan recent Spark applications and flag potential issues."""
-    with HistoryServerClient(history_server) as client:
-        apps = client.list_applications(limit=limit)
-    print_scan_results(console, apps, limit=limit)
 
 
 @app.command()
