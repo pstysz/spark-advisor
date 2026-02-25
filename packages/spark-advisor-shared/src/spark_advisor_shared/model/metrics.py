@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from spark_advisor_hs_poller.model.spark_config import SparkConfig
+from spark_advisor_shared.model.spark_config import SparkConfig
 
 
 class Quantiles(BaseModel):
@@ -77,7 +77,6 @@ class TaskMetricsDistributions(BaseModel):
     memory_bytes_spilled: Quantiles = Field(default_factory=Quantiles)
     disk_bytes_spilled: Quantiles = Field(default_factory=Quantiles)
 
-    # IO/shuffle (nested)
     input_metrics: IOQuantiles = Field(default_factory=IOQuantiles)
     output_metrics: IOQuantiles = Field(default_factory=IOQuantiles)
     shuffle_read_metrics: ShuffleReadQuantiles = Field(default_factory=ShuffleReadQuantiles)
@@ -101,7 +100,6 @@ class StageMetrics(BaseModel):
     stage_id: int
     stage_name: str
 
-    # totals (stage_data)
     sum_executor_run_time_ms: int = 0
     total_gc_time_ms: int = 0
 
@@ -119,7 +117,6 @@ class StageMetrics(BaseModel):
     shuffle_write_records: int = 0
     killed_task_count: int = 0
 
-    # task distributions
     tasks: TaskMetrics = Field(default_factory=TaskMetrics)
 
     @property

@@ -18,7 +18,9 @@ def _safe_float(v: Any) -> float:
 def percentile_value(values: Sequence[Any], quantile: float) -> float:
     if not values:
         return 0.0
-    idx = QUANTILE_MAP.get(float(quantile), 2)
+    idx = QUANTILE_MAP.get(float(quantile))
+    if idx is None:
+        raise ValueError(f"Unsupported quantile: {quantile}. Supported: {sorted(QUANTILE_MAP)}")
     if idx >= len(values):
         idx = len(values) - 1
     return _safe_float(values[idx])

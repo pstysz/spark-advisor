@@ -1,8 +1,8 @@
 from spark_advisor.ai.config import IMPORTANT_KEYS, SYSTEM_PROMPT_TEMPLATE
 from spark_advisor.config import Thresholds
 from spark_advisor.model import RuleResult
-from spark_advisor.model.metrics import JobAnalysis, StageMetrics
-from spark_advisor.util.bytes_helper import format_bytes
+from spark_advisor_shared.model.metrics import JobAnalysis, StageMetrics
+from spark_advisor.util.helpers import format_bytes
 
 
 def build_user_message(
@@ -173,6 +173,3 @@ def build_system_prompt(thresholds: Thresholds | None = None) -> str:
         spill_warning_gb=t.spill_warning_gb,
         spill_critical_gb=t.spill_critical_gb,
     )
-
-
-SYSTEM_PROMPT = build_system_prompt()

@@ -1,5 +1,5 @@
 from spark_advisor.ai.config import ANALYSIS_TOOL
-from spark_advisor.ai.prompts_builder import SYSTEM_PROMPT, build_system_prompt, build_user_message
+from spark_advisor.ai.prompts_builder import build_system_prompt, build_user_message
 from spark_advisor.config import Thresholds
 from spark_advisor.model import (
     RuleResult,
@@ -56,9 +56,6 @@ class TestBuildSystemPrompt:
         assert ">30.0%" in prompt
         assert "<50.0%" in prompt
         assert "~64MB" in prompt
-
-    def test_module_level_constant_uses_defaults(self) -> None:
-        assert build_system_prompt() == SYSTEM_PROMPT
 
     def test_contains_no_problems_instruction(self) -> None:
         assert "no significant issues" in build_system_prompt()

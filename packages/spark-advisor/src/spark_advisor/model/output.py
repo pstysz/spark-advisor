@@ -2,7 +2,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from spark_advisor.model.metrics import JobAnalysis
+from spark_advisor_shared.model.metrics import JobAnalysis
 
 
 class Severity(StrEnum):
@@ -52,6 +52,7 @@ class AdvisorReport(BaseModel):
 class AnalysisResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
+    app_id: str
     job: JobAnalysis
     rule_results: list[RuleResult]
     ai_report: AdvisorReport | None = None

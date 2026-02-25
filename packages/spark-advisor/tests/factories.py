@@ -1,5 +1,5 @@
-from spark_advisor.model import RuleResult, Severity, SparkConfig
-from spark_advisor.model.metrics import (
+from spark_advisor.model import RuleResult, Severity
+from spark_advisor_shared.model.metrics import (
     ExecutorMetrics,
     JobAnalysis,
     Quantiles,
@@ -7,6 +7,7 @@ from spark_advisor.model.metrics import (
     TaskMetrics,
     TaskMetricsDistributions,
 )
+from spark_advisor_shared.model.spark_config import SparkConfig
 
 
 def make_quantiles(

@@ -1,6 +1,6 @@
 from typing import Any
 
-from spark_advisor_hs_poller.model.metrics import (
+from spark_advisor_shared.model.metrics import (
     ExecutorMetrics,
     IOQuantiles,
     JobAnalysis,
@@ -11,7 +11,7 @@ from spark_advisor_hs_poller.model.metrics import (
     TaskMetrics,
     TaskMetricsDistributions,
 )
-from spark_advisor_hs_poller.model.spark_config import SparkConfig
+from spark_advisor_shared.model.spark_config import SparkConfig
 from spark_advisor_shared.util.stat_helper import quantiles_5
 
 

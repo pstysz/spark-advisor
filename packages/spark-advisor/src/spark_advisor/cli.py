@@ -4,14 +4,14 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from spark_advisor import SparkAdvisor
+from spark_advisor import AdviceOrchestrator
 from spark_advisor.ai.llm_analysis_service import LlmAnalysisService
 from spark_advisor.analysis.rules import rules_for_threshold
 from spark_advisor.analysis.static_analysis_service import StaticAnalysisService
 from spark_advisor.api.anthropic_client import AnthropicClient
-from spark_advisor.config import DEFAULT_MODEL, Thresholds
+from spark_advisor.config import AnalyzerSettings, Thresholds
 from spark_advisor.model import AnalysisResult
-from spark_advisor.model.metrics import JobAnalysis
+from spark_advisor_shared.model.metrics import JobAnalysis
 from spark_advisor.util.console import (
     print_analysis_result,
     print_job_overview,
@@ -24,6 +24,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+_settings = AnalyzerSettings()
 
 
 def _load_job(source: str) -> JobAnalysis:
@@ -34,37 +35,38 @@ def _load_job(source: str) -> JobAnalysis:
 
 
 def _run_analysis(
-    job: JobAnalysis, *, ai_enabled: bool, model: str, thresholds: Thresholds | None = None
+        job: JobAnalysis, *, ai_enabled: bool, model: str, thresholds: Thresholds | None = None
 ) -> AnalysisResult:
     t = thresholds or Thresholds()
     static = StaticAnalysisService(rules_for_threshold(t))
     if not ai_enabled:
-        return SparkAdvisor(static).run(job)
+        return AdviceOrchestrator(static).run(job)
     with AnthropicClient() as client:
-        return SparkAdvisor(static, LlmAnalysisService(client)).run(job, model=model)
+        # ToDO: setup model
+        return AdviceOrchestrator(static, LlmAnalysisService(client, _settings)).run(job)
 
 
 @app.command()
 def analyze(
-    source: Annotated[
-        str,
-        typer.Argument(help="Path to event log file (.json or .json.gz)"),
-    ],
-    ai_enabled: Annotated[
-        bool,
-        typer.Option(
-            "--ai/--no-ai",
-            help="Enable AI-powered analysis (requires ANTHROPIC_API_KEY)",
-        ),
-    ] = True,
-    model: Annotated[
-        str,
-        typer.Option("--model", "-m", help="Claude model to use"),
-    ] = DEFAULT_MODEL,
-    output_config: Annotated[
-        Path | None,
-        typer.Option("--output-config", "-o", help="Write suggested config to file"),
-    ] = None,
+        source: Annotated[
+            str,
+            typer.Argument(help="Path to event log file (.json or .json.gz)"),
+        ],
+        ai_enabled: Annotated[
+            bool,
+            typer.Option(
+                "--ai/--no-ai",
+                help="Enable AI-powered analysis (requires ANTHROPIC_API_KEY)",
+            ),
+        ] = _settings.ai_settings.enabled,
+        model: Annotated[
+            str,
+            typer.Option("--model", "-m", help="Claude model to use"),
+        ] = _settings.ai_settings.model,
+        output_config: Annotated[
+            Path | None,
+            typer.Option("--output-config", "-o", help="Write suggested config to file"),
+        ] = None,
 ) -> None:
     """Analyze a Spark job and get optimization recommendations."""
     with console.status("[bold blue]Loading job data...[/]"):

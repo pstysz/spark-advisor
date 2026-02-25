@@ -1,6 +1,6 @@
 from spark_advisor.analysis.rules import Rule, default_rules
 from spark_advisor.model import RuleResult
-from spark_advisor.model.metrics import JobAnalysis
+from spark_advisor_shared.model.metrics import JobAnalysis
 from spark_advisor.model.output import Severity
 
 

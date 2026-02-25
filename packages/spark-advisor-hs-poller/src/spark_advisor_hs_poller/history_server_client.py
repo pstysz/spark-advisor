@@ -1,9 +1,12 @@
+import logging
 from typing import Any
 
 import httpx
 from pydantic import TypeAdapter
 
 from spark_advisor_hs_poller.model.output import ApplicationSummary
+
+logger = logging.getLogger(__name__)
 
 
 class HistoryServerClient:
@@ -58,6 +61,9 @@ class HistoryServerClient:
             params={"quantiles": "0.0,0.25,0.5,0.75,1.0"},
         )
         if response.status_code == 404:
+            # ToDo: unify HTTP error handling — consider a helper that maps
+            #  404 → empty result for all endpoints with optional data
+            logger.debug("Task summary not available for stage %d/%d (404)", stage_id, stage_attempt_id)
             return {}
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
