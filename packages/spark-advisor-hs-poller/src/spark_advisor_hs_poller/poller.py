@@ -10,7 +10,7 @@ from spark_advisor_shared.telemetry.setup import get_tracer
 if TYPE_CHECKING:
     from spark_advisor_hs_poller.history_server_client import HistoryServerClient
     from spark_advisor_hs_poller.pooling_state import PollingState
-    from spark_advisor_shared.sink.base import Sink
+    from spark_advisor_shared.kafka.sink import KafkaSink
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -20,7 +20,7 @@ class HistoryServerPoller:
     def __init__(
             self,
             hs_client: HistoryServerClient,
-            sink: Sink,
+            sink: KafkaSink,
             pool_state: PollingState,
             batch_size: int = 50,
     ) -> None:

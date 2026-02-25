@@ -3,9 +3,6 @@ from pydantic_settings import SettingsConfigDict
 
 from spark_advisor_shared.config.base import BaseServiceSettings
 
-DEFAULT_MODEL = "claude-sonnet-4-5"
-DEFAULT_MAX_TOKENS = 4096
-
 
 class Thresholds(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -31,15 +28,22 @@ class Thresholds(BaseModel):
     scheduler_delay_ms: int = 100
 
 
+class AiSettings(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    model: str = "claude-sonnet-4-5"
+    api_timeout: float = 90.0
+    max_tokens: int = 4096
+
+
 class AnalyzerSettings(BaseServiceSettings):
     model_config = SettingsConfigDict(
         env_prefix="SA_ANALYZER_",
         yaml_file="/etc/spark-advisor/analyzer/config.yaml",
     )
 
-    anthropic_api_key: str = ""
-    default_model: str = DEFAULT_MODEL
-    ai_enabled: bool = True
     server_host: str = "0.0.0.0"
     server_port: int = 8080
     thresholds: Thresholds = Thresholds()
+    ai_settings: AiSettings = AiSettings()

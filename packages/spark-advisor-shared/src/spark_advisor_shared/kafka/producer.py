@@ -18,14 +18,17 @@ class KafkaProducerWrapper:
     def __init__(self, config: KafkaProducerSettings) -> None:
         self._producer = Producer(config.to_confluent_config())
 
+    def __enter__(self) -> KafkaProducerWrapper:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
     def send(self, topic: str, key: str, envelope: KafkaEnvelope) -> None:
         data = serialize_message(envelope)
-        error: KafkaError | None = None
 
         def on_delivery(err: KafkaError | None, msg: Message) -> None:
-            nonlocal error
             if err is not None:
-                error = err
                 logger.error("Kafka delivery failed: %s", err)
             else:
                 logger.debug("Delivered to %s [%s] @ %s", msg.topic(), msg.partition(), msg.offset())
@@ -36,13 +39,15 @@ class KafkaProducerWrapper:
             value=data,
             callback=on_delivery,
         )
-        self._producer.flush(timeout=10.0)
-
-        if error is not None:
-            raise RuntimeError(f"Kafka delivery failed for topic={topic} key={key}: {error}")
+        self._producer.poll(0)
 
     def flush(self, timeout: float = 10.0) -> int:
+        if self._producer is None:
+            return 0
         return self._producer.flush(timeout)
 
     def close(self) -> None:
+        if self._producer is None:
+            return
         self._producer.flush(30.0)
+        self._producer = None  # type: ignore[assignment]

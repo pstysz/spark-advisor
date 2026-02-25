@@ -4,6 +4,7 @@ import pytest
 from anthropic.types import Message, ToolUseBlock, Usage
 
 from spark_advisor.ai.llm_analysis_service import LlmAnalysisService
+from spark_advisor.config import AiSettings, Thresholds
 from spark_advisor.model import Severity
 from tests.factories import make_job, make_rule_result
 
@@ -30,7 +31,7 @@ def _fake_tool_response(tool_input: dict) -> Message:
 def _make_service(tool_input: dict) -> LlmAnalysisService:
     mock_client = MagicMock()
     mock_client.create_message.return_value = _fake_tool_response(tool_input)
-    return LlmAnalysisService(mock_client)
+    return LlmAnalysisService(mock_client, AiSettings(), Thresholds())
 
 
 class TestLlmAnalysisService:

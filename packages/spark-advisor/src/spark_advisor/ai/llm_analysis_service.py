@@ -3,28 +3,30 @@ from typing import Any
 from anthropic.types import MessageParam, ToolChoiceToolParam, ToolUseBlock
 
 from spark_advisor.ai.config import ANALYSIS_TOOL
-from spark_advisor.ai.prompts_builder import SYSTEM_PROMPT, build_user_message
+from spark_advisor.ai.prompts_builder import build_system_prompt, build_user_message
 from spark_advisor.api.anthropic_client import AnthropicClient
-from spark_advisor.config import DEFAULT_MAX_TOKENS, DEFAULT_MODEL
+from spark_advisor.config import AiSettings, Thresholds
 from spark_advisor.model import AdvisorReport, AnalysisToolInput, Recommendation, RuleResult, Severity
-from spark_advisor.model.metrics import JobAnalysis
+from spark_advisor_shared.model.metrics import JobAnalysis
 
 
 class LlmAnalysisService:
-    def __init__(self, client: AnthropicClient) -> None:
+    def __init__(self, client: AnthropicClient, ai: AiSettings, thresholds: Thresholds) -> None:
         self._client = client
+        self._ai_settings = ai
+        self._thresholds = thresholds
+        self._prompt = build_system_prompt(self._thresholds)
 
     def analyze(
-        self,
-        job: JobAnalysis,
-        rule_results: list[RuleResult],
-        model: str = DEFAULT_MODEL,
+            self,
+            job: JobAnalysis,
+            rule_results: list[RuleResult],
     ) -> AdvisorReport:
-        user_message = build_user_message(job, rule_results)
+        user_message = build_user_message(job, rule_results, self._thresholds)
         response = self._client.create_message(
-            model=model,
-            max_tokens=DEFAULT_MAX_TOKENS,
-            system=SYSTEM_PROMPT,
+            model=self._ai_settings.model,
+            max_tokens=self._ai_settings.max_tokens,
+            system=self._prompt,
             messages=[MessageParam(role="user", content=user_message)],
             tools=[ANALYSIS_TOOL],
             tool_choice=ToolChoiceToolParam(type="tool", name="submit_analysis"),

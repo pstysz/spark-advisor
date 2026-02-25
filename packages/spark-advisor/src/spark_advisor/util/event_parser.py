@@ -6,8 +6,7 @@ from typing import Any
 
 import orjson
 
-from spark_advisor.model import SparkConfig
-from spark_advisor.model.metrics import (
+from spark_advisor_shared.model.metrics import (
     ExecutorMetrics,
     JobAnalysis,
     Quantiles,
@@ -15,6 +14,7 @@ from spark_advisor.model.metrics import (
     TaskMetrics,
     TaskMetricsDistributions,
 )
+from spark_advisor_shared.model.spark_config import SparkConfig
 
 
 def parse_event_log(path: Path) -> JobAnalysis:

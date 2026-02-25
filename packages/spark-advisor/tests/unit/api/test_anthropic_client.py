@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -11,11 +11,11 @@ class TestAnthropicClient:
             patch.dict("os.environ", {}, clear=True),
             pytest.raises(ValueError, match="ANTHROPIC_API_KEY"),
         ):
-            AnthropicClient()
+            AnthropicClient(timeout=90.0)
 
     def test_must_be_used_in_with_block(self) -> None:
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
-            client = AnthropicClient()
+            client = AnthropicClient(timeout=90.0)
             with pytest.raises(RuntimeError, match="within 'with' block"):
                 client.create_message(
                     model="test",
@@ -32,6 +32,6 @@ class TestAnthropicClient:
         mock_anthropic_cls.return_value = mock_client
 
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
-            with AnthropicClient():
-                mock_anthropic_cls.assert_called_once_with(api_key="sk-test")
+            with AnthropicClient(timeout=90.0):
+                mock_anthropic_cls.assert_called_once_with(api_key="sk-test", timeout=ANY)
             mock_client.close.assert_called_once()

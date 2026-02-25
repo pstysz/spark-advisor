@@ -1,3 +1,3 @@
-from spark_advisor.spark_advisor import SparkAdvisor
+from spark_advisor.advice_orchestrator import AdviceOrchestrator
 
-__all__ = ["SparkAdvisor"]
+__all__ = ["AdviceOrchestrator"]

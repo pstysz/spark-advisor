@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettingsSource
 from pydantic_settings.sources import PydanticBaseSettingsSource
 
-from spark_advisor_shared.config.kafka import KafkaProducerSettings
+from spark_advisor_shared.config.kafka import KafkaConsumerSettings, KafkaProducerSettings, KafkaTopicSettings
 
 
 class BaseServiceSettings(BaseSettings):
@@ -16,16 +16,18 @@ class BaseServiceSettings(BaseSettings):
     log_level: str = "INFO"
     otel_enabled: bool = True
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"
-    kafka: KafkaProducerSettings = KafkaProducerSettings()
+    kafka_producer_settings: KafkaProducerSettings = KafkaProducerSettings()
+    kafka_consumer_settings: KafkaConsumerSettings = KafkaConsumerSettings()
+    kafka_topic_settings: KafkaTopicSettings = KafkaTopicSettings()
 
     @classmethod
     def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
+            cls,
+            settings_cls: type[BaseSettings],
+            init_settings: PydanticBaseSettingsSource,
+            env_settings: PydanticBaseSettingsSource,
+            dotenv_settings: PydanticBaseSettingsSource,
+            file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (
             init_settings,

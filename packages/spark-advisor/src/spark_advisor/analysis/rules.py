@@ -3,7 +3,7 @@ from typing import ClassVar
 
 from spark_advisor.config import Thresholds
 from spark_advisor.model import RuleResult
-from spark_advisor.model.metrics import JobAnalysis, StageMetrics
+from spark_advisor_shared.model.metrics import JobAnalysis, StageMetrics
 from spark_advisor.model.output import Severity
 
 
