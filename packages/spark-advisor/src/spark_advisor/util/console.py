@@ -4,7 +4,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from spark_advisor.model import (
+from spark_advisor_models.model import (
     AdvisorReport,
     AnalysisResult,
     JobAnalysis,

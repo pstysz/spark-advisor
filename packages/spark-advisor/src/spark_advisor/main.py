@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
-from spark_advisor.lifecycle_manager import LifecycleManager
 from spark_advisor.config import AnalyzerSettings
+from spark_advisor.lifecycle_manager import LifecycleManager
 from spark_advisor_shared.health.fastapi_health import create_health_router
 
 _settings = AnalyzerSettings()

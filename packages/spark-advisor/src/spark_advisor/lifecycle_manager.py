@@ -10,7 +10,6 @@ from spark_advisor.analysis.advice_processor import AdviceProcessor
 from spark_advisor.analysis.rules import rules_for_threshold
 from spark_advisor.analysis.static_analysis_service import StaticAnalysisService
 from spark_advisor.api.anthropic_client import AnthropicClient
-from spark_advisor.config import AnalyzerSettings
 from spark_advisor_shared.kafka.consumer import KafkaConsumerWrapper
 from spark_advisor_shared.kafka.producer import KafkaProducerWrapper
 from spark_advisor_shared.kafka.sink import KafkaSink
@@ -22,6 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from fastapi import FastAPI
+
+    from spark_advisor.config import AnalyzerSettings
 
 logger = logging.getLogger(__name__)
 

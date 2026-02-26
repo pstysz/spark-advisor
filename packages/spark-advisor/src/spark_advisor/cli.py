@@ -9,14 +9,14 @@ from spark_advisor.ai.llm_analysis_service import LlmAnalysisService
 from spark_advisor.analysis.rules import rules_for_threshold
 from spark_advisor.analysis.static_analysis_service import StaticAnalysisService
 from spark_advisor.api.anthropic_client import AnthropicClient
-from spark_advisor.config import AnalyzerSettings, Thresholds
-from spark_advisor.model import AnalysisResult
-from spark_advisor_shared.model.metrics import JobAnalysis
+from spark_advisor.config import AnalyzerSettings
 from spark_advisor.util.console import (
     print_analysis_result,
     print_job_overview,
 )
 from spark_advisor.util.event_parser import parse_event_log
+from spark_advisor_models.config import Thresholds
+from spark_advisor_models.model import AnalysisResult, JobAnalysis
 
 app = typer.Typer(
     name="spark-advisor",
@@ -41,9 +41,9 @@ def _run_analysis(
     static = StaticAnalysisService(rules_for_threshold(t))
     if not ai_enabled:
         return AdviceOrchestrator(static).run(job)
-    with AnthropicClient() as client:
-        # ToDO: setup model
-        return AdviceOrchestrator(static, LlmAnalysisService(client, _settings)).run(job)
+    with AnthropicClient(_settings.ai_settings.api_timeout) as client:
+        llm = LlmAnalysisService(client, _settings.ai_settings, t)
+        return AdviceOrchestrator(static, llm).run(job)
 
 
 @app.command()

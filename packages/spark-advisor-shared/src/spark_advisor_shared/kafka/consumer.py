@@ -52,5 +52,5 @@ class KafkaConsumerWrapper:
         self._consumer.close()
 
     @property
-    def consumer(self) -> "Consumer":
+    def consumer(self) -> Consumer:
         return self._consumer

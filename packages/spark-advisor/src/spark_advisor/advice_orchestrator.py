@@ -1,7 +1,6 @@
 from spark_advisor.ai.llm_analysis_service import LlmAnalysisService
 from spark_advisor.analysis.static_analysis_service import StaticAnalysisService
-from spark_advisor.model import AnalysisResult
-from spark_advisor_shared.model.metrics import JobAnalysis
+from spark_advisor_models.model import AnalysisResult, JobAnalysis
 
 
 class AdviceOrchestrator:

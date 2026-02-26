@@ -5,12 +5,14 @@ description = "History Server Poller service for spark-advisor"
 requires-python = ">=3.12"
 dependencies = [
     "spark-advisor-shared",
+    "spark-advisor-models",
     "httpx>=0.28",
     "apscheduler>=3.10",
 ]
 
 [tool.uv.sources]
 spark-advisor-shared = { workspace = true }
+spark-advisor-models = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -52,7 +54,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "TCH", "RUF"]
 runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["spark_advisor_hs_poller", "spark_advisor_shared"]
+known-first-party = ["spark_advisor_hs_poller", "spark_advisor_shared", "spark_advisor_models"]
 
 [tool.mypy]
 python_version = "3.12"
