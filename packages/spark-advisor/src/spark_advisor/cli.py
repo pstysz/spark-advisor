@@ -6,8 +6,6 @@ from rich.console import Console
 
 from spark_advisor import AdviceOrchestrator
 from spark_advisor.ai.llm_analysis_service import LlmAnalysisService
-from spark_advisor.analysis.rules import rules_for_threshold
-from spark_advisor.analysis.static_analysis_service import StaticAnalysisService
 from spark_advisor.api.anthropic_client import AnthropicClient
 from spark_advisor.config import AnalyzerSettings
 from spark_advisor.util.console import (
@@ -17,6 +15,7 @@ from spark_advisor.util.console import (
 from spark_advisor.util.event_parser import parse_event_log
 from spark_advisor_models.config import Thresholds
 from spark_advisor_models.model import AnalysisResult, JobAnalysis
+from spark_advisor_rules import StaticAnalysisService, rules_for_threshold
 
 app = typer.Typer(
     name="spark-advisor",

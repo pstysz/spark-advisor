@@ -7,9 +7,8 @@ from typing import TYPE_CHECKING
 from spark_advisor.advice_orchestrator import AdviceOrchestrator
 from spark_advisor.ai.llm_analysis_service import LlmAnalysisService
 from spark_advisor.analysis.advice_processor import AdviceProcessor
-from spark_advisor.analysis.rules import rules_for_threshold
-from spark_advisor.analysis.static_analysis_service import StaticAnalysisService
 from spark_advisor.api.anthropic_client import AnthropicClient
+from spark_advisor_rules import StaticAnalysisService, rules_for_threshold
 from spark_advisor_shared.kafka.consumer import KafkaConsumerWrapper
 from spark_advisor_shared.kafka.producer import KafkaProducerWrapper
 from spark_advisor_shared.kafka.sink import KafkaSink

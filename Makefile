@@ -1,6 +1,6 @@
 .PHONY: install dev test lint format check demo clean
 
-PACKAGES = packages/spark-advisor-models packages/spark-advisor packages/spark-advisor-shared packages/spark-advisor-hs-poller
+PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor packages/spark-advisor-shared packages/spark-advisor-hs-poller
 
 install:
 	uv sync
