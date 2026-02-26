@@ -4,7 +4,6 @@ from spark_advisor_hs_poller.config import PollerSettings
 from spark_advisor_hs_poller.lifecycle_manager import LifecycleManager
 from spark_advisor_shared.health.fastapi_health import create_health_router
 
-
 _settings = PollerSettings()
 
 def create_app() -> FastAPI:

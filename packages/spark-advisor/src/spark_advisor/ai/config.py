@@ -1,6 +1,6 @@
 from anthropic.types import ToolParam
 
-from spark_advisor.model import AnalysisToolInput
+from spark_advisor_models.model import AnalysisToolInput
 
 ANALYSIS_TOOL: ToolParam = {
     "name": "submit_analysis",

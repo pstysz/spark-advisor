@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
-from spark_advisor_shared.model.metrics import JobAnalysis
+from spark_advisor_models.model import JobAnalysis
 from spark_advisor_shared.model.events import KafkaEnvelope, MessageMetadata
 from spark_advisor_shared.telemetry.setup import get_tracer
 

@@ -5,9 +5,15 @@ from anthropic.types import MessageParam, ToolChoiceToolParam, ToolUseBlock
 from spark_advisor.ai.config import ANALYSIS_TOOL
 from spark_advisor.ai.prompts_builder import build_system_prompt, build_user_message
 from spark_advisor.api.anthropic_client import AnthropicClient
-from spark_advisor.config import AiSettings, Thresholds
-from spark_advisor.model import AdvisorReport, AnalysisToolInput, Recommendation, RuleResult, Severity
-from spark_advisor_shared.model.metrics import JobAnalysis
+from spark_advisor_models.config import AiSettings, Thresholds
+from spark_advisor_models.model import (
+    AdvisorReport,
+    AnalysisToolInput,
+    JobAnalysis,
+    Recommendation,
+    RuleResult,
+    Severity,
+)
 
 
 class LlmAnalysisService:

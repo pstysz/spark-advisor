@@ -4,7 +4,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 from spark_advisor.analysis.advice_processor import AdviceProcessor
-from spark_advisor.model.output import AnalysisResult
+from spark_advisor_models.model import AnalysisResult
 from spark_advisor_shared.model.events import KafkaEnvelope, MessageMetadata
 from spark_advisor_shared.util.threading import background_worker
 from tests.factories import make_job, make_rule_result

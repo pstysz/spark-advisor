@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from spark_advisor_hs_poller.config import PollerSettings
 from spark_advisor_hs_poller.history_server_client import HistoryServerClient
 from spark_advisor_hs_poller.poller import HistoryServerPoller
 from spark_advisor_hs_poller.pooling_state import PollingState
@@ -18,6 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from fastapi import FastAPI
+
+    from spark_advisor_hs_poller.config import PollerSettings
 
 logger = logging.getLogger(__name__)
 

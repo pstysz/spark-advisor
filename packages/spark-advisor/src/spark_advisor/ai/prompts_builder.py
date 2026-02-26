@@ -1,8 +1,7 @@
 from spark_advisor.ai.config import IMPORTANT_KEYS, SYSTEM_PROMPT_TEMPLATE
-from spark_advisor.config import Thresholds
-from spark_advisor.model import RuleResult
-from spark_advisor_shared.model.metrics import JobAnalysis, StageMetrics
-from spark_advisor.util.helpers import format_bytes
+from spark_advisor_models.config import Thresholds
+from spark_advisor_models.model import JobAnalysis, RuleResult, StageMetrics
+from spark_advisor_models.util import format_bytes
 
 
 def build_user_message(
