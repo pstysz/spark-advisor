@@ -1,6 +1,6 @@
 .PHONY: install dev test lint format check demo clean
 
-PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor packages/spark-advisor-shared packages/spark-advisor-hs-poller
+PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-cli packages/spark-advisor packages/spark-advisor-shared packages/spark-advisor-hs-poller
 
 install:
 	uv sync
@@ -29,7 +29,7 @@ format:
 check: lint test
 
 demo:
-	cd $(CURDIR)/packages/spark-advisor && uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json --no-ai
+	cd $(CURDIR)/packages/spark-advisor-cli && uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json
 
 clean:
 	rm -rf dist/ build/ *.egg-info .mypy_cache .pytest_cache .ruff_cache htmlcov/
