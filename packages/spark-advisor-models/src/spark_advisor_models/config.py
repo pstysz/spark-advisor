@@ -24,6 +24,11 @@ class Thresholds(BaseModel):
 
     scheduler_delay_ms: int = 100
 
+    small_file_threshold_bytes: int = 10 * 1024 * 1024
+    broadcast_join_default_bytes: int = 10 * 1024 * 1024
+    memory_overhead_gc_threshold_percent: float = 20.0
+    memory_overhead_mem_utilization_percent: float = 80.0
+
 
 class AiSettings(BaseModel):
     model_config = ConfigDict(frozen=True)

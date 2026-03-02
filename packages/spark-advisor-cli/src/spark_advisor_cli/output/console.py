@@ -11,6 +11,7 @@ from spark_advisor_models.model import (
     RuleResult,
     Severity,
 )
+from spark_advisor_models.util.bytes import format_bytes
 
 SEVERITY_ICONS = {
     Severity.CRITICAL: "[bold red]🔴 CRITICAL[/]",
@@ -39,6 +40,46 @@ def print_job_overview(console: Console, job: JobAnalysis) -> None:
         table.add_row("Executors", str(job.executors.executor_count))
 
     console.print(Panel(table, title="[bold]Spark Job Analysis[/]", border_style="blue"))
+
+
+def print_stage_breakdown(console: Console, job: JobAnalysis) -> None:
+    table = Table(title="Stage Breakdown", show_lines=True)
+    table.add_column("Stage", style="bold", width=6)
+    table.add_column("Name", min_width=15)
+    table.add_column("Tasks", justify="right")
+    table.add_column("Duration (ms)\nmin / med / max", justify="right")
+    table.add_column("Shuffle R / W", justify="right")
+    table.add_column("Spill", justify="right")
+    table.add_column("GC %", justify="right")
+    table.add_column("Input", justify="right")
+
+    for s in job.stages:
+        rt = s.tasks.distributions.executor_run_time
+        duration_str = f"{rt.min:.0f} / {rt.median:.0f} / {rt.max:.0f}"
+
+        shuffle_str = f"R: {format_bytes(s.total_shuffle_read_bytes)}\nW: {format_bytes(s.total_shuffle_write_bytes)}"
+        spill_str = format_bytes(s.spill_to_disk_bytes) if s.spill_to_disk_bytes > 0 else "-"
+        input_str = format_bytes(s.input_bytes) if s.input_bytes > 0 else "-"
+
+        gc_pct = s.gc_time_percent
+        gc_str = f"{gc_pct:.0f}%"
+        if gc_pct > 40:
+            gc_str = f"[bold red]{gc_pct:.0f}%[/]"
+        elif gc_pct > 20:
+            gc_str = f"[yellow]{gc_pct:.0f}%[/]"
+
+        table.add_row(
+            str(s.stage_id),
+            s.stage_name,
+            str(s.tasks.task_count),
+            duration_str,
+            shuffle_str,
+            spill_str,
+            gc_str,
+            input_str,
+        )
+
+    console.print(table)
 
 
 def print_analysis_result(

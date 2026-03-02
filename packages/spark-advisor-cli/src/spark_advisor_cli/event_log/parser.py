@@ -26,7 +26,10 @@ def parse_event_log(path: Path) -> JobAnalysis:
             line = line.strip()
             if not line:
                 continue
-            event = orjson.loads(line)
+            try:
+                event = orjson.loads(line)
+            except orjson.JSONDecodeError:
+                continue
             _process_event(event, state)
 
     return state.build()
@@ -79,6 +82,15 @@ class _ParserState:
         self.executor_count: int = 0
 
     def build(self) -> JobAnalysis:
+        if self.end_time <= self.start_time:
+            if self.stage_info:
+                self.end_time = max(
+                    (info.get("completion_time", 0) for info in self.stage_info.values()),
+                    default=self.start_time,
+                )
+            else:
+                self.end_time = self.start_time
+
         stages = []
         for stage_id, info in sorted(self.stage_info.items()):
             acc = self.stage_tasks[stage_id]

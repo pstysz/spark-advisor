@@ -1,10 +1,15 @@
 from spark_advisor_models.model import Severity
 from spark_advisor_rules import StaticAnalysisService
 from spark_advisor_rules.rules import (
+    BroadcastJoinThresholdRule,
     DataSkewRule,
+    DynamicAllocationRule,
     ExecutorIdleRule,
+    ExecutorMemoryOverheadRule,
     GCPressureRule,
+    SerializerChoiceRule,
     ShufflePartitionsRule,
+    SmallFileRule,
     SpillToDiskRule,
     TaskFailureRule,
 )
@@ -201,3 +206,156 @@ class TestRunRules:
         job = make_job(stages=[])
         results = StaticAnalysisService().analyze(job)
         assert results == []
+
+
+class TestSmallFileRule:
+    def test_normal_input_size(self):
+        stage = make_stage(input_bytes=200 * 1024 * 1024, task_count=10)
+        job = make_job(stages=[stage])
+        assert SmallFileRule().evaluate(job) == []
+
+    def test_detects_small_files(self):
+        stage = make_stage(input_bytes=50 * 1024 * 1024, task_count=100)
+        job = make_job(stages=[stage])
+        results = SmallFileRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+        assert results[0].rule_id == "small_files"
+
+    def test_skips_zero_input(self):
+        stage = make_stage(input_bytes=0, task_count=100)
+        job = make_job(stages=[stage])
+        assert SmallFileRule().evaluate(job) == []
+
+    def test_skips_zero_tasks(self):
+        stage = make_stage(input_bytes=100 * 1024 * 1024, task_count=0)
+        job = make_job(stages=[stage])
+        assert SmallFileRule().evaluate(job) == []
+
+
+class TestBroadcastJoinThresholdRule:
+    def test_default_threshold_no_issue(self):
+        stage = make_stage(total_shuffle_read_bytes=0)
+        job = make_job(stages=[stage])
+        assert BroadcastJoinThresholdRule().evaluate(job) == []
+
+    def test_disabled_with_shuffle_is_warning(self):
+        stage = make_stage(total_shuffle_read_bytes=500 * 1024 * 1024)
+        job = make_job(stages=[stage], config={"spark.sql.autoBroadcastJoinThreshold": "-1"})
+        results = BroadcastJoinThresholdRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+
+    def test_disabled_without_shuffle_is_info(self):
+        stage = make_stage(total_shuffle_read_bytes=0)
+        job = make_job(stages=[stage], config={"spark.sql.autoBroadcastJoinThreshold": "-1"})
+        results = BroadcastJoinThresholdRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
+
+    def test_low_threshold_with_shuffle(self):
+        stage = make_stage(total_shuffle_read_bytes=500 * 1024 * 1024)
+        job = make_job(stages=[stage], config={"spark.sql.autoBroadcastJoinThreshold": "1048576"})
+        results = BroadcastJoinThresholdRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
+
+
+class TestSerializerChoiceRule:
+    def test_kryo_no_warning(self):
+        stage = make_stage(total_shuffle_read_bytes=100 * 1024 * 1024)
+        job = make_job(
+            stages=[stage],
+            config={"spark.serializer": "org.apache.spark.serializer.KryoSerializer"},
+        )
+        assert SerializerChoiceRule().evaluate(job) == []
+
+    def test_java_serializer_with_shuffle(self):
+        stage = make_stage(total_shuffle_read_bytes=100 * 1024 * 1024)
+        job = make_job(stages=[stage], config={})
+        results = SerializerChoiceRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
+
+    def test_java_serializer_without_shuffle(self):
+        stage = make_stage(total_shuffle_read_bytes=0, total_shuffle_write_bytes=0)
+        job = make_job(stages=[stage], config={})
+        assert SerializerChoiceRule().evaluate(job) == []
+
+
+class TestDynamicAllocationRule:
+    def test_enabled_with_bounds(self):
+        job = make_job(config={
+            "spark.dynamicAllocation.enabled": "true",
+            "spark.dynamicAllocation.minExecutors": "2",
+            "spark.dynamicAllocation.maxExecutors": "20",
+        })
+        assert DynamicAllocationRule().evaluate(job) == []
+
+    def test_enabled_without_bounds(self):
+        job = make_job(config={"spark.dynamicAllocation.enabled": "true"})
+        results = DynamicAllocationRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+        assert "minExecutors" in results[0].message
+
+    def test_disabled_with_idle_executors(self):
+        job = make_job(
+            executors=make_executors(total_task_time_ms=1_000_000),
+            config={"spark.executor.cores": "4"},
+        )
+        results = DynamicAllocationRule().evaluate(job)
+        assert len(results) == 1
+        assert "dynamicAllocation" in results[0].recommended_value
+
+    def test_disabled_high_utilization_no_warning(self):
+        job = make_job(
+            executors=make_executors(total_task_time_ms=8_000_000),
+            config={"spark.executor.cores": "4"},
+        )
+        assert DynamicAllocationRule().evaluate(job) == []
+
+    def test_disabled_no_executors(self):
+        job = make_job(executors=None, config={})
+        assert DynamicAllocationRule().evaluate(job) == []
+
+
+class TestExecutorMemoryOverheadRule:
+    def test_no_executor_data(self):
+        job = make_job(executors=None)
+        assert ExecutorMemoryOverheadRule().evaluate(job) == []
+
+    def test_gc_pressure_and_high_memory(self):
+        stage = make_stage(sum_executor_run_time_ms=100_000, total_gc_time_ms=30_000)
+        job = make_job(
+            stages=[stage],
+            executors=make_executors(
+                peak_memory_bytes_sum=9 * 1024**3,
+                allocated_memory_bytes_sum=10 * 1024**3,
+            ),
+        )
+        results = ExecutorMemoryOverheadRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+
+    def test_gc_pressure_low_memory_no_warning(self):
+        stage = make_stage(sum_executor_run_time_ms=100_000, total_gc_time_ms=30_000)
+        job = make_job(
+            stages=[stage],
+            executors=make_executors(
+                peak_memory_bytes_sum=2 * 1024**3,
+                allocated_memory_bytes_sum=10 * 1024**3,
+            ),
+        )
+        assert ExecutorMemoryOverheadRule().evaluate(job) == []
+
+    def test_high_memory_no_gc_no_warning(self):
+        stage = make_stage(sum_executor_run_time_ms=100_000, total_gc_time_ms=5_000)
+        job = make_job(
+            stages=[stage],
+            executors=make_executors(
+                peak_memory_bytes_sum=9 * 1024**3,
+                allocated_memory_bytes_sum=10 * 1024**3,
+            ),
+        )
+        assert ExecutorMemoryOverheadRule().evaluate(job) == []
