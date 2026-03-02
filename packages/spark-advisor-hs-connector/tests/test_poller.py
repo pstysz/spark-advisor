@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from spark_advisor_hs_connector.hs_fetcher import deduplicate_stages, resolve_base_path
 from spark_advisor_hs_connector.model.output import ApplicationSummary, Attempt
 from spark_advisor_hs_connector.poller import HistoryServerPoller
 from spark_advisor_hs_connector.polling_state import PollingState
@@ -172,17 +173,17 @@ class TestHistoryServerPoller:
         app_info: dict[str, Any] = {
             "attempts": [{"attemptId": "2", "duration": 100}],
         }
-        assert HistoryServerPoller._resolve_base_path("app-001", app_info) == "/applications/app-001/2"
+        assert resolve_base_path("app-001", app_info) == "/applications/app-001/2"
 
     def test_resolve_base_path_without_attempt_id(self) -> None:
         app_info: dict[str, Any] = {
             "attempts": [{"duration": 100}],
         }
-        assert HistoryServerPoller._resolve_base_path("app-001", app_info) == "/applications/app-001"
+        assert resolve_base_path("app-001", app_info) == "/applications/app-001"
 
     def test_resolve_base_path_no_attempts(self) -> None:
         app_info: dict[str, Any] = {"attempts": []}
-        assert HistoryServerPoller._resolve_base_path("app-001", app_info) == "/applications/app-001"
+        assert resolve_base_path("app-001", app_info) == "/applications/app-001"
 
     def test_deduplicate_stages_keeps_latest_attempt(self) -> None:
         stages: list[dict[str, Any]] = [
@@ -190,7 +191,7 @@ class TestHistoryServerPoller:
             {"stageId": 0, "attemptId": 1, "name": "Stage 0 attempt 1"},
             {"stageId": 1, "attemptId": 0, "name": "Stage 1"},
         ]
-        result = HistoryServerPoller._deduplicate_stages(stages)
+        result = deduplicate_stages(stages)
         assert len(result) == 2
         stage_0 = next(s for s in result if s["stageId"] == 0)
         assert stage_0["attemptId"] == 1
@@ -202,7 +203,7 @@ class TestHistoryServerPoller:
             {"stageId": 0, "attemptId": 0, "name": "attempt 0"},
             {"stageId": 0, "attemptId": 1, "name": "attempt 1"},
         ]
-        result = HistoryServerPoller._deduplicate_stages(stages)
+        result = deduplicate_stages(stages)
         assert len(result) == 1
         assert result[0]["attemptId"] == 2
 
@@ -211,5 +212,5 @@ class TestHistoryServerPoller:
             {"stageId": 0, "attemptId": 0},
             {"stageId": 1, "attemptId": 0},
         ]
-        result = HistoryServerPoller._deduplicate_stages(stages)
+        result = deduplicate_stages(stages)
         assert len(result) == 2
