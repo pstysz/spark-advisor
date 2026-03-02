@@ -45,13 +45,23 @@ class TaskExecutor:
                 timeout=self._settings.nats.fetch_timeout,
             )
 
+            fetch_data = orjson.loads(fetch_reply.data)
+            if "error" in fetch_data:
+                self._tasks.mark_failed(task_id, f"Fetch failed: {fetch_data['error']}")
+                return
+
             analyze_reply = await self._nc.request(
                 self._settings.nats.analyze_subject,
                 fetch_reply.data,
                 timeout=self._settings.nats.analyze_timeout,
             )
 
-            result = AnalysisResult.model_validate_json(analyze_reply.data)
+            analyze_data = orjson.loads(analyze_reply.data)
+            if "error" in analyze_data:
+                self._tasks.mark_failed(task_id, f"Analysis failed: {analyze_data['error']}")
+                return
+
+            result = AnalysisResult.model_validate(analyze_data)
             self._tasks.mark_completed(task_id, result)
 
         except Exception as e:

@@ -9,6 +9,34 @@ class AnalyzeRequest(BaseModel):
     app_id: str
 
 
+class ApplicationResponse(BaseModel):
+    id: str
+    name: str = ""
+    start_time: str = ""
+    end_time: str = ""
+    duration_ms: int = 0
+    completed: bool = False
+    spark_version: str = ""
+    user: str = ""
+
+    @classmethod
+    def from_hs_data(cls, data: dict[str, object]) -> "ApplicationResponse":
+        attempts = data.get("attempts") or []
+        first = attempts[0] if isinstance(attempts, list) and attempts else {}
+        if not isinstance(first, dict):
+            first = {}
+        return cls(
+            id=str(data.get("id", "")),
+            name=str(data.get("name", "")),
+            start_time=str(first.get("startTime", "")),
+            end_time=str(first.get("endTime", "")),
+            duration_ms=int(first.get("duration", 0)),
+            completed=bool(first.get("completed", False)),
+            spark_version=str(first.get("appSparkVersion", "")),
+            user=str(first.get("sparkUser", "")),
+        )
+
+
 class TaskResponse(BaseModel):
     task_id: str
     app_id: str
