@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from spark_advisor_hs_connector.history_server_mapper import map_job_analysis
+from spark_advisor_hs_connector.hs_fetcher import fetch_job_analysis
 
 if TYPE_CHECKING:
     from faststream.nats import NatsBroker
@@ -51,51 +51,5 @@ class HistoryServerPoller:
         return published
 
     async def _fetch_and_publish(self, app_id: str) -> None:
-        app_info = self._hs_client.get_app_info(app_id)
-        base_path = self._resolve_base_path(app_id, app_info)
-
-        environment = self._hs_client.get_environment(base_path)
-        raw_stages = self._hs_client.get_stages(base_path)
-        stages_data = self._deduplicate_stages(raw_stages)
-        task_summaries = self._fetch_task_summaries(base_path, stages_data)
-        executors_data = self._hs_client.get_executors(base_path)
-
-        job = map_job_analysis(
-            app_id=app_id,
-            app_info=app_info,
-            environment=environment,
-            stages_data=stages_data,
-            task_summaries=task_summaries,
-            executors_data=executors_data,
-        )
-
+        job = fetch_job_analysis(self._hs_client, app_id)
         await self._broker.publish(job.model_dump(mode="json"), subject=self._publish_subject)
-
-    def _fetch_task_summaries(
-        self, base_path: str, stages_data: list[dict[str, Any]],
-    ) -> dict[int, dict[str, Any]]:
-        summaries: dict[int, dict[str, Any]] = {}
-        for stage in stages_data:
-            stage_id = int(stage["stageId"])
-            attempt_id = int(stage.get("attemptId", 0))
-            summaries[stage_id] = self._hs_client.get_task_summary(base_path, stage_id, attempt_id)
-        return summaries
-
-    @staticmethod
-    def _deduplicate_stages(stages_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        latest: dict[int, dict[str, Any]] = {}
-        for stage in stages_data:
-            sid = int(stage["stageId"])
-            aid = int(stage.get("attemptId", 0))
-            if sid not in latest or aid > int(latest[sid].get("attemptId", 0)):
-                latest[sid] = stage
-        return list(latest.values())
-
-    @staticmethod
-    def _resolve_base_path(app_id: str, app_info: dict[str, Any]) -> str:
-        attempts = app_info.get("attempts", [])
-        if attempts:
-            attempt_id = attempts[-1].get("attemptId")
-            if attempt_id:
-                return f"/applications/{app_id}/{attempt_id}"
-        return f"/applications/{app_id}"

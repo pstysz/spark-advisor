@@ -5,6 +5,7 @@ from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
 
 class ConnectorNatsSettings(NatsSettings):
     publish_subject: str = "analyze.request"
+    fetch_subject: str = "fetch.job"
 
 
 class ConnectorSettings(BaseServiceSettings):

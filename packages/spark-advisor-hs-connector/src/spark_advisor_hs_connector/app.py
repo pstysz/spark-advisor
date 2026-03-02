@@ -5,12 +5,14 @@ from faststream import FastStream
 from faststream.nats import NatsBroker
 
 from spark_advisor_hs_connector.config import ConnectorSettings
+from spark_advisor_hs_connector.handlers import router
 from spark_advisor_hs_connector.history_server_client import HistoryServerClient
 from spark_advisor_hs_connector.poller import HistoryServerPoller
 from spark_advisor_hs_connector.polling_state import PollingState
 
 settings = ConnectorSettings()
 broker = NatsBroker(settings.nats.url)
+broker.include_router(router)
 app = FastStream(broker)
 
 logger = logging.getLogger(__name__)
