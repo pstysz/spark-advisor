@@ -41,9 +41,12 @@ def task_executor(mock_nc: AsyncMock, task_manager: TaskManager, settings: Gatew
 
 
 @pytest.fixture
-def app(mock_nc: AsyncMock, task_manager: TaskManager, task_executor: TaskExecutor) -> FastAPI:
+def app(
+    mock_nc: AsyncMock, task_manager: TaskManager, task_executor: TaskExecutor, settings: GatewaySettings
+) -> FastAPI:
     test_app = FastAPI()
     test_app.state.nc = mock_nc
+    test_app.state.settings = settings
     test_app.state.task_manager = task_manager
     test_app.state.task_executor = task_executor
     test_app.include_router(create_health_router())

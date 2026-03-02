@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format check demo clean
+.PHONY: install dev test lint format check demo-local demo-remote up down clean
 
 PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-cli packages/spark-advisor-analyzer packages/spark-advisor-hs-connector packages/spark-advisor-gateway
 
@@ -28,8 +28,19 @@ format:
 
 check: lint test
 
-demo:
+demo-local:
 	cd $(CURDIR)/packages/spark-advisor-cli && uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json
+
+demo-remote:
+	curl -s -X POST http://localhost:8080/api/v1/analyze \
+	  -H 'Content-Type: application/json' \
+	  -d '{"app_id":"$(APP_ID)"}'
+
+up:
+	docker compose up -d
+
+down:
+	docker compose down
 
 clean:
 	rm -rf dist/ build/ *.egg-info .mypy_cache .pytest_cache .ruff_cache htmlcov/
