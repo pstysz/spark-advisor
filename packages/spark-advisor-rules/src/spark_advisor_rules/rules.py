@@ -240,6 +240,175 @@ class TaskFailureRule(Rule):
         )
 
 
+class SmallFileRule(Rule):
+    rule_id: ClassVar[str] = "small_files"
+
+    def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        if stage.input_bytes == 0 or stage.tasks.task_count == 0:
+            return None
+        avg_input = stage.input_bytes / stage.tasks.task_count
+        if avg_input >= self._thresholds.small_file_threshold_bytes:
+            return None
+        avg_mb = avg_input / (1024 * 1024)
+        return self._result(
+            Severity.WARNING,
+            f"Small input partitions in Stage {stage.stage_id}",
+            f"Average input per task is {avg_mb:.1f} MB across {stage.tasks.task_count} tasks",
+            stage_id=stage.stage_id,
+            current_value=f"{avg_mb:.1f} MB/task, {stage.tasks.task_count} tasks",
+            recommended_value="Use coalesce() or increase spark.sql.files.maxPartitionBytes",
+            estimated_impact="Reducing task count cuts scheduler overhead and improves throughput",
+        )
+
+
+class BroadcastJoinThresholdRule(Rule):
+    rule_id: ClassVar[str] = "broadcast_join"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        threshold = job.config.broadcast_join_threshold
+        has_shuffle = any(s.total_shuffle_read_bytes > 0 for s in job.stages)
+
+        if threshold == -1:
+            severity = Severity.WARNING if has_shuffle else Severity.INFO
+            return [self._result(
+                severity,
+                "Broadcast join disabled",
+                "spark.sql.autoBroadcastJoinThreshold is -1 (disabled)",
+                current_value="disabled (-1)",
+                recommended_value=(
+                    f"spark.sql.autoBroadcastJoinThreshold = {self._thresholds.broadcast_join_default_bytes}"
+                ),
+                estimated_impact="Broadcasting small tables avoids expensive shuffle joins",
+            )]
+
+        if has_shuffle and threshold < self._thresholds.broadcast_join_default_bytes:
+            threshold_mb = threshold / (1024 * 1024)
+            default_mb = self._thresholds.broadcast_join_default_bytes / (1024 * 1024)
+            return [self._result(
+                Severity.INFO,
+                "Low broadcast join threshold",
+                f"Threshold is {threshold_mb:.0f} MB — some shuffle joins might be avoidable",
+                current_value=f"{threshold_mb:.0f} MB",
+                recommended_value=(
+                    f"spark.sql.autoBroadcastJoinThreshold = "
+                    f"{self._thresholds.broadcast_join_default_bytes} ({default_mb:.0f} MB)"
+                ),
+                estimated_impact="Larger threshold may convert shuffle joins to broadcast joins",
+            )]
+
+        return []
+
+    def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        return None
+
+
+class SerializerChoiceRule(Rule):
+    rule_id: ClassVar[str] = "serializer_choice"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        serializer = job.config.serializer
+        if "KryoSerializer" in serializer:
+            return []
+
+        has_shuffle = any(
+            s.total_shuffle_read_bytes > 0 or s.total_shuffle_write_bytes > 0
+            for s in job.stages
+        )
+        if not has_shuffle:
+            return []
+
+        return [self._result(
+            Severity.INFO,
+            "Using default Java serializer",
+            f"Current serializer: {serializer}",
+            current_value=serializer,
+            recommended_value="spark.serializer = org.apache.spark.serializer.KryoSerializer",
+            estimated_impact="Kryo serialization is typically 10x faster and more compact",
+        )]
+
+    def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        return None
+
+
+class DynamicAllocationRule(Rule):
+    rule_id: ClassVar[str] = "dynamic_allocation"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        results: list[RuleResult] = []
+
+        if job.config.dynamic_allocation_enabled:
+            min_exec = job.config.dynamic_allocation_min_executors
+            max_exec = job.config.dynamic_allocation_max_executors
+            if not min_exec or not max_exec:
+                missing = []
+                if not min_exec:
+                    missing.append("minExecutors")
+                if not max_exec:
+                    missing.append("maxExecutors")
+                results.append(self._result(
+                    Severity.WARNING,
+                    "Dynamic allocation without bounds",
+                    f"Dynamic allocation enabled but {', '.join(missing)} not set",
+                    current_value="spark.dynamicAllocation.enabled = true",
+                    recommended_value=f"Set spark.dynamicAllocation.{missing[0]}",
+                    estimated_impact="Unbounded dynamic allocation can over-provision resources",
+                ))
+        else:
+            if job.executors and job.executors.executor_count > 0 and job.duration_ms > 0:
+                cores = job.config.executor_cores
+                total_slot_time = job.executors.executor_count * cores * job.duration_ms
+                if total_slot_time > 0:
+                    utilization = (job.executors.total_task_time_ms / total_slot_time) * 100
+                    if utilization < self._thresholds.min_slot_utilization_percent:
+                        results.append(self._result(
+                            Severity.WARNING,
+                            "Consider enabling dynamic allocation",
+                            f"Slot utilization is {utilization:.0f}% with fixed executor count",
+                            current_value=(
+                                f"{job.executors.executor_count} static executors, {utilization:.0f}% utilized"
+                            ),
+                            recommended_value="spark.dynamicAllocation.enabled = true",
+                            estimated_impact="Dynamic allocation auto-scales executors to match workload",
+                        ))
+
+        return results
+
+    def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        return None
+
+
+class ExecutorMemoryOverheadRule(Rule):
+    rule_id: ClassVar[str] = "executor_memory_overhead"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        if job.executors is None:
+            return []
+
+        mem_util = job.executors.memory_utilization_percent
+        has_gc_pressure = any(
+            s.gc_time_percent > self._thresholds.memory_overhead_gc_threshold_percent
+            for s in job.stages
+        )
+
+        if not has_gc_pressure or mem_util < self._thresholds.memory_overhead_mem_utilization_percent:
+            return []
+
+        overhead = job.config.executor_memory_overhead
+        current_desc = f"memoryOverhead = {overhead}" if overhead else "memoryOverhead = default (max(384MB, 10%))"
+
+        return [self._result(
+            Severity.WARNING,
+            "Executor memory overhead may be too low",
+            f"GC pressure detected with {mem_util:.0f}% memory utilization",
+            current_value=current_desc,
+            recommended_value="Increase spark.executor.memoryOverhead (try 20-25% of executor memory)",
+            estimated_impact="More overhead memory reduces GC pressure and OOM risk",
+        )]
+
+    def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        return None
+
+
 def default_rules() -> list[Rule]:
     _default = Thresholds()
     return [
@@ -249,6 +418,11 @@ def default_rules() -> list[Rule]:
         ShufflePartitionsRule(_default),
         ExecutorIdleRule(_default),
         TaskFailureRule(_default),
+        SmallFileRule(_default),
+        BroadcastJoinThresholdRule(_default),
+        SerializerChoiceRule(_default),
+        DynamicAllocationRule(_default),
+        ExecutorMemoryOverheadRule(_default),
     ]
 
 
@@ -260,4 +434,9 @@ def rules_for_threshold(thresholds: Thresholds) -> list[Rule]:
         ShufflePartitionsRule(thresholds),
         ExecutorIdleRule(thresholds),
         TaskFailureRule(thresholds),
+        SmallFileRule(thresholds),
+        BroadcastJoinThresholdRule(thresholds),
+        SerializerChoiceRule(thresholds),
+        DynamicAllocationRule(thresholds),
+        ExecutorMemoryOverheadRule(thresholds),
     ]

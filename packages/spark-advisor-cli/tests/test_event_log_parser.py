@@ -1,3 +1,4 @@
+import gzip
 import json
 import tempfile
 from pathlib import Path
@@ -146,3 +147,60 @@ class TestEventParserRecords:
         job = parse_event_log(_write_events(events))
         stage = job.stages[0]
         assert stage.total_shuffle_read_bytes == 800
+
+
+class TestMalformedLines:
+    def test_skips_malformed_json(self) -> None:
+        path = _write_events(_base_events())
+        with open(path, "a") as f:
+            f.write("this is not json\n")
+            f.write(json.dumps(_APP_END) + "\n")
+        job = parse_event_log(path)
+        assert job.app_id == "app-1"
+
+    def test_skips_empty_lines(self) -> None:
+        path = _write_events(_base_events())
+        with open(path, "a") as f:
+            f.write("\n\n\n")
+            f.write(json.dumps(_APP_END) + "\n")
+        job = parse_event_log(path)
+        assert job.app_id == "app-1"
+
+
+class TestIncompleteLogs:
+    def test_missing_app_end_uses_stage_completion_time(self) -> None:
+        events = [
+            {"Event": "SparkListenerApplicationStart", "App ID": "app-1", "App Name": "Test", "Timestamp": 1000},
+            {
+                "Event": "SparkListenerStageCompleted",
+                "Stage Info": {
+                    "Stage ID": 0,
+                    "Stage Name": "read",
+                    "Completion Time": 4000,
+                    "Accumulables": [],
+                },
+            },
+            _task_event(),
+        ]
+        job = parse_event_log(_write_events(events))
+        assert job.duration_ms == 3000
+
+    def test_missing_app_end_no_stages(self) -> None:
+        events = [
+            {"Event": "SparkListenerApplicationStart", "App ID": "app-1", "App Name": "Test", "Timestamp": 1000},
+        ]
+        job = parse_event_log(_write_events(events))
+        assert job.duration_ms == 0
+
+
+class TestGzipSupport:
+    def test_parses_gzipped_event_log(self) -> None:
+        events = [*_base_events(), _task_event(), _APP_END]
+        with tempfile.NamedTemporaryFile(suffix=".json.gz", delete=False) as f:
+            with gzip.open(f.name, "wt", encoding="utf-8") as gz:
+                for e in events:
+                    gz.write(json.dumps(e) + "\n")
+            path = Path(f.name)
+        job = parse_event_log(path)
+        assert job.app_id == "app-1"
+        assert len(job.stages) == 1
