@@ -1,6 +1,6 @@
 .PHONY: install dev test lint format check demo clean
 
-PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-cli packages/spark-advisor-analyzer
+PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-cli packages/spark-advisor-analyzer packages/spark-advisor-hs-connector
 
 install:
 	uv sync
