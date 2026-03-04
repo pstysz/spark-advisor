@@ -1,6 +1,7 @@
 import typer
 
 from spark_advisor_cli.commands.analyze import analyze
+from spark_advisor_cli.commands.scan import scan
 from spark_advisor_cli.commands.version import version
 
 app = typer.Typer(
@@ -10,6 +11,7 @@ app = typer.Typer(
 )
 
 app.command()(analyze)
+app.command()(scan)
 app.command()(version)
 
 

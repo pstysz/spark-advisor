@@ -2,6 +2,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "spark-advisor-models" / "tests"))
 
 from factories import make_job, make_rule_result
@@ -44,3 +46,22 @@ class TestAdviceOrchestrator:
         result = orchestrator.run(make_job())
 
         assert isinstance(result.rule_results, list)
+
+    def test_use_agent_without_agent_raises_error(self) -> None:
+        orchestrator = AdviceOrchestrator(StaticAnalysisService())
+        with pytest.raises(ValueError, match="Agent mode requested but no AgentOrchestrator"):
+            orchestrator.run(make_job(), use_agent=True)
+
+    def test_use_agent_delegates_to_agent(self) -> None:
+        mock_agent = MagicMock()
+        mock_agent.run.return_value = AnalysisResult(
+            app_id="app-test-001",
+            job=make_job(),
+            rule_results=[],
+        )
+
+        orchestrator = AdviceOrchestrator(StaticAnalysisService(), agent=mock_agent)
+        result = orchestrator.run(make_job(), use_agent=True)
+
+        mock_agent.run.assert_called_once()
+        assert result.app_id == "app-test-001"

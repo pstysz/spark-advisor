@@ -19,7 +19,7 @@ def _fake_tool_response(tool_input: dict) -> Message:  # type: ignore[type-arg]
         id="msg_test",
         type="message",
         role="assistant",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         content=[
             ToolUseBlock(
                 id="toolu_test",
