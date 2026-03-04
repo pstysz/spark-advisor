@@ -23,3 +23,16 @@ async def handle_analyze(
     except Exception as e:
         logger.exception("Analysis failed for %s", job.app_id)
         return {"error": str(e)}
+
+
+@router.subscriber("analyze.agent.request")
+@router.publisher("analyze.result")
+async def handle_agent_analyze(
+    job: JobAnalysis,
+    orchestrator: AdviceOrchestrator = Context("orchestrator"),  # type: ignore[assignment]  # noqa: B008
+) -> AnalysisResult | dict[str, Any]:
+    try:
+        return await asyncio.to_thread(orchestrator.run, job, use_agent=True)
+    except Exception as e:
+        logger.exception("Agent analysis failed for %s", job.app_id)
+        return {"error": str(e)}

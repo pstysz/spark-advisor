@@ -99,7 +99,7 @@ def print_analysis_result(
         console.print("[green]No issues found — skipping AI analysis.[/]")
 
     if not use_ai:
-        console.print("[dim]AI analysis disabled. Use --ai to enable.[/]")
+        console.print("[dim]AI analysis disabled. Set ANTHROPIC_API_KEY and remove --no-ai to enable.[/]")
 
 
 def _print_rule_results(console: Console, results: list[RuleResult]) -> None:

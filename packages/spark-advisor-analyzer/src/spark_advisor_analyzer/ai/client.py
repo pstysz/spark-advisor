@@ -2,14 +2,14 @@ import os
 
 import anthropic
 import httpx
-from anthropic.types import Message, MessageParam, ToolChoiceToolParam, ToolParam
+from anthropic.types import Message, MessageParam, ToolChoiceAutoParam, ToolChoiceToolParam, ToolParam
 
 
 class AnthropicClient:
     def __init__(self, timeout: float) -> None:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY variable is required for AI analysis")
+            raise ValueError("ANTHROPIC_API_KEY env variable is required for AI analysis")
         self._api_key = api_key
         self._timeout = timeout
         self._client: anthropic.Anthropic | None = None
@@ -33,7 +33,7 @@ class AnthropicClient:
             system: str,
             messages: list[MessageParam],
             tools: list[ToolParam],
-            tool_choice: ToolChoiceToolParam,
+            tool_choice: ToolChoiceToolParam | ToolChoiceAutoParam,
     ) -> Message:
         if self._client is None:
             raise RuntimeError("AnthropicClient must be used within 'with' block")

@@ -6,15 +6,20 @@ requires-python = ">=3.12"
 dependencies = [
     "spark-advisor-models",
     "spark-advisor-rules",
+    "spark-advisor-hs-connector",
+    "spark-advisor-analyzer",
     "typer>=0.15",
     "rich>=14",
     "httpx>=0.28",
     "orjson>=3.10",
+    "anthropic>=0.52",
 ]
 
 [tool.uv.sources]
 spark-advisor-models = { workspace = true }
 spark-advisor-rules = { workspace = true }
+spark-advisor-hs-connector = { workspace = true }
+spark-advisor-analyzer = { workspace = true }
 
 [project.scripts]
 spark-advisor = "spark_advisor_cli.app:main"
@@ -25,6 +30,7 @@ dev = [
     "pytest-cov>=6.1",
     "mypy>=1.15",
     "ruff>=0.11",
+    "respx>=0.22",
 ]
 
 [build-system]
@@ -55,7 +61,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "TCH", "RUF"]
 runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["spark_advisor_cli", "spark_advisor_models", "spark_advisor_rules"]
+known-first-party = ["spark_advisor_cli", "spark_advisor_models", "spark_advisor_rules", "spark_advisor_hs_connector", "spark_advisor_analyzer"]
 
 [tool.mypy]
 python_version = "3.12"
