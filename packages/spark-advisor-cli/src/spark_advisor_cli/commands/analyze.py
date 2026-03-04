@@ -10,7 +10,7 @@ from spark_advisor_cli.event_log.parser import parse_event_log
 from spark_advisor_cli.output.console import print_analysis_result, print_job_overview, print_stage_breakdown
 from spark_advisor_models.config import AiSettings, Thresholds
 from spark_advisor_models.model import AnalysisResult, JobAnalysis
-from spark_advisor_models.model.output import OutputFormat
+from spark_advisor_models.model.output import AnalysisMode, OutputFormat
 from spark_advisor_rules import StaticAnalysisService, rules_for_threshold
 
 console = Console()
@@ -44,7 +44,7 @@ def _run_analysis(
     thresholds: Thresholds,
     *,
     use_ai: bool,
-    use_agent: bool,
+    mode: AnalysisMode,
     model: str,
     ai_timeout: float,
 ) -> AnalysisResult:
@@ -60,7 +60,7 @@ def _run_analysis(
             llm_service: LlmAnalysisService | None = None
             agent_orch = None
 
-            if use_agent:
+            if mode == AnalysisMode.AGENT:
                 from spark_advisor_analyzer.agent.orchestrator import AgentOrchestrator
 
                 agent_orch = AgentOrchestrator(ai_client, static, ai_settings)
@@ -68,7 +68,7 @@ def _run_analysis(
                 llm_service = LlmAnalysisService(ai_client, ai_settings, thresholds)
 
             orchestrator = AdviceOrchestrator(static, llm_service, agent_orch)
-            return orchestrator.run(job, use_agent=use_agent)
+            return orchestrator.run(job, mode=mode)
 
     rule_results = static.analyze(job)
     return AnalysisResult(app_id=job.app_id, job=job, rule_results=rule_results, ai_report=None)
@@ -129,8 +129,9 @@ def analyze(
 
     thresholds = Thresholds()
     use_ai = _resolve_ai_enabled(no_ai)
+    analysis_mode = AnalysisMode.AGENT if agent else AnalysisMode.STANDARD
 
-    if agent:
+    if analysis_mode == AnalysisMode.AGENT:
         status_msg = "[bold blue]Running agent analysis (multi-turn AI)...[/]"
     elif use_ai:
         status_msg = "[bold blue]Running analysis (rules + AI)...[/]"
@@ -140,7 +141,7 @@ def analyze(
     with console.status(status_msg):
         try:
             result = _run_analysis(
-                job, thresholds, use_ai=use_ai, use_agent=agent, model=model, ai_timeout=90.0,
+                job, thresholds, use_ai=use_ai, mode=analysis_mode, model=model, ai_timeout=90.0,
             )
         except Exception as e:
             console.print(f"[red]Analysis error: {e}[/]")
@@ -152,4 +153,6 @@ def analyze(
         print_job_overview(console, job)
         if verbose:
             print_stage_breakdown(console, job)
-        print_analysis_result(console, result, use_ai=use_ai or agent, output_config=output)
+        print_analysis_result(
+            console, result, use_ai=use_ai or analysis_mode == AnalysisMode.AGENT, output_config=output,
+        )

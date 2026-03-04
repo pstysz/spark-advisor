@@ -3,10 +3,12 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
+from spark_advisor_models.model.output import AnalysisMode
 
 
 class AnalyzeRequest(BaseModel):
     app_id: str
+    mode: AnalysisMode = AnalysisMode.STANDARD
 
 
 class ApplicationResponse(BaseModel):

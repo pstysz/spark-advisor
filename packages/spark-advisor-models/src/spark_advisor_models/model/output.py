@@ -5,6 +5,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from spark_advisor_models.model.metrics import JobAnalysis
 
 
+class AnalysisMode(StrEnum):
+    STANDARD = "standard"
+    AGENT = "agent"
+
+
 class OutputFormat(StrEnum):
     TEXT = "text"
     JSON = "json"

@@ -7,6 +7,7 @@ from faststream.nats import NatsRouter
 
 from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
 from spark_advisor_models.model import AnalysisResult, JobAnalysis
+from spark_advisor_models.model.output import AnalysisMode
 
 router = NatsRouter()
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ async def handle_agent_analyze(
     orchestrator: AdviceOrchestrator = Context("orchestrator"),  # type: ignore[assignment]  # noqa: B008
 ) -> AnalysisResult | dict[str, Any]:
     try:
-        return await asyncio.to_thread(orchestrator.run, job, use_agent=True)
+        return await asyncio.to_thread(orchestrator.run, job, mode=AnalysisMode.AGENT)
     except Exception as e:
         logger.exception("Agent analysis failed for %s", job.app_id)
         return {"error": str(e)}

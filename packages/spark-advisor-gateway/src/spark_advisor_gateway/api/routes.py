@@ -40,7 +40,7 @@ def create_router() -> APIRouter:
         manager: TaskManager = request.app.state.task_manager
         executor: TaskExecutor = request.app.state.task_executor
         task = manager.create(body.app_id)
-        executor.submit(task.task_id, body.app_id)
+        executor.submit(task.task_id, body.app_id, body.mode)
         return {"task_id": task.task_id, "status": task.status.value}
 
     @router.get("/tasks/{task_id}")

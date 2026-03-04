@@ -18,6 +18,7 @@ from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.models import TaskStatus
 from spark_advisor_gateway.task.store import InMemoryTaskStore
 from spark_advisor_models.model import AnalysisResult
+from spark_advisor_models.model.output import AnalysisMode
 
 
 def _make_reply(data: bytes) -> MagicMock:
@@ -115,3 +116,62 @@ async def test_execute_sends_correct_subjects() -> None:
     calls = nc.request.call_args_list
     assert calls[0].args[0] == "fetch.job"
     assert calls[1].args[0] == "analyze.request"
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_mode_uses_agent_subject() -> None:
+    nc, manager, executor = _setup()
+    job = make_job()
+    result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
+
+    nc.request = AsyncMock(side_effect=[
+        _make_reply(orjson.dumps(job.model_dump(mode="json"))),
+        _make_reply(result.model_dump_json().encode()),
+    ])
+
+    task = manager.create("app-test-001")
+    executor.submit(task.task_id, "app-test-001", mode=AnalysisMode.AGENT)
+    await asyncio.sleep(0.1)
+
+    calls = nc.request.call_args_list
+    assert calls[0].args[0] == "fetch.job"
+    assert calls[1].args[0] == "analyze.agent.request"
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_mode_uses_agent_timeout() -> None:
+    nc, manager, executor = _setup()
+    job = make_job()
+    result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
+
+    nc.request = AsyncMock(side_effect=[
+        _make_reply(orjson.dumps(job.model_dump(mode="json"))),
+        _make_reply(result.model_dump_json().encode()),
+    ])
+
+    task = manager.create("app-test-001")
+    executor.submit(task.task_id, "app-test-001", mode=AnalysisMode.AGENT)
+    await asyncio.sleep(0.1)
+
+    calls = nc.request.call_args_list
+    assert calls[1].kwargs["timeout"] == 300.0
+
+
+@pytest.mark.asyncio
+async def test_execute_standard_mode_default() -> None:
+    nc, manager, executor = _setup()
+    job = make_job()
+    result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
+
+    nc.request = AsyncMock(side_effect=[
+        _make_reply(orjson.dumps(job.model_dump(mode="json"))),
+        _make_reply(result.model_dump_json().encode()),
+    ])
+
+    task = manager.create("app-test-001")
+    executor.submit(task.task_id, "app-test-001")
+    await asyncio.sleep(0.1)
+
+    calls = nc.request.call_args_list
+    assert calls[1].args[0] == "analyze.request"
+    assert calls[1].kwargs["timeout"] == 120.0
