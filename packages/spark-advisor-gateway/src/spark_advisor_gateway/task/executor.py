@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import orjson
 
 from spark_advisor_models.model import AnalysisResult
+from spark_advisor_models.model.output import AnalysisMode
 
 if TYPE_CHECKING:
     import nats.aio.client
@@ -30,12 +31,12 @@ class TaskExecutor:
         self._tasks = task_manager
         self._settings = settings
 
-    def submit(self, task_id: str, app_id: str) -> None:
-        task = asyncio.create_task(self._execute(task_id, app_id))
+    def submit(self, task_id: str, app_id: str, mode: AnalysisMode = AnalysisMode.STANDARD) -> None:
+        task = asyncio.create_task(self._execute(task_id, app_id, mode))
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
 
-    async def _execute(self, task_id: str, app_id: str) -> None:
+    async def _execute(self, task_id: str, app_id: str, mode: AnalysisMode = AnalysisMode.STANDARD) -> None:
         try:
             self._tasks.mark_running(task_id)
 
@@ -50,10 +51,17 @@ class TaskExecutor:
                 self._tasks.mark_failed(task_id, f"Fetch failed: {fetch_data['error']}")
                 return
 
+            if mode == AnalysisMode.AGENT:
+                subject = self._settings.nats.analyze_agent_subject
+                timeout = self._settings.nats.analyze_agent_timeout
+            else:
+                subject = self._settings.nats.analyze_subject
+                timeout = self._settings.nats.analyze_timeout
+
             analyze_reply = await self._nc.request(
-                self._settings.nats.analyze_subject,
+                subject,
                 fetch_reply.data,
-                timeout=self._settings.nats.analyze_timeout,
+                timeout=timeout,
             )
 
             analyze_data = orjson.loads(analyze_reply.data)

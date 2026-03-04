@@ -11,6 +11,7 @@ from spark_advisor_models.model import (
     Recommendation,
     Severity,
 )
+from spark_advisor_models.model.output import AnalysisMode
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SAMPLE_LOG = _REPO_ROOT / "sample_event_logs" / "sample_etl_job.json"
@@ -139,26 +140,26 @@ class TestAgentMode:
 
     @patch("spark_advisor_cli.commands.analyze._run_analysis")
     @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test-key"})
-    def test_agent_flag_passes_use_agent(self, mock_run: MagicMock) -> None:
+    def test_agent_flag_passes_agent_mode(self, mock_run: MagicMock) -> None:
         mock_run.return_value = _make_ai_result()
 
         result = runner.invoke(app, ["analyze", str(SAMPLE_LOG), "--agent"])
 
         assert result.exit_code == 0
         _, kwargs = mock_run.call_args
-        assert kwargs["use_agent"] is True
+        assert kwargs["mode"] == AnalysisMode.AGENT
         assert kwargs["use_ai"] is True
 
     @patch("spark_advisor_cli.commands.analyze._run_analysis")
     @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test-key"})
-    def test_no_agent_flag_passes_false(self, mock_run: MagicMock) -> None:
+    def test_no_agent_flag_passes_standard_mode(self, mock_run: MagicMock) -> None:
         mock_run.return_value = _make_ai_result()
 
         result = runner.invoke(app, ["analyze", str(SAMPLE_LOG)])
 
         assert result.exit_code == 0
         _, kwargs = mock_run.call_args
-        assert kwargs["use_agent"] is False
+        assert kwargs["mode"] == AnalysisMode.STANDARD
 
 
 class TestResolveAiEnabled:

@@ -7,9 +7,11 @@ from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
 class GatewayNatsSettings(NatsSettings):
     fetch_subject: str = "fetch.job"
     analyze_subject: str = "analyze.request"
+    analyze_agent_subject: str = "analyze.agent.request"
     list_apps_subject: str = "list.applications"
     fetch_timeout: float = 30.0
     analyze_timeout: float = 120.0
+    analyze_agent_timeout: float = 300.0
     list_apps_timeout: float = 10.0
 
 

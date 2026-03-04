@@ -10,6 +10,7 @@ from factories import make_job, make_rule_result
 
 from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
 from spark_advisor_models.model import AdvisorReport, AnalysisResult, Severity
+from spark_advisor_models.model.output import AnalysisMode
 from spark_advisor_rules import StaticAnalysisService
 
 
@@ -50,7 +51,7 @@ class TestAdviceOrchestrator:
     def test_use_agent_without_agent_raises_error(self) -> None:
         orchestrator = AdviceOrchestrator(StaticAnalysisService())
         with pytest.raises(ValueError, match="Agent mode requested but no AgentOrchestrator"):
-            orchestrator.run(make_job(), use_agent=True)
+            orchestrator.run(make_job(), mode=AnalysisMode.AGENT)
 
     def test_use_agent_delegates_to_agent(self) -> None:
         mock_agent = MagicMock()
@@ -61,7 +62,7 @@ class TestAdviceOrchestrator:
         )
 
         orchestrator = AdviceOrchestrator(StaticAnalysisService(), agent=mock_agent)
-        result = orchestrator.run(make_job(), use_agent=True)
+        result = orchestrator.run(make_job(), mode=AnalysisMode.AGENT)
 
         mock_agent.run.assert_called_once()
         assert result.app_id == "app-test-001"

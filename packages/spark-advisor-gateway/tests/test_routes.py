@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import orjson
 import pytest
 
+from spark_advisor_models.model.output import AnalysisMode
+
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
+    from spark_advisor_gateway.task.executor import TaskExecutor
     from spark_advisor_gateway.task.manager import TaskManager
 
 
@@ -19,6 +22,24 @@ async def test_analyze_returns_202(client: AsyncClient) -> None:
     data = response.json()
     assert data["status"] == "pending"
     assert "task_id" in data
+
+
+@pytest.mark.asyncio
+async def test_analyze_with_agent_mode(client: AsyncClient, task_executor: TaskExecutor) -> None:
+    with patch.object(task_executor, "submit") as mock_submit:
+        response = await client.post("/api/v1/analyze", json={"app_id": "app-123", "mode": "agent"})
+    assert response.status_code == 202
+    call_args = mock_submit.call_args
+    assert call_args.args[2] == AnalysisMode.AGENT
+
+
+@pytest.mark.asyncio
+async def test_analyze_default_mode_is_standard(client: AsyncClient, task_executor: TaskExecutor) -> None:
+    with patch.object(task_executor, "submit") as mock_submit:
+        response = await client.post("/api/v1/analyze", json={"app_id": "app-123"})
+    assert response.status_code == 202
+    call_args = mock_submit.call_args
+    assert call_args.args[2] == AnalysisMode.STANDARD
 
 
 @pytest.mark.asyncio
