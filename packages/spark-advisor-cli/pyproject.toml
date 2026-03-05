@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-cli"
-version = "0.1.4" # x-release-please-version
+version = "0.1.5" # x-release-please-version
 description = "AI-powered Apache Spark job analyzer and configuration advisor"
 readme = "README.md"
 license = "Apache-2.0"
