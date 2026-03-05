@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.4](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.3...spark-advisor-v0.1.4) (2026-03-05)
+
+
+### Features
+
+* add helm charts ([e7b719a](https://github.com/pstysz/spark-advisor/commit/e7b719a0942a885dbecda3098f2d4e47215bd099))
+* add k8s integration ([a20ee00](https://github.com/pstysz/spark-advisor/commit/a20ee0051fcdf3d5a555f918930ab386b2361a9e))
+* added make command to deploy the whole stack on minikube ([090cad6](https://github.com/pstysz/spark-advisor/commit/090cad6e7ce85fd4868532776ea700d482710f5f))
+* docker publish added ([ec028d7](https://github.com/pstysz/spark-advisor/commit/ec028d7f12779787b6828b69adf1b9ac5f60f55c))
+
 ## [0.1.3](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.2...spark-advisor-v0.1.3) (2026-03-05)
 
 
