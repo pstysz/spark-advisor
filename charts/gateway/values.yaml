@@ -25,6 +25,7 @@ config:
 service:
   type: ClusterIP
   port: 8080
+  nodePort: ""
 
 imagePullSecrets: []
 

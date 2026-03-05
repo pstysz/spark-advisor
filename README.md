@@ -258,7 +258,26 @@ make down
 
 Helm charts for deploying to Kubernetes. An umbrella chart installs all services + NATS in a single command.
 
-### Install
+### Local development with Minikube
+
+```bash
+# Start minikube
+minikube start
+
+# Set ANTHROPIC_API_KEY (e.g. via .envrc or export)
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Build images inside minikube and deploy (creates namespace spark-advisor)
+make minikube-deploy
+
+# Forward gateway port to localhost
+kubectl port-forward -n spark-advisor svc/spark-advisor-gateway 8080:8080
+
+# Test
+curl http://localhost:8080/health/live
+```
+
+### Install on a cluster
 
 ```bash
 # Create secret for Claude API key

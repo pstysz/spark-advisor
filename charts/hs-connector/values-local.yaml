@@ -1,0 +1,8 @@
+image:
+  repository: spark-advisor-hs-connector
+  tag: ""
+  pullPolicy: Never
+
+config:
+  logLevel: "DEBUG"
+  historyServerUrl: "http://host.minikube.internal:18080"

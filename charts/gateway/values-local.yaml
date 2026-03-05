@@ -1,0 +1,7 @@
+image:
+  repository: spark-advisor-gateway
+  tag: ""
+  pullPolicy: Never
+
+config:
+  logLevel: "DEBUG"
