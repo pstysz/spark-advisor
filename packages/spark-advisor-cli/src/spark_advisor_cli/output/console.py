@@ -83,11 +83,11 @@ def print_stage_breakdown(console: Console, job: JobAnalysis) -> None:
 
 
 def print_analysis_result(
-        console: Console,
-        result: AnalysisResult,
-        *,
-        use_ai: bool = True,
-        output_config: Path | None = None,
+    console: Console,
+    result: AnalysisResult,
+    *,
+    use_ai: bool = True,
+    output_config: Path | None = None,
 ) -> None:
     _print_rule_results(console, result.rule_results)
 

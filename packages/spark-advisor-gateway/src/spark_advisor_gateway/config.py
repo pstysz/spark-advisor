@@ -1,7 +1,16 @@
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict
 from pydantic_settings import SettingsConfigDict
 
 from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
+
+
+class StateKey(StrEnum):
+    NC = "nc"
+    SETTINGS = "settings"
+    TASK_MANAGER = "task_manager"
+    TASK_EXECUTOR = "task_executor"
 
 
 class GatewayNatsSettings(NatsSettings):

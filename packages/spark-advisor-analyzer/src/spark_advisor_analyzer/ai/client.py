@@ -14,29 +14,36 @@ class AnthropicClient:
         self._timeout = timeout
         self._client: anthropic.Anthropic | None = None
 
-    def __enter__(self) -> "AnthropicClient":
+    def open(self) -> "AnthropicClient":
         self._client = anthropic.Anthropic(
             api_key=self._api_key,
             timeout=httpx.Timeout(self._timeout),
         )
         return self
 
-    def __exit__(self, *_: object) -> None:
+    def close(self) -> None:
         if self._client:
             self._client.close()
+            self._client = None
+
+    def __enter__(self) -> "AnthropicClient":
+        return self.open()
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
 
     def create_message(
-            self,
-            *,
-            model: str,
-            max_tokens: int,
-            system: str,
-            messages: list[MessageParam],
-            tools: list[ToolParam],
-            tool_choice: ToolChoiceToolParam | ToolChoiceAutoParam,
+        self,
+        *,
+        model: str,
+        max_tokens: int,
+        system: str,
+        messages: list[MessageParam],
+        tools: list[ToolParam],
+        tool_choice: ToolChoiceToolParam | ToolChoiceAutoParam,
     ) -> Message:
         if self._client is None:
-            raise RuntimeError("AnthropicClient must be used within 'with' block")
+            raise RuntimeError("Client not initialized — call open() or use as context manager")
         return self._client.messages.create(
             model=model,
             max_tokens=max_tokens,

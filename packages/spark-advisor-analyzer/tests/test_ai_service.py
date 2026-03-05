@@ -1,17 +1,12 @@
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from anthropic.types import Message, ToolUseBlock, Usage
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "spark-advisor-models" / "tests"))
-
-from factories import make_job, make_rule_result
-
 from spark_advisor_analyzer.ai.service import LlmAnalysisService
 from spark_advisor_models.config import AiSettings, Thresholds
 from spark_advisor_models.model import Severity
+from spark_advisor_models.testing import make_job, make_rule_result
 
 
 def _fake_tool_response(tool_input: dict) -> Message:  # type: ignore[type-arg]

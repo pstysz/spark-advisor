@@ -3,13 +3,10 @@ import logging
 from faststream import FastStream
 from faststream.nats import NatsBroker
 
-from spark_advisor_analyzer.agent.orchestrator import AgentOrchestrator
 from spark_advisor_analyzer.ai.client import AnthropicClient
-from spark_advisor_analyzer.ai.service import LlmAnalysisService
-from spark_advisor_analyzer.config import AnalyzerSettings
+from spark_advisor_analyzer.config import AnalyzerSettings, ContextKey
+from spark_advisor_analyzer.factory import create_analysis_stack
 from spark_advisor_analyzer.handlers import router
-from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
-from spark_advisor_rules import StaticAnalysisService, rules_for_threshold
 
 settings = AnalyzerSettings()
 broker = NatsBroker(settings.nats.url)
@@ -22,26 +19,35 @@ async def on_startup() -> None:
     logging.basicConfig(level=settings.log_level)
     logger = logging.getLogger(__name__)
 
-    static = StaticAnalysisService(rules_for_threshold(settings.thresholds))
-
-    llm_service: LlmAnalysisService | None = None
-    agent_orch: AgentOrchestrator | None = None
+    client: AnthropicClient | None = None
     if settings.ai.enabled:
         try:
             client = AnthropicClient(settings.ai.api_timeout)
-            client.__enter__()
-            llm_service = LlmAnalysisService(client, settings.ai, settings.thresholds)
-            agent_orch = AgentOrchestrator(client, static, settings.ai)
+            client.open()
+            app.context.set_global(ContextKey.AI_CLIENT, client)
         except ValueError:
             logger.warning("ANTHROPIC_API_KEY not set — AI analysis disabled")
 
-    orchestrator = AdviceOrchestrator(static, llm_service, agent_orch)
-    app.context.set_global("orchestrator", orchestrator)
+    orchestrator = create_analysis_stack(
+        client=client,
+        ai_settings=settings.ai,
+        thresholds=settings.thresholds,
+    )
+    app.context.set_global(ContextKey.ORCHESTRATOR, orchestrator)
 
     logger.info(
-        "Analyzer started: ai_enabled=%s agent_enabled=%s model=%s",
-        settings.ai.enabled, agent_orch is not None, settings.ai.model,
+        "Analyzer started: ai_enabled=%s model=%s",
+        settings.ai.enabled and client is not None,
+        settings.ai.model,
     )
+
+
+@app.on_shutdown
+async def on_shutdown() -> None:
+    ai_client: AnthropicClient | None = app.context.get(ContextKey.AI_CLIENT)
+    if ai_client is not None:
+        ai_client.close()
+        logging.getLogger(__name__).info("AnthropicClient closed")
 
 
 def main() -> None:

@@ -155,9 +155,7 @@ def _map_executors(executors_data: list[dict[str, Any]]) -> ExecutorMetrics:
     non_driver = [e for e in executors_data if e.get("id") != "driver"]
     return ExecutorMetrics(
         executor_count=len(non_driver),
-        peak_memory_bytes_sum=sum(
-            (e.get("peakMemoryMetrics") or {}).get("JVMHeapMemory", 0) for e in non_driver
-        ),
+        peak_memory_bytes_sum=sum((e.get("peakMemoryMetrics") or {}).get("JVMHeapMemory", 0) for e in non_driver),
         allocated_memory_bytes_sum=sum(e.get("maxMemory", 0) for e in non_driver),
         total_task_time_ms=sum(e.get("totalDuration", 0) for e in non_driver),
         total_gc_time_ms=sum(e.get("totalGCTime", 0) for e in non_driver),

@@ -1,27 +1,32 @@
 from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
 class Attempt(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, alias_generator=to_camel, populate_by_name=True)
 
-    attemptId: str | None = None
-    startTime: str = ""
-    endTime: str = ""
-    lastUpdated: str = ""
+    attempt_id: str | None = None
+    start_time: str = ""
+    end_time: str = ""
+    last_updated: str = ""
     duration: int = 0
-    sparkUser: str = ""
+    spark_user: str = ""
     completed: bool = False
-    appSparkVersion: str = ""
-    logPath: str = ""
-    startTimeEpoch: int = 0
-    endTimeEpoch: int = 0
-    lastUpdatedEpoch: int = 0
+    app_spark_version: str = ""
+    log_path: str = ""
+    start_time_epoch: int = 0
+    end_time_epoch: int = 0
+    last_updated_epoch: int = 0
 
 
 class ApplicationSummary(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, alias_generator=to_camel, populate_by_name=True)
 
     id: str
     name: str = ""
     attempts: list[Attempt] = []
-    driverHost: str = ""
+    driver_host: str = ""
+
+    @property
+    def latest_attempt(self) -> Attempt | None:
+        return self.attempts[-1] if self.attempts else None

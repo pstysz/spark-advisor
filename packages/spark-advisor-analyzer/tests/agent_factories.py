@@ -2,13 +2,13 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
-from factories import make_job
 
 from spark_advisor_analyzer.agent.context import AgentContext
 from spark_advisor_analyzer.agent.orchestrator import AgentOrchestrator
 from spark_advisor_analyzer.agent.tools import AgentToolName
-from spark_advisor_models.config import AiSettings
-from spark_advisor_rules import StaticAnalysisService, default_rules
+from spark_advisor_models.config import AiSettings, Thresholds
+from spark_advisor_models.testing import make_job
+from spark_advisor_rules import StaticAnalysisService, rules_for_threshold
 
 
 def make_agent_context(**overrides: object) -> AgentContext:
@@ -16,7 +16,7 @@ def make_agent_context(**overrides: object) -> AgentContext:
 
 
 def make_default_static() -> StaticAnalysisService:
-    return StaticAnalysisService(default_rules())
+    return StaticAnalysisService(rules_for_threshold(Thresholds()))
 
 
 def make_tool_use_message(tool_name: str, tool_input: dict[str, Any], tool_id: str = "toolu_1") -> Message:
@@ -70,6 +70,6 @@ def make_text_message() -> Message:
 def make_agent_orchestrator(mock_client: MagicMock) -> AgentOrchestrator:
     return AgentOrchestrator(
         client=mock_client,
-        static_analysis=StaticAnalysisService(default_rules()),
+        static_analysis=StaticAnalysisService(rules_for_threshold(Thresholds())),
         ai_settings=AiSettings(),
     )

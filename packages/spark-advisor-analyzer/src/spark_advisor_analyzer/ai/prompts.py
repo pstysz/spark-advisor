@@ -79,18 +79,12 @@ def _append_single_stage(lines: list[str], stage: StageMetrics, t: Thresholds) -
     lines.append(f"- Tasks: {stage.tasks.task_count}")
 
     dur = dist.duration
-    lines.append(
-        f"- Task duration (wall-clock): min={dur.min:.0f}ms "
-        f"median={dur.median:.0f}ms "
-        f"max={dur.max:.0f}ms"
-    )
+    lines.append(f"- Task duration (wall-clock): min={dur.min:.0f}ms median={dur.median:.0f}ms max={dur.max:.0f}ms")
 
     run = dist.executor_run_time
     if run.max > 0:
         lines.append(
-            f"- Executor run time (compute): min={run.min:.0f}ms "
-            f"median={run.median:.0f}ms "
-            f"max={run.max:.0f}ms"
+            f"- Executor run time (compute): min={run.min:.0f}ms median={run.median:.0f}ms max={run.max:.0f}ms"
         )
 
     peak_mem = dist.peak_execution_memory
@@ -102,9 +96,7 @@ def _append_single_stage(lines: list[str], stage: StageMetrics, t: Thresholds) -
 
     sched = dist.scheduler_delay
     if sched.max > t.scheduler_delay_ms:
-        lines.append(
-            f"- Scheduler delay: median={sched.median:.0f}ms max={sched.max:.0f}ms"
-        )
+        lines.append(f"- Scheduler delay: median={sched.median:.0f}ms max={sched.max:.0f}ms")
 
     lines.append(f"- Input: {format_bytes(stage.input_bytes)}")
     if stage.input_records > 0:

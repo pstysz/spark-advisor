@@ -37,6 +37,15 @@ class TestAnalyzeSparkJob:
         with pytest.raises(FileNotFoundError, match="not found"):
             analyze_spark_job("/nonexistent/file.json", no_ai=True)
 
+    def test_agent_mode_without_api_key_returns_error(self) -> None:
+        from spark_advisor_mcp.server import analyze_spark_job
+
+        with patch.dict("os.environ", {}, clear=True):
+            result = analyze_spark_job(str(SAMPLE_LOG), agent=True)
+
+        assert "Error" in result
+        assert "ANTHROPIC_API_KEY" in result
+
 
 class TestGetJobConfig:
     def test_returns_config_table(self) -> None:
@@ -86,8 +95,8 @@ class TestScanRecentJobs:
                     Attempt(
                         duration=60000,
                         completed=True,
-                        appSparkVersion="3.5.0",
-                        sparkUser="hdfs",
+                        app_spark_version="3.5.0",
+                        spark_user="hdfs",
                     )
                 ],
             ),

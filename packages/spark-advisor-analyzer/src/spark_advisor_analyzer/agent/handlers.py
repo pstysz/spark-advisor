@@ -2,6 +2,8 @@ import json
 import math
 from typing import Any
 
+from pydantic import BaseModel, ValidationError
+
 from spark_advisor_analyzer.agent.context import AgentContext
 from spark_advisor_analyzer.agent.tools import (
     AgentToolName,
@@ -12,6 +14,12 @@ from spark_advisor_analyzer.agent.tools import (
 from spark_advisor_analyzer.ai.tool_config import IMPORTANT_KEYS
 from spark_advisor_models.util import format_bytes
 from spark_advisor_rules import StaticAnalysisService
+
+_TOOL_INPUT_MODELS: dict[AgentToolName, type[BaseModel]] = {
+    AgentToolName.GET_STAGE_DETAILS: GetStageDetailsInput,
+    AgentToolName.CALCULATE_OPTIMAL_PARTITIONS: CalculateOptimalPartitionsInput,
+    AgentToolName.COMPARE_CONFIGS: CompareConfigsInput,
+}
 
 
 class ToolExecutionError(Exception):
@@ -29,22 +37,31 @@ def execute_tool(
     except ValueError as err:
         raise ToolExecutionError(f"Unknown tool: {name}") from err
 
+    if tool == AgentToolName.SUBMIT_FINAL_REPORT:
+        raise ToolExecutionError("submit_final_report is handled by the orchestrator, not execute_tool")
+
+    input_model = _TOOL_INPUT_MODELS.get(tool)
+    validated: BaseModel | None = None
+    if input_model is not None:
+        try:
+            validated = input_model.model_validate(input_data)
+        except ValidationError as e:
+            raise ToolExecutionError(f"Invalid input for {name}: {e}") from e
+
     match tool:
         case AgentToolName.GET_JOB_OVERVIEW:
             return _handle_get_job_overview(context)
         case AgentToolName.GET_STAGE_DETAILS:
-            validated = GetStageDetailsInput.model_validate(input_data)
+            assert isinstance(validated, GetStageDetailsInput)
             return _handle_get_stage_details(context, validated)
         case AgentToolName.RUN_RULES_ENGINE:
             return _handle_run_rules_engine(context, static_analysis)
         case AgentToolName.CALCULATE_OPTIMAL_PARTITIONS:
-            validated_partitions = CalculateOptimalPartitionsInput.model_validate(input_data)
-            return _handle_calculate_optimal_partitions(context, validated_partitions)
+            assert isinstance(validated, CalculateOptimalPartitionsInput)
+            return _handle_calculate_optimal_partitions(context, validated)
         case AgentToolName.COMPARE_CONFIGS:
-            validated_configs = CompareConfigsInput.model_validate(input_data)
-            return _handle_compare_configs(context, validated_configs)
-        case AgentToolName.SUBMIT_FINAL_REPORT:
-            raise ToolExecutionError("submit_final_report is handled by the orchestrator, not execute_tool")
+            assert isinstance(validated, CompareConfigsInput)
+            return _handle_compare_configs(context, validated)
         case _:
             raise ToolExecutionError(f"Unhandled tool: {tool}")
 
@@ -108,9 +125,7 @@ def _handle_get_stage_details(context: AgentContext, input_data: GetStageDetails
 
 
 def _handle_run_rules_engine(context: AgentContext, static_analysis: StaticAnalysisService) -> str:
-    if not context.rules_executed:
-        context.rule_results = static_analysis.analyze(context.job)
-        context.rules_executed = True
+    results = context.get_or_run_rules(static_analysis)
 
     findings = [
         {
@@ -122,7 +137,7 @@ def _handle_run_rules_engine(context: AgentContext, static_analysis: StaticAnaly
             "current_value": r.current_value,
             "recommended_value": r.recommended_value,
         }
-        for r in context.rule_results
+        for r in results
     ]
     return json.dumps({"findings_count": len(findings), "findings": findings})
 
@@ -140,24 +155,28 @@ def _handle_calculate_optimal_partitions(
 
     actual_size_mb = round(total_bytes / (optimal * 1024 * 1024), 1) if optimal > 0 else 0
 
-    return json.dumps({
-        "current_partitions": current,
-        "optimal_partitions": optimal,
-        "total_shuffle_bytes": total_bytes,
-        "total_shuffle_formatted": format_bytes(total_bytes),
-        "target_partition_size_mb": target_mb,
-        "actual_partition_size_mb": actual_size_mb,
-    })
+    return json.dumps(
+        {
+            "current_partitions": current,
+            "optimal_partitions": optimal,
+            "total_shuffle_bytes": total_bytes,
+            "total_shuffle_formatted": format_bytes(total_bytes),
+            "target_partition_size_mb": target_mb,
+            "actual_partition_size_mb": actual_size_mb,
+        }
+    )
 
 
 def _handle_compare_configs(context: AgentContext, input_data: CompareConfigsInput) -> str:
     changes = []
     for key, new_value in input_data.proposed_changes.items():
         current = context.job.config.get(key)
-        changes.append({
-            "parameter": key,
-            "current_value": current or "(not set)",
-            "proposed_value": new_value,
-            "changed": current != new_value,
-        })
+        changes.append(
+            {
+                "parameter": key,
+                "current_value": current or "(not set)",
+                "proposed_value": new_value,
+                "changed": current != new_value,
+            }
+        )
     return json.dumps({"changes": changes, "total_changes": len(changes)})

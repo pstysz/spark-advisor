@@ -61,39 +61,35 @@ def analyze_spark_job(
         no_ai: Disable AI analysis (rules only). Defaults to False.
         agent: Use agent mode (multi-turn AI with tool use for deeper analysis). Defaults to False.
     """
+    from spark_advisor_analyzer.factory import create_analysis_stack
     from spark_advisor_models.config import AiSettings, Thresholds
-    from spark_advisor_models.model import AnalysisResult
     from spark_advisor_models.model.output import AnalysisMode
-    from spark_advisor_rules import StaticAnalysisService, rules_for_threshold
+
+    if agent and not _ai_available():
+        return "Error: agent mode requires ANTHROPIC_API_KEY environment variable."
 
     job = _load_job(source, history_server)
     thresholds = Thresholds()
-    static = StaticAnalysisService(rules_for_threshold(thresholds))
     use_ai = not no_ai and _ai_available()
     mode = AnalysisMode.AGENT if agent else AnalysisMode.STANDARD
 
+    client = None
+    ai_settings: AiSettings | None = None
     if use_ai:
         from spark_advisor_analyzer.ai.client import AnthropicClient
-        from spark_advisor_analyzer.ai.service import LlmAnalysisService
-        from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
 
-        ai_settings = AiSettings(model="claude-sonnet-4-6", api_timeout=90.0)
-        with AnthropicClient(timeout=ai_settings.api_timeout) as ai_client:
-            llm_service: LlmAnalysisService | None = None
-            agent_orch = None
+        ai_settings = AiSettings()
+        client = AnthropicClient(timeout=ai_settings.api_timeout)
+        client.open()
 
-            if mode == AnalysisMode.AGENT:
-                from spark_advisor_analyzer.agent.orchestrator import AgentOrchestrator
-
-                agent_orch = AgentOrchestrator(ai_client, static, ai_settings)
-            else:
-                llm_service = LlmAnalysisService(ai_client, ai_settings, thresholds)
-
-            orchestrator = AdviceOrchestrator(static, llm_service, agent_orch)
-            result = orchestrator.run(job, mode=mode)
-    else:
-        rule_results = static.analyze(job)
-        result = AnalysisResult(app_id=job.app_id, job=job, rule_results=rule_results, ai_report=None)
+    try:
+        orchestrator = create_analysis_stack(
+            client=client, ai_settings=ai_settings, thresholds=thresholds,
+        )
+        result = orchestrator.run(job, mode=mode)
+    finally:
+        if client is not None:
+            client.close()
 
     return format_analysis_result(result, use_ai=use_ai)
 

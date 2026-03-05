@@ -1,3 +1,5 @@
+from typing import Any
+
 from spark_advisor_models.model import (
     ExecutorMetrics,
     JobAnalysis,
@@ -11,9 +13,7 @@ from spark_advisor_models.model import (
 )
 
 
-def make_quantiles(
-    min: int = 0, p25: int = 0, median: int = 0, p75: int = 0, max: int = 0
-) -> Quantiles:
+def make_quantiles(min: int = 0, p25: int = 0, median: int = 0, p75: int = 0, max: int = 0) -> Quantiles:
     return Quantiles(min=min, p25=p25, median=median, p75=p75, max=max)
 
 
@@ -50,13 +50,9 @@ def make_stage(
     )
     computed_sum = sum_executor_run_time_ms if sum_executor_run_time_ms is not None else task_count * run_time_median
 
-    peak_mem = (
-        make_quantiles(max=peak_memory_max, median=peak_memory_max // 2) if peak_memory_max else Quantiles()
-    )
+    peak_mem = make_quantiles(max=peak_memory_max, median=peak_memory_max // 2) if peak_memory_max else Quantiles()
     sched = (
-        make_quantiles(max=scheduler_delay_max, median=scheduler_delay_max // 4)
-        if scheduler_delay_max
-        else Quantiles()
+        make_quantiles(max=scheduler_delay_max, median=scheduler_delay_max // 4) if scheduler_delay_max else Quantiles()
     )
 
     return StageMetrics(
@@ -88,8 +84,8 @@ def make_stage(
     )
 
 
-def make_job(**overrides: object) -> JobAnalysis:
-    defaults: dict[str, object] = {
+def make_job(**overrides: Any) -> JobAnalysis:
+    defaults: dict[str, Any] = {
         "app_id": "app-test-001",
         "app_name": "TestJob",
         "duration_ms": 300_000,
@@ -98,27 +94,27 @@ def make_job(**overrides: object) -> JobAnalysis:
     }
     defaults.update(overrides)
     if isinstance(defaults.get("config"), dict):
-        defaults["config"] = SparkConfig(raw=defaults["config"])  # type: ignore[arg-type]
-    return JobAnalysis(**defaults)  # type: ignore[arg-type]
+        defaults["config"] = SparkConfig(raw=defaults["config"])
+    return JobAnalysis(**defaults)
 
 
-def make_executors(**overrides: object) -> ExecutorMetrics:
-    defaults: dict[str, object] = {
+def make_executors(**overrides: Any) -> ExecutorMetrics:
+    defaults: dict[str, Any] = {
         "executor_count": 10,
         "peak_memory_bytes_sum": 1024 * 1024 * 1024 * 2,
         "allocated_memory_bytes_sum": 1024 * 1024 * 1024 * 4,
         "total_task_time_ms": 500_000,
     }
     defaults.update(overrides)
-    return ExecutorMetrics(**defaults)  # type: ignore[arg-type]
+    return ExecutorMetrics(**defaults)
 
 
-def make_rule_result(**overrides: object) -> RuleResult:
-    defaults: dict[str, object] = {
+def make_rule_result(**overrides: Any) -> RuleResult:
+    defaults: dict[str, Any] = {
         "rule_id": "data_skew",
         "severity": Severity.WARNING,
         "title": "Data skew in Stage 0",
         "message": "Max task duration is 5.0x the median",
     }
     defaults.update(overrides)
-    return RuleResult(**defaults)  # type: ignore[arg-type]
+    return RuleResult(**defaults)

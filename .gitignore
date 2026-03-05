@@ -13,9 +13,6 @@ build/
 .venv/
 .envrc
 
-# uv
-uv.lock
-
 # Testing
 .coverage
 .pytest_cache/

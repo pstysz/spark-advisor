@@ -1,11 +1,11 @@
 import json
 
 import pytest
-from factories import make_executors, make_stage
 
 from agent_factories import make_agent_context, make_default_static
 from spark_advisor_analyzer.agent.handlers import ToolExecutionError, execute_tool
 from spark_advisor_analyzer.agent.tools import AgentToolName
+from spark_advisor_models.testing import make_executors, make_stage
 
 
 class TestGetJobOverview:
@@ -40,9 +40,7 @@ class TestGetStageDetails:
             execute_tool(AgentToolName.GET_STAGE_DETAILS, {"stage_id": 99}, make_agent_context(), make_default_static())
 
     def test_missing_stage_id_raises_error(self) -> None:
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
+        with pytest.raises(ToolExecutionError, match="Invalid input"):
             execute_tool(AgentToolName.GET_STAGE_DETAILS, {}, make_agent_context(), make_default_static())
 
 

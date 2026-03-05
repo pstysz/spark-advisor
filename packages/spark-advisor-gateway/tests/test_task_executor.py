@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import orjson
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "spark-advisor-models" / "tests"))
-
-from factories import make_job
 
 from spark_advisor_gateway.config import GatewaySettings
 from spark_advisor_gateway.task.executor import TaskExecutor
@@ -19,6 +13,7 @@ from spark_advisor_gateway.task.models import TaskStatus
 from spark_advisor_gateway.task.store import InMemoryTaskStore
 from spark_advisor_models.model import AnalysisResult
 from spark_advisor_models.model.output import AnalysisMode
+from spark_advisor_models.testing import make_job
 
 
 def _make_reply(data: bytes) -> MagicMock:
@@ -44,16 +39,18 @@ async def test_execute_success() -> None:
     result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
     result_bytes = result.model_dump_json().encode()
 
-    nc.request = AsyncMock(side_effect=[
-        _make_reply(job_bytes),
-        _make_reply(result_bytes),
-    ])
+    nc.request = AsyncMock(
+        side_effect=[
+            _make_reply(job_bytes),
+            _make_reply(result_bytes),
+        ]
+    )
 
-    task = manager.create("app-test-001")
+    task = await manager.create("app-test-001")
     executor.submit(task.task_id, "app-test-001")
     await asyncio.sleep(0.1)
 
-    updated = manager.get(task.task_id)
+    updated = await manager.get(task.task_id)
     assert updated is not None
     assert updated.status == TaskStatus.COMPLETED
     assert updated.result is not None
@@ -73,11 +70,11 @@ async def test_execute_marks_running() -> None:
 
     nc.request = slow_request
 
-    task = manager.create("app-slow")
+    task = await manager.create("app-slow")
     executor.submit(task.task_id, "app-slow")
     await started_event.wait()
 
-    updated = manager.get(task.task_id)
+    updated = await manager.get(task.task_id)
     assert updated is not None
     assert updated.status == TaskStatus.RUNNING
 
@@ -87,11 +84,11 @@ async def test_execute_marks_failed_on_error() -> None:
     nc, manager, executor = _setup()
     nc.request = AsyncMock(side_effect=TimeoutError("NATS timeout"))
 
-    task = manager.create("app-fail")
+    task = await manager.create("app-fail")
     executor.submit(task.task_id, "app-fail")
     await asyncio.sleep(0.1)
 
-    updated = manager.get(task.task_id)
+    updated = await manager.get(task.task_id)
     assert updated is not None
     assert updated.status == TaskStatus.FAILED
     assert updated.error is not None
@@ -104,12 +101,14 @@ async def test_execute_sends_correct_subjects() -> None:
     job = make_job()
     result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
 
-    nc.request = AsyncMock(side_effect=[
-        _make_reply(orjson.dumps(job.model_dump(mode="json"))),
-        _make_reply(result.model_dump_json().encode()),
-    ])
+    nc.request = AsyncMock(
+        side_effect=[
+            _make_reply(orjson.dumps(job.model_dump(mode="json"))),
+            _make_reply(result.model_dump_json().encode()),
+        ]
+    )
 
-    task = manager.create("app-test-001")
+    task = await manager.create("app-test-001")
     executor.submit(task.task_id, "app-test-001")
     await asyncio.sleep(0.1)
 
@@ -124,12 +123,14 @@ async def test_execute_agent_mode_uses_agent_subject() -> None:
     job = make_job()
     result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
 
-    nc.request = AsyncMock(side_effect=[
-        _make_reply(orjson.dumps(job.model_dump(mode="json"))),
-        _make_reply(result.model_dump_json().encode()),
-    ])
+    nc.request = AsyncMock(
+        side_effect=[
+            _make_reply(orjson.dumps(job.model_dump(mode="json"))),
+            _make_reply(result.model_dump_json().encode()),
+        ]
+    )
 
-    task = manager.create("app-test-001")
+    task = await manager.create("app-test-001")
     executor.submit(task.task_id, "app-test-001", mode=AnalysisMode.AGENT)
     await asyncio.sleep(0.1)
 
@@ -144,12 +145,14 @@ async def test_execute_agent_mode_uses_agent_timeout() -> None:
     job = make_job()
     result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
 
-    nc.request = AsyncMock(side_effect=[
-        _make_reply(orjson.dumps(job.model_dump(mode="json"))),
-        _make_reply(result.model_dump_json().encode()),
-    ])
+    nc.request = AsyncMock(
+        side_effect=[
+            _make_reply(orjson.dumps(job.model_dump(mode="json"))),
+            _make_reply(result.model_dump_json().encode()),
+        ]
+    )
 
-    task = manager.create("app-test-001")
+    task = await manager.create("app-test-001")
     executor.submit(task.task_id, "app-test-001", mode=AnalysisMode.AGENT)
     await asyncio.sleep(0.1)
 
@@ -163,12 +166,14 @@ async def test_execute_standard_mode_default() -> None:
     job = make_job()
     result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
 
-    nc.request = AsyncMock(side_effect=[
-        _make_reply(orjson.dumps(job.model_dump(mode="json"))),
-        _make_reply(result.model_dump_json().encode()),
-    ])
+    nc.request = AsyncMock(
+        side_effect=[
+            _make_reply(orjson.dumps(job.model_dump(mode="json"))),
+            _make_reply(result.model_dump_json().encode()),
+        ]
+    )
 
-    task = manager.create("app-test-001")
+    task = await manager.create("app-test-001")
     executor.submit(task.task_id, "app-test-001")
     await asyncio.sleep(0.1)
 

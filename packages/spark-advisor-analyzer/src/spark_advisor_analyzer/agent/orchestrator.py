@@ -24,8 +24,6 @@ from spark_advisor_rules import StaticAnalysisService
 
 logger = logging.getLogger(__name__)
 
-MAX_ITERATIONS = 10
-
 
 class AgentOrchestrator:
     def __init__(
@@ -37,7 +35,8 @@ class AgentOrchestrator:
         self._client = client
         self._static = static_analysis
         self._ai = ai_settings
-        self._system_prompt = build_agent_system_prompt(MAX_ITERATIONS)
+        self._max_iterations = ai_settings.max_agent_iterations
+        self._system_prompt = build_agent_system_prompt(self._max_iterations)
 
     def run(self, job: JobAnalysis) -> AnalysisResult:
         context = AgentContext(job=job)
@@ -45,8 +44,8 @@ class AgentOrchestrator:
             MessageParam(role="user", content=build_initial_message(job)),
         ]
 
-        for iteration in range(MAX_ITERATIONS):
-            logger.info("Agent iteration %d/%d", iteration + 1, MAX_ITERATIONS)
+        for iteration in range(self._max_iterations):
+            logger.info("Agent iteration %d/%d", iteration + 1, self._max_iterations)
 
             response = self._call_claude(messages, tool_choice=ToolChoiceAutoParam(type="auto"))
 
@@ -59,10 +58,12 @@ class AgentOrchestrator:
 
             if not tool_uses:
                 messages.append(MessageParam(role="assistant", content=response.content))
-                messages.append(MessageParam(
-                    role="user",
-                    content=f"Please call {AgentToolName.SUBMIT_FINAL_REPORT} with your analysis now.",
-                ))
+                messages.append(
+                    MessageParam(
+                        role="user",
+                        content=f"Please call {AgentToolName.SUBMIT_FINAL_REPORT} with your analysis now.",
+                    )
+                )
                 continue
 
             messages.append(MessageParam(role="assistant", content=response.content))
@@ -71,15 +72,17 @@ class AgentOrchestrator:
             for tool_use in tool_uses:
                 logger.info("Executing tool: %s", tool_use.name)
                 result_content = self._execute_single_tool(tool_use.name, tool_use.input, context)
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_use.id,
-                    "content": result_content,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use.id,
+                        "content": result_content,
+                    }
+                )
 
             messages.append(MessageParam(role="user", content=tool_results))
 
-        logger.warning("Agent hit max iterations (%d), forcing final report", MAX_ITERATIONS)
+        logger.warning("Agent hit max iterations (%d), forcing final report", self._max_iterations)
         return self._force_final_report(job, context, messages)
 
     def _call_claude(
@@ -118,14 +121,16 @@ class AgentOrchestrator:
         context: AgentContext,
         messages: list[MessageParam],
     ) -> AnalysisResult:
-        messages.append(MessageParam(
-            role="user",
-            content=(
-                "You have reached the maximum number of tool calls. "
-                "You MUST call submit_final_report now with your best analysis "
-                "based on the information gathered so far."
-            ),
-        ))
+        messages.append(
+            MessageParam(
+                role="user",
+                content=(
+                    "You have reached the maximum number of tool calls. "
+                    "You MUST call submit_final_report now with your best analysis "
+                    "based on the information gathered so far."
+                ),
+            )
+        )
 
         response = self._call_claude(
             messages,
@@ -137,7 +142,7 @@ class AgentOrchestrator:
             return self._build_result(job, context, final_input)
 
         logger.error("Force-submit failed, returning rules-only result")
-        rule_results = context.rule_results if context.rules_executed else self._static.analyze(job)
+        rule_results = context.get_or_run_rules(self._static)
         return AnalysisResult(app_id=job.app_id, job=job, rule_results=rule_results)
 
     def _build_result(
@@ -146,7 +151,7 @@ class AgentOrchestrator:
         context: AgentContext,
         parsed: AnalysisToolInput,
     ) -> AnalysisResult:
-        rule_results = context.rule_results if context.rules_executed else self._static.analyze(job)
+        rule_results = context.get_or_run_rules(self._static)
         report = build_advisor_report(job.app_id, parsed, rule_results)
         return AnalysisResult(app_id=job.app_id, job=job, rule_results=rule_results, ai_report=report)
 

@@ -17,7 +17,19 @@ def build_advisor_report(
         summary=parsed.summary,
         severity=Severity(parsed.severity.upper()),
         rule_results=rule_results,
-        recommendations=[Recommendation(**rec.model_dump()) for rec in parsed.recommendations],
+        recommendations=[
+            Recommendation(
+                priority=rec.priority,
+                title=rec.title,
+                parameter=rec.parameter,
+                current_value=rec.current_value,
+                recommended_value=rec.recommended_value,
+                explanation=rec.explanation,
+                estimated_impact=rec.estimated_impact,
+                risk=rec.risk,
+            )
+            for rec in parsed.recommendations
+        ],
         causal_chain=parsed.causal_chain,
         suggested_config={
             rec.parameter: rec.recommended_value

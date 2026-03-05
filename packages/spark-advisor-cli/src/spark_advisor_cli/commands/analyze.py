@@ -11,7 +11,6 @@ from spark_advisor_cli.output.console import print_analysis_result, print_job_ov
 from spark_advisor_models.config import AiSettings, Thresholds
 from spark_advisor_models.model import AnalysisResult, JobAnalysis
 from spark_advisor_models.model.output import AnalysisMode, OutputFormat
-from spark_advisor_rules import StaticAnalysisService, rules_for_threshold
 
 console = Console()
 
@@ -46,32 +45,29 @@ def _run_analysis(
     use_ai: bool,
     mode: AnalysisMode,
     model: str,
-    ai_timeout: float,
 ) -> AnalysisResult:
-    static = StaticAnalysisService(rules_for_threshold(thresholds))
+    from spark_advisor_analyzer.factory import create_analysis_stack
+
+    client = None
+    ai_settings: AiSettings | None = None
 
     if use_ai:
         from spark_advisor_analyzer.ai.client import AnthropicClient
-        from spark_advisor_analyzer.ai.service import LlmAnalysisService
-        from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
 
-        ai_settings = AiSettings(model=model, api_timeout=ai_timeout)
-        with AnthropicClient(timeout=ai_settings.api_timeout) as ai_client:
-            llm_service: LlmAnalysisService | None = None
-            agent_orch = None
+        ai_settings = AiSettings(model=model)
+        client = AnthropicClient(timeout=ai_settings.api_timeout)
+        client.open()
 
-            if mode == AnalysisMode.AGENT:
-                from spark_advisor_analyzer.agent.orchestrator import AgentOrchestrator
-
-                agent_orch = AgentOrchestrator(ai_client, static, ai_settings)
-            else:
-                llm_service = LlmAnalysisService(ai_client, ai_settings, thresholds)
-
-            orchestrator = AdviceOrchestrator(static, llm_service, agent_orch)
-            return orchestrator.run(job, mode=mode)
-
-    rule_results = static.analyze(job)
-    return AnalysisResult(app_id=job.app_id, job=job, rule_results=rule_results, ai_report=None)
+    try:
+        orchestrator = create_analysis_stack(
+            client=client,
+            ai_settings=ai_settings,
+            thresholds=thresholds,
+        )
+        return orchestrator.run(job, mode=mode)
+    finally:
+        if client is not None:
+            client.close()
 
 
 def analyze(
@@ -141,7 +137,11 @@ def analyze(
     with console.status(status_msg):
         try:
             result = _run_analysis(
-                job, thresholds, use_ai=use_ai, mode=analysis_mode, model=model, ai_timeout=90.0,
+                job,
+                thresholds,
+                use_ai=use_ai,
+                mode=analysis_mode,
+                model=model,
             )
         except Exception as e:
             console.print(f"[red]Analysis error: {e}[/]")
@@ -154,5 +154,11 @@ def analyze(
         if verbose:
             print_stage_breakdown(console, job)
         print_analysis_result(
-            console, result, use_ai=use_ai or analysis_mode == AnalysisMode.AGENT, output_config=output,
+            console,
+            result,
+            use_ai=use_ai or analysis_mode == AnalysisMode.AGENT,
+            output_config=output,
         )
+
+    if output and not use_ai:
+        console.print("[yellow]Warning: --output requires AI analysis to generate config file.[/]")
