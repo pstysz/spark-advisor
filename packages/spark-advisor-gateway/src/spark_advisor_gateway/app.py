@@ -10,7 +10,7 @@ from fastapi import FastAPI
 
 from spark_advisor_gateway.api.health import create_health_router
 from spark_advisor_gateway.api.routes import create_router
-from spark_advisor_gateway.config import GatewaySettings
+from spark_advisor_gateway.config import GatewaySettings, StateKey
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.store import InMemoryTaskStore
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    settings: GatewaySettings = app.state.settings
+    settings: GatewaySettings = getattr(app.state, StateKey.SETTINGS)
 
     nc = await nats.connect(settings.nats.url)
     logger.info("Connected to NATS: %s", settings.nats.url)
@@ -32,9 +32,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     task_manager = TaskManager(store)
     task_executor = TaskExecutor(nc, task_manager, settings)
 
-    app.state.nc = nc
-    app.state.task_manager = task_manager
-    app.state.task_executor = task_executor
+    setattr(app.state, StateKey.NC, nc)
+    setattr(app.state, StateKey.TASK_MANAGER, task_manager)
+    setattr(app.state, StateKey.TASK_EXECUTOR, task_executor)
 
     yield
 
@@ -47,7 +47,7 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
         settings = GatewaySettings()
 
     app = FastAPI(title="Spark Advisor Gateway", lifespan=lifespan)
-    app.state.settings = settings
+    setattr(app.state, StateKey.SETTINGS, settings)
 
     app.include_router(create_health_router())
     app.include_router(create_router())
@@ -56,7 +56,7 @@ def create_app(settings: GatewaySettings | None = None) -> FastAPI:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
     settings = GatewaySettings()
+    logging.basicConfig(level=settings.log_level)
     app = create_app(settings)
     uvicorn.run(app, host=settings.server.host, port=settings.server.port)

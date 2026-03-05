@@ -40,7 +40,7 @@ def scan(
     table.add_column("Spark Version")
 
     for app in apps:
-        latest = app.attempts[-1] if app.attempts else None
+        latest = app.latest_attempt
         duration = "-"
         status = ""
         spark_version = ""
@@ -50,7 +50,7 @@ def scan(
                 duration_min = latest.duration / 60_000
                 duration = f"{duration_min:.1f} min"
             status = "[green]completed[/]" if latest.completed else "[yellow]running[/]"
-            spark_version = latest.appSparkVersion
+            spark_version = latest.app_spark_version
 
         table.add_row(app.id, app.name, duration, status, spark_version)
 

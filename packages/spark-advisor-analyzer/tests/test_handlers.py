@@ -1,16 +1,10 @@
-import sys
-from pathlib import Path
-
 import pytest
 from faststream.nats import TestNatsBroker
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "spark-advisor-models" / "tests"))
-
-from factories import make_job
 
 from spark_advisor_analyzer.app import app, broker
 from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
 from spark_advisor_models.model import AnalysisResult
+from spark_advisor_models.testing import make_job
 from spark_advisor_rules import StaticAnalysisService
 
 

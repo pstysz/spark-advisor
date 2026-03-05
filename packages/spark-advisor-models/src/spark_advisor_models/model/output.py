@@ -20,6 +20,11 @@ class Severity(StrEnum):
     WARNING = "WARNING"
     INFO = "INFO"
 
+    @property
+    def order(self) -> int:
+        _ORDER = {"CRITICAL": 0, "WARNING": 1, "INFO": 2}
+        return _ORDER[self.value]
+
 
 class RuleResult(BaseModel):
     model_config = ConfigDict(frozen=True)

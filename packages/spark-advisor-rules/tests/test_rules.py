@@ -1,4 +1,5 @@
 from spark_advisor_models.model import Severity
+from spark_advisor_models.testing import make_executors, make_job, make_stage
 from spark_advisor_rules import StaticAnalysisService
 from spark_advisor_rules.rules import (
     BroadcastJoinThresholdRule,
@@ -13,7 +14,6 @@ from spark_advisor_rules.rules import (
     SpillToDiskRule,
     TaskFailureRule,
 )
-from tests.factories import make_executors, make_job, make_stage
 
 
 class TestDataSkewRule:
@@ -285,11 +285,13 @@ class TestSerializerChoiceRule:
 
 class TestDynamicAllocationRule:
     def test_enabled_with_bounds(self):
-        job = make_job(config={
-            "spark.dynamicAllocation.enabled": "true",
-            "spark.dynamicAllocation.minExecutors": "2",
-            "spark.dynamicAllocation.maxExecutors": "20",
-        })
+        job = make_job(
+            config={
+                "spark.dynamicAllocation.enabled": "true",
+                "spark.dynamicAllocation.minExecutors": "2",
+                "spark.dynamicAllocation.maxExecutors": "20",
+            }
+        )
         assert DynamicAllocationRule().evaluate(job) == []
 
     def test_enabled_without_bounds(self):

@@ -145,6 +145,14 @@ class ExecutorMetrics(BaseModel):
             return 0.0
         return (self.peak_memory_bytes_sum / self.allocated_memory_bytes_sum) * 100
 
+    def slot_utilization_percent(self, duration_ms: int, executor_cores: int) -> float | None:
+        if self.executor_count == 0 or duration_ms == 0 or self.total_task_time_ms == 0:
+            return None
+        total_slot_time = self.executor_count * executor_cores * duration_ms
+        if total_slot_time == 0:
+            return None
+        return (self.total_task_time_ms / total_slot_time) * 100
+
 
 class JobAnalysis(BaseModel):
     model_config = ConfigDict(frozen=True)

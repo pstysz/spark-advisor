@@ -54,9 +54,7 @@ def build_agent_system_prompt(max_iterations: int) -> str:
 
 def build_initial_message(job: JobAnalysis) -> str:
     total_tasks = sum(s.tasks.task_count for s in job.stages)
-    total_shuffle = sum(
-        s.total_shuffle_read_bytes + s.total_shuffle_write_bytes for s in job.stages
-    )
+    total_shuffle = sum(s.total_shuffle_read_bytes + s.total_shuffle_write_bytes for s in job.stages)
 
     return (
         f"Analyze Spark job {job.app_id}"

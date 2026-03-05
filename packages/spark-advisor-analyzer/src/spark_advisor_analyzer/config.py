@@ -1,7 +1,14 @@
+from enum import StrEnum
+
 from pydantic_settings import SettingsConfigDict
 
 from spark_advisor_models.config import AiSettings, Thresholds
 from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
+
+
+class ContextKey(StrEnum):
+    AI_CLIENT = "ai_client"
+    ORCHESTRATOR = "orchestrator"
 
 
 class AnalyzerNatsSettings(NatsSettings):

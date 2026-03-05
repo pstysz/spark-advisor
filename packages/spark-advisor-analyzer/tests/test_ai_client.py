@@ -16,7 +16,7 @@ class TestAnthropicClient:
     def test_must_be_used_in_with_block(self) -> None:
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
             client = AnthropicClient(timeout=90.0)
-            with pytest.raises(RuntimeError, match="within 'with' block"):
+            with pytest.raises(RuntimeError, match="Client not initialized"):
                 client.create_message(
                     model="test",
                     max_tokens=100,

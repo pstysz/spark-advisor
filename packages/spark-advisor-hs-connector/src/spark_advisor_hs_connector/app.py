@@ -1,10 +1,11 @@
 import asyncio
+import contextlib
 import logging
 
 from faststream import FastStream
 from faststream.nats import NatsBroker
 
-from spark_advisor_hs_connector.config import ConnectorSettings
+from spark_advisor_hs_connector.config import ConnectorSettings, ContextKey
 from spark_advisor_hs_connector.handlers import router
 from spark_advisor_hs_connector.history_server_client import HistoryServerClient
 from spark_advisor_hs_connector.poller import HistoryServerPoller
@@ -23,9 +24,9 @@ async def on_startup() -> None:
     logging.basicConfig(level=settings.log_level)
 
     hs_client = HistoryServerClient(settings.history_server_url, settings.history_server_timeout)
-    hs_client.__enter__()
+    hs_client.open()
 
-    polling_state = PollingState()
+    polling_state = PollingState(max_size=settings.max_processed_apps)
     poller = HistoryServerPoller(
         hs_client=hs_client,
         broker=broker,
@@ -34,8 +35,8 @@ async def on_startup() -> None:
         batch_size=settings.batch_size,
     )
 
-    app.context.set_global("poller", poller)
-    app.context.set_global("hs_client", hs_client)
+    app.context.set_global(ContextKey.POLLER, poller)
+    app.context.set_global(ContextKey.HS_CLIENT, hs_client)
 
     logger.info(
         "HS Connector started: history_server=%s poll_interval=%ds",
@@ -44,14 +45,26 @@ async def on_startup() -> None:
     )
 
 
-_polling_task: asyncio.Task[None] | None = None
+@app.on_shutdown
+async def on_shutdown() -> None:
+    polling_task: asyncio.Task[None] | None = app.context.get(ContextKey.POLLING_TASK)
+    if polling_task and not polling_task.done():
+        polling_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await polling_task
+        logger.info("Polling task cancelled")
+
+    hs_client: HistoryServerClient | None = app.context.get(ContextKey.HS_CLIENT)
+    if hs_client is not None:
+        hs_client.close()
+        logger.info("HistoryServerClient closed")
 
 
 @app.after_startup
 async def start_polling() -> None:
-    global _polling_task
-    poller: HistoryServerPoller = app.context.get("poller")
-    _polling_task = asyncio.create_task(_polling_loop(poller, settings.poll_interval_seconds))
+    poller: HistoryServerPoller = app.context.get(ContextKey.POLLER)
+    polling_task = asyncio.create_task(_polling_loop(poller, settings.poll_interval_seconds))
+    app.context.set_global(ContextKey.POLLING_TASK, polling_task)
 
 
 async def _polling_loop(poller: HistoryServerPoller, interval: int) -> None:

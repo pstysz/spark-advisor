@@ -12,7 +12,7 @@ from httpx import ASGITransport, AsyncClient
 
 from spark_advisor_gateway.api.health import create_health_router
 from spark_advisor_gateway.api.routes import create_router
-from spark_advisor_gateway.config import GatewaySettings
+from spark_advisor_gateway.config import GatewaySettings, StateKey
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.store import InMemoryTaskStore
@@ -45,10 +45,10 @@ def app(
     mock_nc: AsyncMock, task_manager: TaskManager, task_executor: TaskExecutor, settings: GatewaySettings
 ) -> FastAPI:
     test_app = FastAPI()
-    test_app.state.nc = mock_nc
-    test_app.state.settings = settings
-    test_app.state.task_manager = task_manager
-    test_app.state.task_executor = task_executor
+    setattr(test_app.state, StateKey.NC, mock_nc)
+    setattr(test_app.state, StateKey.SETTINGS, settings)
+    setattr(test_app.state, StateKey.TASK_MANAGER, task_manager)
+    setattr(test_app.state, StateKey.TASK_EXECUTOR, task_executor)
     test_app.include_router(create_health_router())
     test_app.include_router(create_router())
     return test_app
