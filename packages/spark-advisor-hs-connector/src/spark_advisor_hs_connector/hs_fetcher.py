@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from spark_advisor_hs_connector.history_server_client import HistoryServerClient
@@ -49,9 +50,16 @@ def fetch_task_summaries(
     base_path: str,
     stages_data: list[dict[str, Any]],
 ) -> dict[int, dict[str, Any]]:
-    summaries: dict[int, dict[str, Any]] = {}
-    for stage in stages_data:
+    if not stages_data:
+        return {}
+
+    def _fetch_one(stage: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         stage_id = int(stage["stageId"])
         attempt_id = int(stage.get("attemptId", 0))
-        summaries[stage_id] = hs_client.get_task_summary(base_path, stage_id, attempt_id)
-    return summaries
+        return stage_id, hs_client.get_task_summary(base_path, stage_id, attempt_id)
+
+    max_workers = min(8, len(stages_data))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        results = executor.map(_fetch_one, stages_data)
+
+    return dict(results)

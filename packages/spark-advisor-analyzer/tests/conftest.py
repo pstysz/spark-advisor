@@ -1,14 +1,7 @@
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "spark-advisor-models" / "tests"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from factories import make_executors, make_job, make_stage
-
 from spark_advisor_models.model import JobAnalysis, StageMetrics
+from spark_advisor_models.testing import make_executors, make_job, make_stage
 
 
 @pytest.fixture

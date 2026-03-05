@@ -1,12 +1,14 @@
 from unittest.mock import MagicMock
 
 from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
-from factories import make_job
 
 from agent_factories import make_agent_orchestrator, make_final_report_message, make_text_message, make_tool_use_message
-from spark_advisor_analyzer.agent.orchestrator import MAX_ITERATIONS
 from spark_advisor_analyzer.agent.tools import AgentToolName
+from spark_advisor_models.config import AiSettings
 from spark_advisor_models.model import Severity
+from spark_advisor_models.testing import make_job
+
+DEFAULT_MAX_ITERATIONS = AiSettings().max_agent_iterations
 
 
 class TestAgentOrchestrator:
@@ -56,15 +58,15 @@ class TestAgentOrchestrator:
     def test_max_iterations_forces_report(self) -> None:
         overview_msg = make_tool_use_message(AgentToolName.GET_JOB_OVERVIEW, {})
         mock_client = MagicMock()
-        mock_client.create_message.side_effect = [overview_msg] * MAX_ITERATIONS + [
-            make_final_report_message()
-        ]
+        mock_client.create_message.side_effect = (
+            [overview_msg] * DEFAULT_MAX_ITERATIONS + [make_final_report_message()]
+        )
 
         orch = make_agent_orchestrator(mock_client)
         result = orch.run(make_job())
 
         assert result.ai_report is not None
-        assert mock_client.create_message.call_count == MAX_ITERATIONS + 1
+        assert mock_client.create_message.call_count == DEFAULT_MAX_ITERATIONS + 1
 
     def test_tool_error_sent_back_to_claude(self) -> None:
         mock_client = MagicMock()
@@ -101,11 +103,14 @@ class TestAgentOrchestrator:
             content=[TextBlock(type="text", text="I cannot provide analysis.")],
             stop_reason="end_turn",
             usage=Usage(
-                input_tokens=100, output_tokens=50, cache_creation_input_tokens=0, cache_read_input_tokens=0,
+                input_tokens=100,
+                output_tokens=50,
+                cache_creation_input_tokens=0,
+                cache_read_input_tokens=0,
             ),
         )
         mock_client = MagicMock()
-        mock_client.create_message.side_effect = [overview_msg] * MAX_ITERATIONS + [empty_response]
+        mock_client.create_message.side_effect = [overview_msg] * DEFAULT_MAX_ITERATIONS + [empty_response]
 
         orch = make_agent_orchestrator(mock_client)
         result = orch.run(make_job())

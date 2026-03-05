@@ -1,7 +1,7 @@
 import pytest
 
 from spark_advisor_models.model import JobAnalysis, StageMetrics
-from tests.factories import make_executors, make_job, make_stage
+from spark_advisor_models.testing import make_executors, make_job, make_stage
 
 
 @pytest.fixture

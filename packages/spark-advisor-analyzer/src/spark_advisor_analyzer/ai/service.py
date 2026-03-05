@@ -23,9 +23,9 @@ class LlmAnalysisService:
         self._prompt = build_system_prompt(self._thresholds)
 
     def analyze(
-            self,
-            job: JobAnalysis,
-            rule_results: list[RuleResult],
+        self,
+        job: JobAnalysis,
+        rule_results: list[RuleResult],
     ) -> AdvisorReport:
         user_message = build_user_message(job, rule_results, self._thresholds)
         response = self._client.create_message(

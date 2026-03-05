@@ -1,16 +1,11 @@
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "spark-advisor-models" / "tests"))
-
-from factories import make_job, make_rule_result
-
 from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
 from spark_advisor_models.model import AdvisorReport, AnalysisResult, Severity
 from spark_advisor_models.model.output import AnalysisMode
+from spark_advisor_models.testing import make_job, make_rule_result
 from spark_advisor_rules import StaticAnalysisService
 
 

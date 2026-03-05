@@ -1,14 +1,8 @@
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "spark-advisor-models" / "tests"))
-
-from factories import make_executors, make_job, make_stage
-
 from spark_advisor_analyzer.ai.prompts import build_system_prompt, build_user_message
 from spark_advisor_analyzer.ai.tool_config import ANALYSIS_TOOL
 from spark_advisor_models.config import Thresholds
 from spark_advisor_models.model import RuleResult, Severity
+from spark_advisor_models.testing import make_executors, make_job, make_stage
 
 
 class TestAnalysisTool:

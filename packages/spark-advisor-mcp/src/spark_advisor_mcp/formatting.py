@@ -123,14 +123,6 @@ def format_suggested_config(rule_results: list[RuleResult]) -> str:
     for rule_id, (current, recommended) in sorted(suggestions.items()):
         lines.append(f"| `{rule_id}` | `{current}` | `{recommended}` |")
 
-    lines.append("")
-    lines.append("### spark-defaults.conf snippet")
-    lines.append("")
-    lines.append("```properties")
-    for _rule_id, (_current, recommended) in sorted(suggestions.items()):
-        lines.append(f"# {_rule_id}")
-        lines.append(f"# recommended: {recommended}")
-    lines.append("```")
     return "\n".join(lines)
 
 
@@ -145,7 +137,7 @@ def format_scan_results(apps: list[ApplicationSummary]) -> str:
         "|--------|------|----------|--------|---------------|",
     ]
     for app in apps:
-        latest = app.attempts[-1] if app.attempts else None
+        latest = app.latest_attempt
         duration = "-"
         status = ""
         spark_ver = ""
@@ -153,7 +145,7 @@ def format_scan_results(apps: list[ApplicationSummary]) -> str:
             if latest.duration > 0:
                 duration = f"{latest.duration / 60_000:.1f} min"
             status = "✅ completed" if latest.completed else "🔄 running"
-            spark_ver = latest.appSparkVersion
+            spark_ver = latest.app_spark_version
         lines.append(f"| `{app.id}` | {app.name} | {duration} | {status} | {spark_ver} |")
     return "\n".join(lines)
 
