@@ -1,0 +1,44 @@
+replicaCount: 1
+
+image:
+  repository: spark-advisor-gateway
+  tag: ""
+  pullPolicy: IfNotPresent
+
+config:
+  logLevel: "INFO"
+  server:
+    host: "0.0.0.0"
+    port: 8080
+  nats:
+    url: "nats://localhost:4222"
+    fetchSubject: "fetch.job"
+    analyzeSubject: "analyze.request"
+    analyzeAgentSubject: "analyze.agent.request"
+    listAppsSubject: "list.applications"
+    fetchTimeout: 30.0
+    analyzeTimeout: 120.0
+    analyzeAgentTimeout: 300.0
+    listAppsTimeout: 10.0
+  maxStoredTasks: 1000
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: spark-advisor.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,24 @@
+analyzer:
+  config:
+    nats:
+      url: ""
+    ai:
+      enabled: true
+
+gateway:
+  config:
+    nats:
+      url: ""
+  ingress:
+    enabled: false
+
+hs-connector:
+  config:
+    nats:
+      url: ""
+    historyServerUrl: "http://spark-history:18080"
+
+nats:
+  config:
+    jetstream:
+      enabled: true
