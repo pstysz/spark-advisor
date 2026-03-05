@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.2...spark-advisor-v0.1.3) (2026-03-05)
+
+
+### Bug Fixes
+
+* invalid uv build directory ([54f22bc](https://github.com/pstysz/spark-advisor/commit/54f22bcf7beb683a3a6f1a6f861363c9d934823b))
+
 ## [0.1.2](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.1...spark-advisor-v0.1.2) (2026-03-05)
 
 
