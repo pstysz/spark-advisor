@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-models"
-version = "0.1.2" # x-release-please-version
+version = "0.1.4" # x-release-please-version
 description = "Shared Pydantic contracts for spark-advisor microservices"
 requires-python = ">=3.12"
 dependencies = [
