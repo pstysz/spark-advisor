@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: spark-advisor-hs-connector
+  repository: ghcr.io/pstysz/spark-advisor-hs-connector
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -16,9 +16,7 @@ config:
   pollIntervalSeconds: 60
   batchSize: 50
 
-service:
-  type: ClusterIP
-  port: 8080
+imagePullSecrets: []
 
 resources: {}
 

@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: spark-advisor-analyzer
+  repository: ghcr.io/pstysz/spark-advisor-analyzer
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -39,9 +39,7 @@ anthropicApiKey:
   existingSecret: ""
   secretKey: "api-key"
 
-service:
-  type: ClusterIP
-  port: 8080
+imagePullSecrets: []
 
 resources: {}
 

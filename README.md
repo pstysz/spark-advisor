@@ -16,6 +16,7 @@
     <img src="https://img.shields.io/badge/Claude_API-191919?logo=anthropic&logoColor=white" alt="Claude API">
     <img src="https://img.shields.io/badge/MCP-compatible-8A2BE2" alt="MCP Compatible">
     <img src="https://img.shields.io/badge/NATS-27AAE1?logo=natsdotio&logoColor=white" alt="NATS">
+    <img src="https://img.shields.io/badge/Helm-0F1689?logo=helm&logoColor=white" alt="Helm">
     <img src="https://img.shields.io/badge/code%20style-ruff-D7FF64?logo=ruff&logoColor=black" alt="Code style: ruff">
   </p>
 
@@ -25,6 +26,7 @@
     <a href="#cli-usage">CLI Usage</a> •
     <a href="#mcp-server">MCP Server</a> •
     <a href="#microservices">Microservices</a> •
+    <a href="#kubernetes">Kubernetes</a> •
     <a href="#architecture">Architecture</a> •
     <a href="#development">Development</a>
   </p>
@@ -162,16 +164,16 @@ spark-advisor analyze /path/to/event-log.json.gz -o spark-defaults.conf
 spark-advisor analyze /path/to/event-log.json.gz --model claude-sonnet-4-6
 ```
 
-| Flag | Short | Default | Description |
-|------|-------|---------|-------------|
-| `source` | | required | App ID (with `-hs`) or path to event log file |
-| `--history-server` | `-hs` | `None` | Spark History Server URL |
-| `--no-ai` | | `False` | Disable AI analysis (rules only) |
-| `--agent` | | `False` | Use agent mode (multi-turn AI with tool use) |
-| `--model` | `-m` | `claude-sonnet-4-6` | Claude model for AI analysis |
-| `--output` | `-o` | `None` | Write suggested config to file |
-| `--format` | `-f` | `text` | Output format: `text` or `json` |
-| `--verbose` | `-v` | `False` | Show per-stage breakdown |
+| Flag               | Short | Default             | Description                                   |
+|--------------------|-------|---------------------|-----------------------------------------------|
+| `source`           |       | required            | App ID (with `-hs`) or path to event log file |
+| `--history-server` | `-hs` | `None`              | Spark History Server URL                      |
+| `--no-ai`          |       | `False`             | Disable AI analysis (rules only)              |
+| `--agent`          |       | `False`             | Use agent mode (multi-turn AI with tool use)  |
+| `--model`          | `-m`  | `claude-sonnet-4-6` | Claude model for AI analysis                  |
+| `--output`         | `-o`  | `None`              | Write suggested config to file                |
+| `--format`         | `-f`  | `text`              | Output format: `text` or `json`               |
+| `--verbose`        | `-v`  | `False`             | Show per-stage breakdown                      |
 
 ### `scan` — list recent jobs from History Server
 
@@ -251,6 +253,51 @@ curl -X POST http://localhost:8080/api/v1/analyze \
 ```bash
 make down
 ```
+
+## Kubernetes
+
+Helm charts for deploying to Kubernetes. An umbrella chart installs all services + NATS in a single command.
+
+### Install
+
+```bash
+# Create secret for Claude API key
+kubectl create secret generic anthropic-api-key \
+  --from-literal=api-key=sk-ant-...
+
+# Install with Helm
+helm dependency update charts/spark-advisor
+helm install spark-advisor charts/spark-advisor \
+  --set analyzer.anthropicApiKey.existingSecret=anthropic-api-key \
+  --set hs-connector.config.historyServerUrl=http://spark-history:18080
+```
+
+### Enable Ingress
+
+```bash
+helm install spark-advisor charts/spark-advisor \
+  --set gateway.ingress.enabled=true \
+  --set gateway.ingress.hosts[0].host=spark-advisor.example.com \
+  --set gateway.ingress.hosts[0].paths[0].path=/ \
+  --set gateway.ingress.hosts[0].paths[0].pathType=Prefix
+```
+
+### Chart structure
+
+```
+charts/
+├── spark-advisor/       # Umbrella chart (installs everything)
+├── analyzer/            # Rules engine + AI worker (NATS subscriber)
+├── gateway/             # REST API (Service + optional Ingress)
+└── hs-connector/        # History Server poller (NATS subscriber)
+```
+
+Each service has a ConfigMap mapping `values.yaml` to the `SA_*` environment variables expected by pydantic-settings. NATS URL is auto-resolved from the release name when deployed via the umbrella chart.
+
+Docker images are published to GitHub Container Registry on each release:
+- `ghcr.io/pstysz/spark-advisor-analyzer`
+- `ghcr.io/pstysz/spark-advisor-gateway`
+- `ghcr.io/pstysz/spark-advisor-hs-connector`
 
 ## Architecture
 
@@ -336,6 +383,8 @@ make down        # Stop microservices
 | **Ruff**              | Linter + formatter                                    |
 | **mypy**              | Type checker (strict mode)                            |
 | **pytest**            | Testing with coverage and fixtures                    |
+| **Helm**              | Kubernetes deployment (umbrella chart + 3 subcharts)  |
+| **Docker**            | Multi-stage builds with uv, published to ghcr.io      |
 
 ### Testing
 
@@ -357,8 +406,10 @@ cd packages/spark-advisor-rules && uv run pytest -v  # single package
 - [x] 3 NATS-based microservices (gateway, analyzer, hs-connector)
 - [x] Agent mode — multi-turn Claude analysis with 6 tools
 - [x] MCP server — Claude Desktop / Cursor integration (5 tools)
-- [ ] GitHub Actions CI pipeline
-- [ ] PyPI release (`pip install spark-advisor`)
+- [x] GitHub Actions CI (lint + test + Helm lint)
+- [x] Helm charts for Kubernetes deployment (umbrella chart + 3 subcharts)
+- [x] Docker images published to ghcr.io on release
+- [x] PyPI release (`pip install spark-advisor`)
 - [ ] Terminal demo GIF
 
 ## License

@@ -55,7 +55,7 @@ Each package owns its domain and can be independently deployed, scaled, and test
 | **gateway**      | Service | REST API, `TaskManager`, `TaskStore`, `TaskExecutor`                                                                                                                                  | Analysis logic, HS client, Claude API   |
 | **hs-connector** | Service | `HistoryServerClient`, mapper, `HistoryServerPoller`, `PollingState`, `ApplicationSummary` model                                                                                      | Analysis logic, Claude API, REST API    |
 | **cli**          | App     | Event log parser, Rich console output, `analyze` (file + HS + optional AI), `scan` (list HS apps), `version`                                                                          | NATS messaging, REST API serving        |
-| **mcp**          | App     | MCP server (stdio), 5 tools (`analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`), markdown formatting for MCP responses                     | NATS messaging, REST API serving        |
+| **mcp**          | App     | MCP server (stdio), 5 tools (`analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`), markdown formatting for MCP responses                    | NATS messaging, REST API serving        |
 
 ---
 
@@ -200,19 +200,19 @@ Deterministic rules engine. Pure business logic operating on models. Used in two
 
 **Rules (11 total):**
 
-| Rule | Condition | Severity |
-|------|-----------|----------|
-| `DataSkewRule` | max_task_duration / median > 5x | CRITICAL if >10x, WARNING if >5x |
-| `SpillToDiskRule` | diskBytesSpilled > 0 | CRITICAL if >1GB, WARNING if >0.1GB |
-| `GCPressureRule` | GC time > 20% of task time | CRITICAL if >40%, WARNING if >20% |
-| `ShufflePartitionsRule` | Actual partitions far from optimal (128MB/partition) | WARNING |
-| `ExecutorIdleRule` | slot utilization < 40% | WARNING (skipped when CPU data unavailable) |
-| `TaskFailureRule` | failed_task_count > 0 | WARNING |
-| `SmallFileRule` | avg input bytes per task < 10MB | WARNING |
-| `BroadcastJoinThresholdRule` | threshold disabled (-1) with shuffle stages | WARNING if disabled, INFO if < 10MB |
-| `SerializerChoiceRule` | Java serializer with shuffle stages | INFO |
-| `DynamicAllocationRule` | enabled without bounds, or disabled with low utilization | WARNING |
-| `ExecutorMemoryOverheadRule` | GC > 20% AND memory utilization > 80% | WARNING |
+| Rule                         | Condition                                                | Severity                                    |
+|------------------------------|----------------------------------------------------------|---------------------------------------------|
+| `DataSkewRule`               | max_task_duration / median > 5x                          | CRITICAL if >10x, WARNING if >5x            |
+| `SpillToDiskRule`            | diskBytesSpilled > 0                                     | CRITICAL if >1GB, WARNING if >0.1GB         |
+| `GCPressureRule`             | GC time > 20% of task time                               | CRITICAL if >40%, WARNING if >20%           |
+| `ShufflePartitionsRule`      | Actual partitions far from optimal (128MB/partition)     | WARNING                                     |
+| `ExecutorIdleRule`           | slot utilization < 40%                                   | WARNING (skipped when CPU data unavailable) |
+| `TaskFailureRule`            | failed_task_count > 0                                    | WARNING                                     |
+| `SmallFileRule`              | avg input bytes per task < 10MB                          | WARNING                                     |
+| `BroadcastJoinThresholdRule` | threshold disabled (-1) with shuffle stages              | WARNING if disabled, INFO if < 10MB         |
+| `SerializerChoiceRule`       | Java serializer with shuffle stages                      | INFO                                        |
+| `DynamicAllocationRule`      | enabled without bounds, or disabled with low utilization | WARNING                                     |
+| `ExecutorMemoryOverheadRule` | GC > 20% AND memory utilization > 80%                    | WARNING                                     |
 
 **Key design decisions:**
 - Rules take `Thresholds` via constructor injection (configurable thresholds, not hardcoded)
@@ -351,13 +351,13 @@ MCP server exposing spark-advisor as tools for Claude Desktop, Cursor, and other
 
 **5 MCP tools:**
 
-| Tool | Parameters | Reuses |
-|------|-----------|--------|
+| Tool                | Parameters                                      | Reuses                                          |
+|---------------------|-------------------------------------------------|-------------------------------------------------|
 | `analyze_spark_job` | `source`, `history_server?`, `no_ai?`, `agent?` | `parse_event_log()`, `AdviceOrchestrator.run()` |
-| `scan_recent_jobs` | `history_server`, `limit?` | `HistoryServerClient.list_applications()` |
-| `get_job_config` | `source`, `history_server?` | `_load_job()` → `job.config` |
-| `suggest_config` | `source`, `history_server?` | Rules engine → `RuleResult.recommended_value` |
-| `explain_metric` | `metric_name`, `value?` | Hardcoded `METRIC_EXPLANATIONS` knowledge base |
+| `scan_recent_jobs`  | `history_server`, `limit?`                      | `HistoryServerClient.list_applications()`       |
+| `get_job_config`    | `source`, `history_server?`                     | `_load_job()` → `job.config`                    |
+| `suggest_config`    | `source`, `history_server?`                     | Rules engine → `RuleResult.recommended_value`   |
+| `explain_metric`    | `metric_name`, `value?`                         | Hardcoded `METRIC_EXPLANATIONS` knowledge base  |
 
 **Key design decisions:**
 - Uses `mcp` SDK (`FastMCP`) — tools are plain Python functions decorated with `@mcp.tool()`
@@ -448,13 +448,13 @@ spark-advisor analyze app-123 --history-server http://yarn:18080
 
 ## NATS Subjects
 
-| Subject | Pattern | Publisher | Subscriber | Payload |
-|---------|---------|-----------|------------|---------|
-| `fetch.job` | request-reply | Gateway | HS Connector | Request: `{"app_id": "..."}` / Reply: `JobAnalysis` |
-| `list.applications` | request-reply | Gateway | HS Connector | Request: `{"limit": N}` / Reply: `list[ApplicationSummary]` |
-| `analyze.request` | request-reply or pub | Gateway (request), HS Connector (pub) | Analyzer | `JobAnalysis` |
-| `analyze.agent.request` | request-reply | Gateway | Analyzer | `JobAnalysis` (triggers agent mode — multi-turn tool_use) |
-| `analyze.result` | pub-sub | Analyzer | Gateway | `AnalysisResult` |
+| Subject                 | Pattern              | Publisher                             | Subscriber   | Payload                                                     |
+|-------------------------|----------------------|---------------------------------------|--------------|-------------------------------------------------------------|
+| `fetch.job`             | request-reply        | Gateway                               | HS Connector | Request: `{"app_id": "..."}` / Reply: `JobAnalysis`         |
+| `list.applications`     | request-reply        | Gateway                               | HS Connector | Request: `{"limit": N}` / Reply: `list[ApplicationSummary]` |
+| `analyze.request`       | request-reply or pub | Gateway (request), HS Connector (pub) | Analyzer     | `JobAnalysis`                                               |
+| `analyze.agent.request` | request-reply        | Gateway                               | Analyzer     | `JobAnalysis` (triggers agent mode — multi-turn tool_use)   |
+| `analyze.result`        | pub-sub              | Analyzer                              | Gateway      | `AnalysisResult`                                            |
 
 **Message format:** Plain JSON. FastStream handles Pydantic model serialization/deserialization automatically. No envelope wrapper — models are serialized directly.
 
@@ -482,11 +482,11 @@ Defined in `spark_advisor_models.settings`. Provides:
 
 ### Per-service env prefixes
 
-| Service | Env prefix | YAML config path |
-|---------|-----------|-----------------|
-| Analyzer | `SA_ANALYZER_` | `/etc/spark-advisor/analyzer/config.yaml` |
+| Service      | Env prefix      | YAML config path                              |
+|--------------|-----------------|-----------------------------------------------|
+| Analyzer     | `SA_ANALYZER_`  | `/etc/spark-advisor/analyzer/config.yaml`     |
 | HS Connector | `SA_CONNECTOR_` | `/etc/spark-advisor/hs-connector/config.yaml` |
-| Gateway | `SA_GATEWAY_` | `/etc/spark-advisor/gateway/config.yaml` |
+| Gateway      | `SA_GATEWAY_`   | `/etc/spark-advisor/gateway/config.yaml`      |
 
 ### NatsSettings inheritance
 
@@ -517,11 +517,11 @@ data:
 
 Each service exposes health endpoints for Kubernetes probes:
 
-| Service | Liveness | Readiness |
-|---------|----------|-----------|
-| Gateway | `GET /health/live` → `{"status": "ok"}` | `GET /health/ready` → checks NATS connection |
-| Analyzer | FastStream built-in healthcheck | NATS broker connected |
-| HS Connector | FastStream built-in healthcheck | NATS broker connected |
+| Service      | Liveness                                | Readiness                                    |
+|--------------|-----------------------------------------|----------------------------------------------|
+| Gateway      | `GET /health/live` → `{"status": "ok"}` | `GET /health/ready` → checks NATS connection |
+| Analyzer     | FastStream built-in healthcheck         | NATS broker connected                        |
+| HS Connector | FastStream built-in healthcheck         | NATS broker connected                        |
 
 Gateway readiness returns `"degraded"` if NATS is disconnected. Kubernetes will stop routing traffic until reconnection.
 
@@ -529,15 +529,15 @@ Gateway readiness returns `"degraded"` if NATS is disconnected. Kubernetes will 
 
 ## Error Handling
 
-| Scenario | Behavior |
-|----------|----------|
-| **NATS unavailable** | Services fail readiness check. K8s stops routing traffic. FastStream auto-reconnects. |
-| **HS unreachable** | `fetch_job_from_hs()` raises `httpx.ConnectError`. Gateway task marked FAILED with error message. |
-| **Claude API error** | `LlmAnalysisService` catches exception, logs warning. `AdviceOrchestrator` returns rules-only result (graceful degradation). |
-| **Claude API key missing** | Analyzer starts in rules-only mode. Logs warning at startup. |
-| **NATS request timeout** | Gateway `TaskExecutor` catches `TimeoutError`. Task marked FAILED. Configurable via `fetch_timeout` / `analyze_timeout`. |
-| **Malformed message on NATS** | FastStream Pydantic validation rejects invalid JSON. Message is not processed. |
-| **Large event log** | CLI streaming parser processes line-by-line. Memory usage stays constant regardless of file size. |
+| Scenario                      | Behavior                                                                                                                     |
+|-------------------------------|------------------------------------------------------------------------------------------------------------------------------|
+| **NATS unavailable**          | Services fail readiness check. K8s stops routing traffic. FastStream auto-reconnects.                                        |
+| **HS unreachable**            | `fetch_job_from_hs()` raises `httpx.ConnectError`. Gateway task marked FAILED with error message.                            |
+| **Claude API error**          | `LlmAnalysisService` catches exception, logs warning. `AdviceOrchestrator` returns rules-only result (graceful degradation). |
+| **Claude API key missing**    | Analyzer starts in rules-only mode. Logs warning at startup.                                                                 |
+| **NATS request timeout**      | Gateway `TaskExecutor` catches `TimeoutError`. Task marked FAILED. Configurable via `fetch_timeout` / `analyze_timeout`.     |
+| **Malformed message on NATS** | FastStream Pydantic validation rejects invalid JSON. Message is not processed.                                               |
+| **Large event log**           | CLI streaming parser processes line-by-line. Memory usage stays constant regardless of file size.                            |
 
 No DLQ (dead letter queue), no circuit breaker, no rate limiter. These are intentionally excluded to keep the system simple. Graceful degradation (rules-only fallback) handles the most common failure mode (Claude API issues).
 
@@ -545,68 +545,158 @@ No DLQ (dead letter queue), no circuit breaker, no rate limiter. These are inten
 
 ## Technology Stack
 
-| Tool | Role | Package |
-|------|------|---------|
-| **Python 3.12+** | Language | all |
-| **uv** | Package manager, workspace | all |
-| **Pydantic v2** | Data models, validation, `frozen=True` | models (+ all dependents) |
-| **pydantic-settings** | Config from env/yaml/dotenv | models (base), services (concrete) |
-| **NATS** | Message broker (15MB, single binary) | analyzer, hs-connector, gateway |
-| **FastStream[nats]** | Type-safe NATS workers with `TestNatsBroker` | analyzer, hs-connector |
-| **nats-py** | Async NATS client (request-reply with timeouts) | gateway |
-| **FastAPI** | REST API | gateway |
-| **uvicorn** | ASGI server | gateway |
-| **httpx** | HTTP client for History Server | hs-connector |
-| **asyncio** | Background polling loop (`asyncio.create_task` + `asyncio.sleep`) | hs-connector |
-| **anthropic** | Claude API SDK | analyzer |
-| **Typer** | CLI framework | cli |
-| **Rich** | Terminal output (tables, colors, panels) | cli |
-| **orjson** | Fast JSON parsing for event logs | cli, models |
-| **mcp** | MCP server SDK (FastMCP, stdio transport) | mcp |
-| **Ruff** | Linter + formatter | all |
-| **mypy** | Type checker (strict mode) | all |
-| **pytest** | Testing | all |
-| **respx** | HTTP mocking for httpx | hs-connector (tests) |
+| Tool                  | Role                                                              | Package                            |
+|-----------------------|-------------------------------------------------------------------|------------------------------------|
+| **Python 3.12+**      | Language                                                          | all                                |
+| **uv**                | Package manager, workspace                                        | all                                |
+| **Pydantic v2**       | Data models, validation, `frozen=True`                            | models (+ all dependents)          |
+| **pydantic-settings** | Config from env/yaml/dotenv                                       | models (base), services (concrete) |
+| **NATS**              | Message broker (15MB, single binary)                              | analyzer, hs-connector, gateway    |
+| **FastStream[nats]**  | Type-safe NATS workers with `TestNatsBroker`                      | analyzer, hs-connector             |
+| **nats-py**           | Async NATS client (request-reply with timeouts)                   | gateway                            |
+| **FastAPI**           | REST API                                                          | gateway                            |
+| **uvicorn**           | ASGI server                                                       | gateway                            |
+| **httpx**             | HTTP client for History Server                                    | hs-connector                       |
+| **asyncio**           | Background polling loop (`asyncio.create_task` + `asyncio.sleep`) | hs-connector                       |
+| **anthropic**         | Claude API SDK                                                    | analyzer                           |
+| **Typer**             | CLI framework                                                     | cli                                |
+| **Rich**              | Terminal output (tables, colors, panels)                          | cli                                |
+| **orjson**            | Fast JSON parsing for event logs                                  | cli, models                        |
+| **mcp**               | MCP server SDK (FastMCP, stdio transport)                         | mcp                                |
+| **Ruff**              | Linter + formatter                                                | all                                |
+| **mypy**              | Type checker (strict mode)                                        | all                                |
+| **pytest**            | Testing                                                           | all                                |
+| **respx**             | HTTP mocking for httpx                                            | hs-connector (tests)               |
 
 ---
 
 ## Kubernetes Deployment
 
+### Helm Charts
+
+Four Helm charts in the `charts/` directory:
+
+```
+charts/
+├── spark-advisor/       # Umbrella chart — installs everything via `helm install`
+│   ├── Chart.yaml       # Dependencies: analyzer, gateway, hs-connector, nats
+│   └── values.yaml      # Global overrides (NATS URL auto-resolved from release name)
+├── analyzer/            # NATS worker (rules + AI), ConfigMap with SA_ANALYZER_* env vars
+├── gateway/             # REST API, Service, optional Ingress, ConfigMap with SA_GATEWAY_* env vars
+└── hs-connector/        # History Server poller, ConfigMap with SA_CONNECTOR_* env vars
+```
+
+**Umbrella chart dependencies:**
+- `spark-advisor-analyzer` — local subchart (`file://../analyzer`)
+- `spark-advisor-gateway` — local subchart (`file://../gateway`)
+- `spark-advisor-hs-connector` — local subchart (`file://../hs-connector`)
+- `nats` — official NATS Helm chart from `https://nats-io.github.io/k8s/helm/charts/`
+
+### Resource topology
+
 ```
 namespace: spark-advisor
-├── Deployment: gateway          (2 replicas, port 8080)
-├── Deployment: analyzer         (2 replicas)
-├── Deployment: hs-connector     (1 replica)
-├── Service: gateway             (ClusterIP)
-├── Ingress: spark-advisor.example.com → gateway
+├── Deployment: gateway          (replicas configurable, port 8080)
+├── Deployment: analyzer         (replicas configurable)
+├── Deployment: hs-connector     (1 replica recommended)
+├── Service: gateway             (ClusterIP → port 8080)
+├── Ingress: gateway             (disabled by default)
 ├── ConfigMap: gateway           (SA_GATEWAY_* env vars)
 ├── ConfigMap: analyzer          (SA_ANALYZER_* env vars)
 ├── ConfigMap: hs-connector      (SA_CONNECTOR_* env vars)
-└── Secret: analyzer             (ANTHROPIC_API_KEY)
-
-namespace: nats
-└── NATS Server (Bitnami Helm chart or NATS Operator)
+├── Secret: (user-managed)       (ANTHROPIC_API_KEY)
+└── NATS StatefulSet             (from NATS Helm chart dependency)
 ```
 
-- NATS runs in its own namespace — shared infrastructure, not application-specific
-- Analyzer is the only service that needs the `ANTHROPIC_API_KEY` Secret
-- Gateway is the only service exposed via Ingress
-- HS Connector runs as 1 replica — polling deduplication via `PollingState`
+### ConfigMap → pydantic-settings mapping
+
+Each ConfigMap maps `values.yaml` entries to environment variables matching the service's `env_prefix` and `env_nested_delimiter="__"`:
+
+| Service      | ConfigMap env vars                                                              | Python config class |
+|--------------|---------------------------------------------------------------------------------|---------------------|
+| Analyzer     | `SA_ANALYZER_NATS__URL`, `SA_ANALYZER_AI__ENABLED`, `SA_ANALYZER_THRESHOLDS__*` | `AnalyzerSettings`  |
+| Gateway      | `SA_GATEWAY_SERVER__PORT`, `SA_GATEWAY_NATS__ANALYZE_TIMEOUT`, ...              | `GatewaySettings`   |
+| HS-Connector | `SA_CONNECTOR_HISTORY_SERVER_URL`, `SA_CONNECTOR_POLL_INTERVAL_SECONDS`, ...    | `ConnectorSettings` |
+
+All defaults live in `values.yaml` (single source of truth). Deployments use `envFrom: configMapRef` — no hardcoded values in templates. A config checksum annotation triggers pod restarts on ConfigMap changes.
+
+### NATS URL auto-resolution
+
+When deployed via the umbrella chart, subcharts leave `config.nats.url` empty. The ConfigMap template resolves it to `nats://RELEASE-NAME-nats:4222` using the Helm release name.
+
+### Secrets
+
+`ANTHROPIC_API_KEY` is mounted from a user-managed Kubernetes Secret (not stored in ConfigMap):
+
+```bash
+kubectl create secret generic anthropic-api-key --from-literal=api-key=sk-ant-...
+helm install spark-advisor charts/spark-advisor \
+  --set analyzer.anthropicApiKey.existingSecret=anthropic-api-key
+```
+
+### Design decisions
+
+- **Analyzer and hs-connector have no Service** — they are NATS workers with no HTTP port
+- **Gateway is the only service with Ingress** — it's the REST API entry point
+- **HS-Connector should run as 1 replica** — polling deduplication via `PollingState`
+- **NATS is a chart dependency** — deployed in the same release, not a separate namespace
+- **`imagePullSecrets` supported** — for private container registries
 
 > Diagram: [06-k8s-deployment.mmd](diagrams/06-k8s-deployment.mmd)
 
 ---
 
+## CI/CD
+
+### CI Pipeline (`.github/workflows/ci.yml`)
+
+Runs on every push to `main` and on PRs. Two parallel jobs:
+
+| Job           | What it does                                                                         |
+|---------------|--------------------------------------------------------------------------------------|
+| **check**     | Python matrix (3.12, 3.13): `uv sync` → `make lint` (ruff + mypy) → `make test`      |
+| **helm-lint** | `helm lint` on all 3 subcharts + umbrella chart, `helm template` to verify rendering |
+
+### Release Pipeline (`.github/workflows/release.yml`)
+
+Runs on push to `main`. Three jobs:
+
+| Job                | Trigger            | What it does                                                                      |
+|--------------------|--------------------|-----------------------------------------------------------------------------------|
+| **release-please** | Always             | Creates release PRs, manages version bumps across 7 packages + 4 Chart.yaml files |
+| **publish**        | On release created | `make check` → `uv build --package spark-advisor-cli` → `uv publish` to PyPI      |
+| **docker-publish** | On release created | Matrix builds 3 Docker images → pushes to `ghcr.io/pstysz/spark-advisor-*`        |
+
+### Docker images
+
+Published to GitHub Container Registry on each release:
+
+| Image                                       | Dockerfile                                       |
+|---------------------------------------------|--------------------------------------------------|
+| `ghcr.io/pstysz/spark-advisor-analyzer`     | `packages/spark-advisor-analyzer/Dockerfile`     |
+| `ghcr.io/pstysz/spark-advisor-gateway`      | `packages/spark-advisor-gateway/Dockerfile`      |
+| `ghcr.io/pstysz/spark-advisor-hs-connector` | `packages/spark-advisor-hs-connector/Dockerfile` |
+
+Tags: `<version>` (e.g. `0.1.3`) + `latest`. Build context is the monorepo root (Dockerfiles use `COPY packages/...`). BuildX with GitHub Actions cache for fast builds.
+
+### Version management
+
+release-please bumps all versions in a single PR via `# x-release-please-version` markers:
+- 7 `pyproject.toml` files
+- 4 `Chart.yaml` files (`version` + `appVersion` + dependency versions in umbrella)
+
+---
+
 ## Known Pitfalls
 
-| Pitfall | Mitigation |
-|---------|-----------|
-| **NATS message size limit** (1MB default) | `JobAnalysis` for a job with 100+ stages could approach this. Monitor payload sizes. NATS supports configuring `max_payload`. |
-| **In-memory TaskStore lost on gateway restart** | Acceptable for MVP. Future: Redis-backed `TaskStore` (Protocol already defined). |
-| **PollingState lost on hs-connector restart** | Connector re-fetches recent jobs. Analyzer handles duplicates idempotently (same input → same output). |
-| **Synchronous Claude API in async worker** | Wrapped in `asyncio.to_thread()`. Under high load, consider thread pool sizing or async anthropic client. |
-| **No message persistence** | NATS core (not JetStream) — messages are fire-and-forget. If analyzer is down when hs-connector publishes, message is lost. Acceptable: next poll cycle will re-discover the job. |
-| **executor CPU data unavailable from History Server** | `ExecutorIdleRule` skips analysis when `total_cpu_time_ms` is `None`. Only event log source provides CPU metrics. |
+| Pitfall                                               | Mitigation                                                                                                                                                                        |
+|-------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **NATS message size limit** (1MB default)             | `JobAnalysis` for a job with 100+ stages could approach this. Monitor payload sizes. NATS supports configuring `max_payload`.                                                     |
+| **In-memory TaskStore lost on gateway restart**       | Acceptable for MVP. Future: Redis-backed `TaskStore` (Protocol already defined).                                                                                                  |
+| **PollingState lost on hs-connector restart**         | Connector re-fetches recent jobs. Analyzer handles duplicates idempotently (same input → same output).                                                                            |
+| **Synchronous Claude API in async worker**            | Wrapped in `asyncio.to_thread()`. Under high load, consider thread pool sizing or async anthropic client.                                                                         |
+| **No message persistence**                            | NATS core (not JetStream) — messages are fire-and-forget. If analyzer is down when hs-connector publishes, message is lost. Acceptable: next poll cycle will re-discover the job. |
+| **executor CPU data unavailable from History Server** | `ExecutorIdleRule` skips analysis when `total_cpu_time_ms` is `None`. Only event log source provides CPU metrics.                                                                 |
 
 ---
 
@@ -614,45 +704,45 @@ namespace: nats
 
 These concepts existed in the previous Kafka-based architecture and have been intentionally removed:
 
-| Removed concept | Why |
-|----------------|-----|
-| **Apache Kafka** | Replaced by NATS (15MB vs 500MB, no JVM/ZooKeeper, simpler ops) |
-| **confluent-kafka** | Replaced by FastStream[nats] + nats-py |
-| **KafkaEnvelope / MessageMetadata** | FastStream handles Pydantic serde directly — no wrapper needed |
-| **Source / Sink ABCs** | Kafka-specific abstractions. FastStream decorators replace them |
-| **Dead Letter Queue (DLQ)** | Graceful degradation instead — rules-only fallback on AI failure |
-| **Circuit Breaker** | Not needed — NATS request timeouts + graceful degradation suffice |
-| **Rate Limiter** | Not needed — Claude API has its own rate limiting; system throughput is bounded by API |
-| **OpenTelemetry / Jaeger / Prometheus** | Removed stubs. Will add when actually needed (Future Extensions) |
-| **k8s-source** (Kubernetes event watcher) | Future extension — not part of current architecture |
-| **background_worker threading utility** | Replaced by `asyncio` (FastStream is async-native) |
+| Removed concept                           | Why                                                                                    |
+|-------------------------------------------|----------------------------------------------------------------------------------------|
+| **Apache Kafka**                          | Replaced by NATS (15MB vs 500MB, no JVM/ZooKeeper, simpler ops)                        |
+| **confluent-kafka**                       | Replaced by FastStream[nats] + nats-py                                                 |
+| **KafkaEnvelope / MessageMetadata**       | FastStream handles Pydantic serde directly — no wrapper needed                         |
+| **Source / Sink ABCs**                    | Kafka-specific abstractions. FastStream decorators replace them                        |
+| **Dead Letter Queue (DLQ)**               | Graceful degradation instead — rules-only fallback on AI failure                       |
+| **Circuit Breaker**                       | Not needed — NATS request timeouts + graceful degradation suffice                      |
+| **Rate Limiter**                          | Not needed — Claude API has its own rate limiting; system throughput is bounded by API |
+| **OpenTelemetry / Jaeger / Prometheus**   | Removed stubs. Will add when actually needed (Future Extensions)                       |
+| **k8s-source** (Kubernetes event watcher) | Future extension — not part of current architecture                                    |
+| **background_worker threading utility**   | Replaced by `asyncio` (FastStream is async-native)                                     |
 
 ---
 
 ## Future Extensions
 
-| Extension | Description | Impact |
-|-----------|-------------|--------|
-| **Redis TaskStore** | Replace `InMemoryTaskStore` with Redis for persistence across gateway restarts | gateway only — swap via `TaskStore` Protocol |
-| **k8s-source** | Watch Kubernetes events for completed Spark jobs, publish to NATS | New service, depends only on models |
-| **MCP Server** | ✅ Implemented — `spark-advisor-mcp` package with 5 tools. See [mcp-setup.md](mcp-setup.md) | mcp package |
-| **OpenTelemetry** | Distributed tracing across services via NATS | All services — add OTel middleware |
-| **Additional rules** | New domain-specific rules as real-world use cases are discovered | rules package only |
-| **NATS JetStream** | Persistent messaging with at-least-once delivery for batch flow | Replace NATS core subjects with JetStream streams |
+| Extension            | Description                                                                                | Impact                                            |
+|----------------------|--------------------------------------------------------------------------------------------|---------------------------------------------------|
+| **Redis TaskStore**  | Replace `InMemoryTaskStore` with Redis for persistence across gateway restarts             | gateway only — swap via `TaskStore` Protocol      |
+| **k8s-source**       | Watch Kubernetes events for completed Spark jobs, publish to NATS                          | New service, depends only on models               |
+| **MCP Server**       | ✅ Implemented — `spark-advisor-mcp` package with 5 tools. See [mcp-setup.md](mcp-setup.md) | mcp package                                       |
+| **OpenTelemetry**    | Distributed tracing across services via NATS                                               | All services — add OTel middleware                |
+| **Additional rules** | New domain-specific rules as real-world use cases are discovered                           | rules package only                                |
+| **NATS JetStream**   | Persistent messaging with at-least-once delivery for batch flow                            | Replace NATS core subjects with JetStream streams |
 
 ---
 
 ## Diagrams Index
 
-| # | File | Type | Description |
-|---|------|------|-------------|
-| 01 | [01-system-overview.mmd](diagrams/01-system-overview.mmd) | graph TB | Full system: services, NATS, CLI, external |
-| 02 | [02-package-dependencies.mmd](diagrams/02-package-dependencies.mmd) | graph BT | 7-package dependency graph |
-| 03 | [03-models-package.mmd](diagrams/03-models-package.mmd) | graph TB | Contents of models package |
-| 04 | [04-analyzer-pipeline.mmd](diagrams/04-analyzer-pipeline.mmd) | flowchart TB | Analyzer processing: NATS → rules → AI → reply |
-| 05 | [05-nats-subjects.mmd](diagrams/05-nats-subjects.mmd) | graph LR | NATS subjects, publishers, subscribers |
-| 06 | [06-k8s-deployment.mmd](diagrams/06-k8s-deployment.mmd) | graph TB | Kubernetes resources and topology |
-| 07 | [07-on-demand-flow.mmd](diagrams/07-on-demand-flow.mmd) | sequenceDiagram | On-demand: User → Gateway → HS → Analyzer → User |
-| 08 | [08-rules-hierarchy.mmd](diagrams/08-rules-hierarchy.mmd) | classDiagram | Rule ABC, 11 rules, StaticAnalysisService |
-| 09 | [09-batch-flow.mmd](diagrams/09-batch-flow.mmd) | sequenceDiagram | Batch: asyncio loop → HS → Analyzer → Gateway |
+| #  | File                                                                    | Type            | Description                                       |
+|----|-------------------------------------------------------------------------|-----------------|---------------------------------------------------|
+| 01 | [01-system-overview.mmd](diagrams/01-system-overview.mmd)               | graph TB        | Full system: services, NATS, CLI, external        |
+| 02 | [02-package-dependencies.mmd](diagrams/02-package-dependencies.mmd)     | graph BT        | 7-package dependency graph                        |
+| 03 | [03-models-package.mmd](diagrams/03-models-package.mmd)                 | graph TB        | Contents of models package                        |
+| 04 | [04-analyzer-pipeline.mmd](diagrams/04-analyzer-pipeline.mmd)           | flowchart TB    | Analyzer processing: NATS → rules → AI → reply    |
+| 05 | [05-nats-subjects.mmd](diagrams/05-nats-subjects.mmd)                   | graph LR        | NATS subjects, publishers, subscribers            |
+| 06 | [06-k8s-deployment.mmd](diagrams/06-k8s-deployment.mmd)                 | graph TB        | Kubernetes resources and topology                 |
+| 07 | [07-on-demand-flow.mmd](diagrams/07-on-demand-flow.mmd)                 | sequenceDiagram | On-demand: User → Gateway → HS → Analyzer → User  |
+| 08 | [08-rules-hierarchy.mmd](diagrams/08-rules-hierarchy.mmd)               | classDiagram    | Rule ABC, 11 rules, StaticAnalysisService         |
+| 09 | [09-batch-flow.mmd](diagrams/09-batch-flow.mmd)                         | sequenceDiagram | Batch: asyncio loop → HS → Analyzer → Gateway     |
 | 10 | [10-gateway-task-lifecycle.mmd](diagrams/10-gateway-task-lifecycle.mmd) | stateDiagram-v2 | Task states: PENDING → RUNNING → COMPLETED/FAILED |

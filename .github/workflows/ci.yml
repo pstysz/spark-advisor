@@ -33,3 +33,31 @@ jobs:
 
       - name: Test
         run: make test
+
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Lint subchart — analyzer
+        run: helm lint charts/analyzer
+
+      - name: Lint subchart — gateway
+        run: helm lint charts/gateway
+
+      - name: Lint subchart — hs-connector
+        run: helm lint charts/hs-connector
+
+      - name: Add NATS Helm repository
+        run: helm repo add nats https://nats-io.github.io/k8s/helm/charts/
+
+      - name: Build umbrella chart dependencies
+        run: helm dependency update charts/spark-advisor
+
+      - name: Lint umbrella chart
+        run: helm lint charts/spark-advisor
+
+      - name: Verify template rendering
+        run: helm template test charts/spark-advisor
