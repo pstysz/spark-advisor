@@ -180,7 +180,7 @@ class TestHistoryServerClientListApplications:
         assert len(apps) == 1
         assert apps[0].id == "app-001"
         assert apps[0].name == "TestETL"
-        assert apps[0].attempts[0].attemptId == "1"
+        assert apps[0].attempts[0].attempt_id == "1"
 
     @respx.mock
     def test_list_applications_with_null_attempt_id(self) -> None:
@@ -204,7 +204,7 @@ class TestHistoryServerClientListApplications:
             apps = client.list_applications(limit=10)
 
         assert len(apps) == 1
-        assert apps[0].attempts[0].attemptId is None
+        assert apps[0].attempts[0].attempt_id is None
 
     @respx.mock
     def test_list_applications_empty(self) -> None:
@@ -218,7 +218,7 @@ class TestHistoryServerClientListApplications:
 class TestHistoryServerClientLifecycle:
     def test_requires_context_manager(self) -> None:
         client = HistoryServerClient("http://spark-hs:18080")
-        with pytest.raises(RuntimeError, match="within 'with' block"):
+        with pytest.raises(RuntimeError, match="Client not initialized"):
             client.list_applications()
 
     def test_close_is_safe_when_not_opened(self) -> None:

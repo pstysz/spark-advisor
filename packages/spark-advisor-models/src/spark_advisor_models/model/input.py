@@ -8,7 +8,7 @@ class RecommendationInput(BaseModel):
     title: str = Field(description="Short title for the recommendation.")
     parameter: str = Field(
         description="Spark config parameter (e.g. spark.sql.shuffle.partitions). "
-                    'Use "code_change" for non-config recommendations.'
+        'Use "code_change" for non-config recommendations.'
     )
     current_value: str = Field(description="Current value of the parameter.")
     recommended_value: str = Field(description="Recommended new value.")

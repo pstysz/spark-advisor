@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -30,7 +31,7 @@ class HistoryServerPoller:
         self._batch_size = batch_size
 
     async def poll(self) -> int:
-        apps = self._hs_client.list_applications(limit=self._batch_size)
+        apps = await asyncio.to_thread(self._hs_client.list_applications, limit=self._batch_size)
         all_ids = [app.id for app in apps]
         new_ids = self._polling_state.filter_new(all_ids)
 
@@ -51,5 +52,5 @@ class HistoryServerPoller:
         return published
 
     async def _fetch_and_publish(self, app_id: str) -> None:
-        job = fetch_job_analysis(self._hs_client, app_id)
+        job = await asyncio.to_thread(fetch_job_analysis, self._hs_client, app_id)
         await self._broker.publish(job.model_dump(mode="json"), subject=self._publish_subject)

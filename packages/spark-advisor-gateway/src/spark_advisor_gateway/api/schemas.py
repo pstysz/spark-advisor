@@ -1,9 +1,15 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
 from spark_advisor_models.model.output import AnalysisMode
+
+if TYPE_CHECKING:
+    from spark_advisor_hs_connector.model.output import ApplicationSummary
 
 
 class AnalyzeRequest(BaseModel):
@@ -22,20 +28,17 @@ class ApplicationResponse(BaseModel):
     user: str = ""
 
     @classmethod
-    def from_hs_data(cls, data: dict[str, object]) -> "ApplicationResponse":
-        attempts = data.get("attempts") or []
-        first = attempts[0] if isinstance(attempts, list) and attempts else {}
-        if not isinstance(first, dict):
-            first = {}
+    def from_summary(cls, app: ApplicationSummary) -> ApplicationResponse:
+        latest = app.latest_attempt
         return cls(
-            id=str(data.get("id", "")),
-            name=str(data.get("name", "")),
-            start_time=str(first.get("startTime", "")),
-            end_time=str(first.get("endTime", "")),
-            duration_ms=int(first.get("duration", 0)),
-            completed=bool(first.get("completed", False)),
-            spark_version=str(first.get("appSparkVersion", "")),
-            user=str(first.get("sparkUser", "")),
+            id=app.id,
+            name=app.name,
+            start_time=latest.start_time if latest else "",
+            end_time=latest.end_time if latest else "",
+            duration_ms=latest.duration if latest else 0,
+            completed=latest.completed if latest else False,
+            spark_version=latest.app_spark_version if latest else "",
+            user=latest.spark_user if latest else "",
         )
 
 
@@ -50,7 +53,7 @@ class TaskResponse(BaseModel):
     result: dict[str, object] | None = None
 
     @classmethod
-    def from_task(cls, task: AnalysisTask) -> "TaskResponse":
+    def from_task(cls, task: AnalysisTask) -> TaskResponse:
         return cls(
             task_id=task.task_id,
             app_id=task.app_id,

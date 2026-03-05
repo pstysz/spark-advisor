@@ -37,3 +37,4 @@ class AiSettings(BaseModel):
     model: str = "claude-sonnet-4-6"
     api_timeout: float = 90.0
     max_tokens: int = 4096
+    max_agent_iterations: int = 10

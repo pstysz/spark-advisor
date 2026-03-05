@@ -17,21 +17,21 @@ def _make_app_summary(app_id: str) -> ApplicationSummary:
         name=f"Job-{app_id}",
         attempts=[
             Attempt(
-                attemptId="1",
-                startTime="2026-01-01T00:00:00",
-                endTime="2026-01-01T00:05:00",
-                lastUpdated="2026-01-01T00:05:00",
+                attempt_id="1",
+                start_time="2026-01-01T00:00:00",
+                end_time="2026-01-01T00:05:00",
+                last_updated="2026-01-01T00:05:00",
                 duration=300000,
-                sparkUser="user",
+                spark_user="user",
                 completed=True,
-                appSparkVersion="3.5.0",
-                logPath=f"hdfs:///logs/{app_id}",
-                startTimeEpoch=1735689600000,
-                endTimeEpoch=1735689900000,
-                lastUpdatedEpoch=1735689900000,
+                app_spark_version="3.5.0",
+                log_path=f"hdfs:///logs/{app_id}",
+                start_time_epoch=1735689600000,
+                end_time_epoch=1735689900000,
+                last_updated_epoch=1735689900000,
             )
         ],
-        driverHost="10.0.0.1",
+        driver_host="10.0.0.1",
     )
 
 
@@ -95,8 +95,11 @@ class TestHistoryServerPoller:
         state = PollingState()
 
         poller = HistoryServerPoller(
-            hs_client=hs_client, broker=nats_broker, publish_subject="analyze.request",
-            polling_state=state, batch_size=10,
+            hs_client=hs_client,
+            broker=nats_broker,
+            publish_subject="analyze.request",
+            polling_state=state,
+            batch_size=10,
         )
         published = await poller.poll()
 
@@ -118,7 +121,9 @@ class TestHistoryServerPoller:
         state.mark_processed("app-001")
 
         poller = HistoryServerPoller(
-            hs_client=hs_client, broker=nats_broker, publish_subject="analyze.request",
+            hs_client=hs_client,
+            broker=nats_broker,
+            publish_subject="analyze.request",
             polling_state=state,
         )
         published = await poller.poll()
@@ -135,7 +140,9 @@ class TestHistoryServerPoller:
         state = PollingState()
 
         poller = HistoryServerPoller(
-            hs_client=hs_client, broker=nats_broker, publish_subject="analyze.request",
+            hs_client=hs_client,
+            broker=nats_broker,
+            publish_subject="analyze.request",
             polling_state=state,
         )
         published = await poller.poll()
@@ -160,7 +167,9 @@ class TestHistoryServerPoller:
         state = PollingState()
 
         poller = HistoryServerPoller(
-            hs_client=hs_client, broker=nats_broker, publish_subject="analyze.request",
+            hs_client=hs_client,
+            broker=nats_broker,
+            publish_subject="analyze.request",
             polling_state=state,
         )
         published = await poller.poll()

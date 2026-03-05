@@ -8,6 +8,8 @@ from spark_advisor_hs_connector.model.output import ApplicationSummary
 
 logger = logging.getLogger(__name__)
 
+_APP_LIST_ADAPTER = TypeAdapter(list[ApplicationSummary])
+
 
 class HistoryServerClient:
     def __init__(self, base_url: str, timeout: float = 30.0) -> None:
@@ -15,27 +17,31 @@ class HistoryServerClient:
         self._timeout = timeout
         self._client: httpx.Client | None = None
 
-    def __enter__(self) -> "HistoryServerClient":
+    def open(self) -> "HistoryServerClient":
         if self._client is None:
             self._client = httpx.Client(
                 base_url=f"{self._base_url}/api/v1",
                 timeout=self._timeout,
                 headers={"Accept": "application/json"},
+                transport=httpx.HTTPTransport(retries=2),
             )
         return self
+
+    def __enter__(self) -> "HistoryServerClient":
+        return self.open()
 
     def __exit__(self, *_: object) -> None:
         self.close()
 
     def _get_client(self) -> httpx.Client:
         if self._client is None:
-            raise RuntimeError("HistoryServerClient must be used within 'with' block")
+            raise RuntimeError("Client not initialized — call open() or use as context manager")
         return self._client
 
     def list_applications(self, limit: int = 20) -> list[ApplicationSummary]:
         response = self._get_client().get("/applications", params={"limit": limit})
         response.raise_for_status()
-        return TypeAdapter(list[ApplicationSummary]).validate_python(response.json())
+        return _APP_LIST_ADAPTER.validate_json(response.content)
 
     def get_app_info(self, app_id: str) -> dict[str, Any]:
         response = self._get_client().get(f"/applications/{app_id}")
@@ -74,3 +80,4 @@ class HistoryServerClient:
     def close(self) -> None:
         if self._client is not None:
             self._client.close()
+            self._client = None

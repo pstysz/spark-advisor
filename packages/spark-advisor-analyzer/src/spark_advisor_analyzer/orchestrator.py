@@ -13,10 +13,10 @@ if TYPE_CHECKING:
 
 class AdviceOrchestrator:
     def __init__(
-            self,
-            static_analysis: StaticAnalysisService,
-            llm_service: LlmAnalysisService | None = None,
-            agent: AgentOrchestrator | None = None,
+        self,
+        static_analysis: StaticAnalysisService,
+        llm_service: LlmAnalysisService | None = None,
+        agent: AgentOrchestrator | None = None,
     ) -> None:
         self._static = static_analysis
         self._llm = llm_service

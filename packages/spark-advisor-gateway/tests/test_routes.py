@@ -50,7 +50,7 @@ async def test_get_task_not_found(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_get_task_returns_pending(client: AsyncClient, task_manager: TaskManager) -> None:
-    task = task_manager.create("app-456")
+    task = await task_manager.create("app-456")
     response = await client.get(f"/api/v1/tasks/{task.task_id}")
     assert response.status_code == 200
     data = response.json()
@@ -67,8 +67,8 @@ async def test_list_tasks_empty(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_list_tasks_returns_created(client: AsyncClient, task_manager: TaskManager) -> None:
-    task_manager.create("app-a")
-    task_manager.create("app-b")
+    await task_manager.create("app-a")
+    await task_manager.create("app-b")
     response = await client.get("/api/v1/tasks")
     assert response.status_code == 200
     data = response.json()
@@ -78,7 +78,7 @@ async def test_list_tasks_returns_created(client: AsyncClient, task_manager: Tas
 @pytest.mark.asyncio
 async def test_list_tasks_respects_limit(client: AsyncClient, task_manager: TaskManager) -> None:
     for i in range(5):
-        task_manager.create(f"app-{i}")
+        await task_manager.create(f"app-{i}")
     response = await client.get("/api/v1/tasks?limit=2")
     assert response.status_code == 200
     assert len(response.json()) == 2
@@ -92,23 +92,25 @@ def _nats_reply(data: object) -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_list_applications_returns_apps(client: AsyncClient, mock_nc: AsyncMock) -> None:
-    mock_nc.request.return_value = _nats_reply([
-        {
-            "id": "app-001",
-            "name": "SparkPi",
-            "attempts": [
-                {
-                    "startTime": "2026-02-26T18:06:24.459GMT",
-                    "endTime": "2026-02-26T18:07:58.746GMT",
-                    "duration": 5000,
-                    "completed": True,
-                    "appSparkVersion": "3.5.0",
-                    "sparkUser": "hdfs",
-                }
-            ],
-        },
-        {"id": "app-002", "name": "ETL Job", "attempts": []},
-    ])
+    mock_nc.request.return_value = _nats_reply(
+        [
+            {
+                "id": "app-001",
+                "name": "SparkPi",
+                "attempts": [
+                    {
+                        "startTime": "2026-02-26T18:06:24.459GMT",
+                        "endTime": "2026-02-26T18:07:58.746GMT",
+                        "duration": 5000,
+                        "completed": True,
+                        "appSparkVersion": "3.5.0",
+                        "sparkUser": "hdfs",
+                    }
+                ],
+            },
+            {"id": "app-002", "name": "ETL Job", "attempts": []},
+        ]
+    )
     response = await client.get("/api/v1/applications")
     assert response.status_code == 200
     data = response.json()

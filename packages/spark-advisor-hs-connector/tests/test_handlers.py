@@ -80,7 +80,7 @@ async def test_list_applications_returns_list() -> None:
         ApplicationSummary(
             id="app-001",
             name="TestJob",
-            attempts=[Attempt(attemptId="1", duration=300000, completed=True, appSparkVersion="3.5.0")],
+            attempts=[Attempt(attempt_id="1", duration=300000, completed=True, app_spark_version="3.5.0")],
         ),
         ApplicationSummary(id="app-002", name="AnotherJob"),
     ]

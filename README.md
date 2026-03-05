@@ -96,7 +96,7 @@ The rules engine runs for free and catches known patterns. The AI layer adds con
 ### Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/spark-advisor.git
+git clone https://github.com/pstysz/spark-advisor.git
 cd spark-advisor
 uv sync --all-packages
 ```
@@ -185,7 +185,7 @@ spark-advisor scan -hs http://yarn:18080 --limit 20
 
 ```bash
 spark-advisor version
-# spark-advisor v0.1.0
+# spark-advisor v0.1.3
 ```
 
 ## MCP Server
