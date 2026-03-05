@@ -42,9 +42,9 @@ jobs:
         run: make check
 
       - name: Build CLI package
-        run: cd packages/spark-advisor-cli && uv build
+        run: uv build --package spark-advisor-cli
 
       - name: Publish to PyPI
-        run: cd packages/spark-advisor-cli && uv publish
+        run: uv publish
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
