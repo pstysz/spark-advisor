@@ -1,0 +1,71 @@
+graph TB
+    subgraph k8s["Kubernetes Cluster"]
+        direction TB
+
+        subgraph ns["namespace: spark-advisor"]
+            direction TB
+
+            subgraph gw_deploy["Deployment: gateway (2 replicas)"]
+                POD_GW1["Pod: gateway-0<br/>Port 8080"]
+                POD_GW2["Pod: gateway-1<br/>Port 8080"]
+            end
+
+            subgraph analyzer_deploy["Deployment: analyzer (2 replicas)"]
+                POD_A1["Pod: analyzer-0"]
+                POD_A2["Pod: analyzer-1"]
+            end
+
+            subgraph conn_deploy["Deployment: hs-connector (1 replica)"]
+                POD_C["Pod: hs-connector"]
+            end
+
+            CM_GW["ConfigMap<br/>gateway"]
+            CM_A["ConfigMap<br/>analyzer"]
+            CM_C["ConfigMap<br/>hs-connector"]
+            SECRET["Secret<br/>analyzer<br/>(ANTHROPIC_API_KEY)"]
+            SVC_GW["Service<br/>gateway<br/>(ClusterIP)"]
+            INGRESS["Ingress<br/>spark-advisor.example.com"]
+        end
+
+        subgraph nats_ns["namespace: nats"]
+            NATS["NATS Server<br/>(Bitnami Helm)"]
+        end
+    end
+
+    subgraph external["External"]
+        HS_EXT["Spark History Server"]
+        CLAUDE["Claude API"]
+    end
+
+    CM_GW -.->|envFrom| POD_GW1
+    CM_GW -.->|envFrom| POD_GW2
+    CM_A -.->|envFrom| POD_A1
+    CM_A -.->|envFrom| POD_A2
+    SECRET -.->|envFrom| POD_A1
+    SECRET -.->|envFrom| POD_A2
+    CM_C -.->|envFrom| POD_C
+
+    INGRESS --> SVC_GW
+    SVC_GW --> POD_GW1
+    SVC_GW --> POD_GW2
+
+    POD_GW1 -->|"NATS"| NATS
+    POD_GW2 -->|"NATS"| NATS
+    POD_A1 -->|"NATS"| NATS
+    POD_A2 -->|"NATS"| NATS
+    POD_C -->|"NATS"| NATS
+
+    POD_C -->|"REST"| HS_EXT
+    POD_A1 -->|"Claude API<br/>(single-turn + agent)"| CLAUDE
+
+    classDef podStyle fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef cfgStyle fill:#f59e0b,stroke:#d97706,color:#000
+    classDef natsStyle fill:#ea580c,stroke:#c2410c,color:#fff
+    classDef extStyle fill:#7c3aed,stroke:#6d28d9,color:#fff
+    classDef netStyle fill:#10b981,stroke:#059669,color:#fff
+
+    class POD_GW1,POD_GW2,POD_A1,POD_A2,POD_C podStyle
+    class CM_GW,CM_A,CM_C,SECRET cfgStyle
+    class NATS natsStyle
+    class HS_EXT,CLAUDE extStyle
+    class SVC_GW,INGRESS netStyle

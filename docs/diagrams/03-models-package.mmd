@@ -1,0 +1,45 @@
+graph TB
+    subgraph models["spark-advisor-models (pure contracts — ZERO infrastructure)"]
+        direction TB
+
+        subgraph model_pkg["model/"]
+            METRICS["metrics.py<br/>JobAnalysis, StageMetrics,<br/>ExecutorMetrics, TaskMetrics,<br/>Quantiles, IOQuantiles"]
+            SPARK_CFG["spark_config.py<br/>SparkConfig"]
+            OUTPUT["output.py<br/>Severity, RuleResult,<br/>AnalysisResult, AdvisorReport,<br/>Recommendation, OutputFormat"]
+            INPUT["input.py<br/>AnalysisToolInput,<br/>RecommendationInput"]
+        end
+
+        subgraph config_pkg["config.py"]
+            THRESHOLDS["Thresholds<br/>(frozen Pydantic)"]
+            AI_SETTINGS["AiSettings<br/>(model, timeout, enabled)"]
+        end
+
+        subgraph settings_pkg["settings.py"]
+            BASE_SETTINGS["BaseServiceSettings<br/>(env → .env → YAML chain)"]
+            NATS_SETTINGS["NatsSettings<br/>(url: str)"]
+        end
+
+        subgraph util_pkg["util/"]
+            BYTES["bytes.py — format_bytes()"]
+            STATS["stats.py — percentile_value(),<br/>median_value(), quantiles_5()"]
+        end
+    end
+
+    subgraph not_here["NOT in models — owned by services"]
+        direction LR
+        NO_RULES["Rules Engine<br/>→ rules pkg"]
+        NO_AI["AI / LLM / Agent<br/>→ analyzer"]
+        NO_HS["HistoryServerClient<br/>→ hs-connector"]
+        NO_PARSER["Event log parser<br/>→ cli"]
+        NO_CONSOLE["Rich console<br/>→ cli"]
+        NO_TASK["TaskManager<br/>→ gateway"]
+        NO_MCP["MCP tools<br/>→ mcp pkg"]
+    end
+
+    METRICS --> SPARK_CFG
+
+    classDef modelStyle fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef notHereStyle fill:#dc2626,stroke:#b91c1c,color:#fff
+
+    class METRICS,SPARK_CFG,OUTPUT,INPUT,THRESHOLDS,AI_SETTINGS,BASE_SETTINGS,NATS_SETTINGS,BYTES,STATS modelStyle
+    class NO_RULES,NO_AI,NO_HS,NO_PARSER,NO_CONSOLE,NO_TASK,NO_MCP notHereStyle

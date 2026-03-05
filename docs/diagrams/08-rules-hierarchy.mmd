@@ -1,0 +1,103 @@
+classDiagram
+    namespace spark_advisor_rules {
+        class Rule {
+            <<abstract>>
+            +rule_id: ClassVar~str~
+            -_thresholds: Thresholds
+            +evaluate(job: JobAnalysis) list~RuleResult~
+            +_check_stage(stage, job)* RuleResult | None
+            +_result(...) RuleResult
+        }
+
+        class DataSkewRule {
+            +rule_id = "data_skew"
+            +_check_stage() RuleResult | None
+        }
+
+        class SpillToDiskRule {
+            +rule_id = "spill_to_disk"
+            +_check_stage() RuleResult | None
+        }
+
+        class GCPressureRule {
+            +rule_id = "gc_pressure"
+            +_check_stage() RuleResult | None
+        }
+
+        class ShufflePartitionsRule {
+            +rule_id = "shuffle_partitions"
+            +evaluate(job) list~RuleResult~
+        }
+
+        class ExecutorIdleRule {
+            +rule_id = "executor_idle"
+            +evaluate(job) list~RuleResult~
+        }
+
+        class TaskFailureRule {
+            +rule_id = "task_failures"
+            +_check_stage() RuleResult | None
+        }
+
+        class SmallFileRule {
+            +rule_id = "small_files"
+            +_check_stage() RuleResult | None
+        }
+
+        class BroadcastJoinThresholdRule {
+            +rule_id = "broadcast_join"
+            +evaluate(job) list~RuleResult~
+        }
+
+        class SerializerChoiceRule {
+            +rule_id = "serializer_choice"
+            +evaluate(job) list~RuleResult~
+        }
+
+        class DynamicAllocationRule {
+            +rule_id = "dynamic_allocation"
+            +evaluate(job) list~RuleResult~
+        }
+
+        class ExecutorMemoryOverheadRule {
+            +rule_id = "executor_memory_overhead"
+            +evaluate(job) list~RuleResult~
+        }
+
+        class StaticAnalysisService {
+            -_rules: list~Rule~
+            +analyze(job: JobAnalysis) list~RuleResult~
+        }
+    }
+
+    namespace spark_advisor_models {
+        class Thresholds {
+            <<frozen>>
+            +skew_warning_ratio: float
+            +skew_critical_ratio: float
+            +spill_warning_gb: float
+            +spill_critical_gb: float
+            +gc_warning_percent: float
+            +gc_critical_percent: float
+            +target_partition_size_bytes: int
+            +min_cpu_utilization_percent: float
+            +task_failure_warning_count: int
+            +small_file_threshold_bytes: int
+            +broadcast_join_threshold_bytes: int
+            +memory_overhead_percent: float
+        }
+    }
+
+    Rule <|-- DataSkewRule
+    Rule <|-- SpillToDiskRule
+    Rule <|-- GCPressureRule
+    Rule <|-- ShufflePartitionsRule
+    Rule <|-- ExecutorIdleRule
+    Rule <|-- TaskFailureRule
+    Rule <|-- SmallFileRule
+    Rule <|-- BroadcastJoinThresholdRule
+    Rule <|-- SerializerChoiceRule
+    Rule <|-- DynamicAllocationRule
+    Rule <|-- ExecutorMemoryOverheadRule
+    Rule --> Thresholds : uses (from models)
+    StaticAnalysisService --> Rule : runs many

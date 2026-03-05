@@ -1,0 +1,61 @@
+flowchart TB
+    START_STD(["NATS: analyze.request"])
+    START_AGENT(["NATS: analyze.agent.request"])
+
+    DESER["Deserialize<br/>JobAnalysis<br/>(Pydantic validation)"]
+    RULES["Run Static Analysis<br/>(11 Rules Engine)"]
+
+    subgraph standard_path["Standard Path (AdviceOrchestrator)"]
+        CHECK_AI{"AI enabled +<br/>LLM service<br/>available?"}
+        CALL_AI["Call Claude API<br/>(LlmAnalysisService<br/>single-turn)"]
+        AI_OK{"Success?"}
+        AI_REPORT["build_advisor_report()"]
+        AI_FALLBACK["Log warning,<br/>continue without AI"]
+        BUILD["Build AnalysisResult<br/>(rules + optional AI)"]
+    end
+
+    subgraph agent_path["Agent Path (AgentOrchestrator)"]
+        direction TB
+        AGENT_LOOP["Multi-turn Claude loop<br/>(max 10 iterations)"]
+        TOOLS["6 Agent Tools<br/>(overview, stage, rules,<br/>partitions, configs, submit)"]
+        FORCE{"Max iterations<br/>reached?"}
+        FORCE_SUBMIT["Force submit_final_report<br/>(tool_choice=tool)"]
+        FORCE_OK{"Success?"}
+        AGENT_REPORT["build_advisor_report()"]
+        RULES_ONLY["Rules-only fallback"]
+    end
+
+    REPLY(["Reply to caller<br/>+ publish to<br/>analyze.result"])
+
+    START_STD --> DESER
+    DESER --> RULES
+    RULES --> CHECK_AI
+    CHECK_AI -->|"no"| BUILD
+    CHECK_AI -->|"yes"| CALL_AI
+    CALL_AI --> AI_OK
+    AI_OK -->|"yes"| AI_REPORT
+    AI_OK -->|"no"| AI_FALLBACK
+    AI_REPORT --> BUILD
+    AI_FALLBACK --> BUILD
+    BUILD --> REPLY
+
+    START_AGENT --> AGENT_LOOP
+    AGENT_LOOP <-->|"tool calls"| TOOLS
+    AGENT_LOOP --> FORCE
+    FORCE -->|"no (submit called)"| AGENT_REPORT
+    FORCE -->|"yes"| FORCE_SUBMIT
+    FORCE_SUBMIT --> FORCE_OK
+    FORCE_OK -->|"yes"| AGENT_REPORT
+    FORCE_OK -->|"no"| RULES_ONLY
+    AGENT_REPORT --> REPLY
+    RULES_ONLY --> REPLY
+
+    classDef processStyle fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef decisionStyle fill:#f59e0b,stroke:#d97706,color:#000
+    classDef startEndStyle fill:#059669,stroke:#047857,color:#fff
+    classDef agentStyle fill:#7c3aed,stroke:#6d28d9,color:#fff
+
+    class START_STD,START_AGENT,REPLY startEndStyle
+    class DESER,RULES,CALL_AI,AI_REPORT,AI_FALLBACK,BUILD processStyle
+    class CHECK_AI,AI_OK,FORCE,FORCE_OK decisionStyle
+    class AGENT_LOOP,TOOLS,FORCE_SUBMIT,AGENT_REPORT,RULES_ONLY agentStyle

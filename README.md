@@ -1,11 +1,12 @@
 <div align="center">
 
-  <img src="docs/logo.png" alt="spark-advisor logo" width="256" height="250">
+  <img src=".github/logo.png" alt="spark-advisor logo" width="256" height="250">
   <p>AI-powered Apache Spark job analyzer and configuration advisor.</p>
   <p><strong>v<!-- x-release-please-version -->0.1.0<!-- /x-release-please-version --></strong></p>
   <p><em>Stop guessing Spark configs. Let data and AI tell you what's wrong.</em></p>
 
   <p>
+    <a href="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml"><img src="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
     <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
     <img src="https://img.shields.io/badge/tests-291%20passing-brightgreen" alt="Tests">

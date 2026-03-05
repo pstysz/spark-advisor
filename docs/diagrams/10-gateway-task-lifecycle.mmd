@@ -1,0 +1,34 @@
+stateDiagram-v2
+    [*] --> PENDING: POST /analyze
+
+    PENDING --> RUNNING: TaskExecutor.submit()
+
+    RUNNING --> COMPLETED: NATS reply received,<br/>AnalysisResult parsed
+    RUNNING --> FAILED: Timeout / NATS error /<br/>Service unavailable
+
+    COMPLETED --> [*]
+    FAILED --> [*]
+
+    note right of PENDING
+        Task created with unique ID.
+        Returned immediately as HTTP 202.
+        Optional mode: "standard" or "agent".
+    end note
+
+    note right of RUNNING
+        TaskExecutor runs async:
+        1. NATS request fetch.job
+        2. NATS request analyze.request
+           or analyze.agent.request
+        3. Store result
+    end note
+
+    note right of COMPLETED
+        Result available via:
+        GET /api/v1/tasks/{id}
+    end note
+
+    note right of FAILED
+        Error message stored.
+        Client can retry POST /analyze.
+    end note
