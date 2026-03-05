@@ -1,0 +1,25 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/pstysz/spark-advisor-hs-connector
+  tag: ""
+  pullPolicy: IfNotPresent
+
+config:
+  logLevel: "INFO"
+  nats:
+    url: "nats://localhost:4222"
+    publishSubject: "analyze.request"
+    fetchSubject: "fetch.job"
+  historyServerUrl: "http://localhost:18080"
+  historyServerTimeout: 30.0
+  pollIntervalSeconds: 60
+  batchSize: 50
+
+imagePullSecrets: []
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
