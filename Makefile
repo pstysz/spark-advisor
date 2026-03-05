@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format check demo-local demo-remote up down clean
+.PHONY: install dev test lint format check demo-local demo-remote up down clean docker-local minikube-deploy
 
 PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-cli packages/spark-advisor-analyzer packages/spark-advisor-hs-connector packages/spark-advisor-gateway packages/spark-advisor-mcp
 
@@ -41,6 +41,30 @@ up:
 
 down:
 	docker compose down
+
+SERVICES = spark-advisor-analyzer spark-advisor-gateway spark-advisor-hs-connector
+LOCAL_TAG := $(shell git rev-parse --short HEAD)-$(shell date +%s)
+
+docker-local:
+	@eval $$(minikube docker-env) && \
+	for svc in $(SERVICES); do \
+		echo "\n=== Building $$svc:$(LOCAL_TAG) ==="; \
+		docker build -f packages/$$svc/Dockerfile -t $$svc:$(LOCAL_TAG) . || exit 1; \
+	done
+
+minikube-deploy: docker-local
+	kubectl create namespace spark-advisor --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create secret generic anthropic-api-key \
+		--namespace spark-advisor \
+		--from-literal=api-key=$$ANTHROPIC_API_KEY \
+		--dry-run=client -o yaml | kubectl apply -f -
+	helm dependency update charts/spark-advisor
+	helm upgrade --install spark-advisor charts/spark-advisor \
+		--namespace spark-advisor --create-namespace \
+		-f charts/spark-advisor/values-local.yaml \
+		--set analyzer.image.tag=$(LOCAL_TAG) \
+		--set gateway.image.tag=$(LOCAL_TAG) \
+		--set hs-connector.image.tag=$(LOCAL_TAG)
 
 clean:
 	rm -rf dist/ build/ *.egg-info .mypy_cache .pytest_cache .ruff_cache htmlcov/
