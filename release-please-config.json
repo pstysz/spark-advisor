@@ -1,0 +1,21 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "package-name": "spark-advisor",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "extra-files": [
+        "packages/spark-advisor-models/pyproject.toml",
+        "packages/spark-advisor-rules/pyproject.toml",
+        "packages/spark-advisor-cli/pyproject.toml",
+        "packages/spark-advisor-analyzer/pyproject.toml",
+        "packages/spark-advisor-hs-connector/pyproject.toml",
+        "packages/spark-advisor-gateway/pyproject.toml",
+        "packages/spark-advisor-mcp/pyproject.toml",
+        "README.md"
+      ]
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+}

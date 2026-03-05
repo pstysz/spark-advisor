@@ -1,3 +1,5 @@
+from importlib.metadata import version as pkg_version
+
 from rich.console import Console
 
 console = Console()
@@ -5,4 +7,5 @@ console = Console()
 
 def version() -> None:
     """Show version information."""
-    console.print("spark-advisor [bold]v0.1.0[/]")
+    ver = pkg_version("spark-advisor-cli")
+    console.print(f"spark-advisor [bold]v{ver}[/]")

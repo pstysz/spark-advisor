@@ -1,8 +1,27 @@
 [project]
 name = "spark-advisor-cli"
 version = "0.1.0"
-description = "CLI tool for Spark job analysis"
+description = "AI-powered Apache Spark job analyzer and configuration advisor"
+readme = "../../README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12"
+authors = [
+    { name = "Pawel Stysz" },
+]
+keywords = ["spark", "apache-spark", "performance", "optimization", "ai", "claude", "mcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Monitoring",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
 dependencies = [
     "spark-advisor-models",
     "spark-advisor-rules",
@@ -23,6 +42,12 @@ spark-advisor-analyzer = { workspace = true }
 
 [project.scripts]
 spark-advisor = "spark_advisor_cli.app:main"
+
+[project.urls]
+Homepage = "https://github.com/pstysz/spark-advisor"
+Repository = "https://github.com/pstysz/spark-advisor"
+Issues = "https://github.com/pstysz/spark-advisor/issues"
+Documentation = "https://github.com/pstysz/spark-advisor/blob/main/docs/architecture.md"
 
 [dependency-groups]
 dev = [
