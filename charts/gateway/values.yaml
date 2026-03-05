@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: spark-advisor-gateway
+  repository: ghcr.io/pstysz/spark-advisor-gateway
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -25,6 +25,8 @@ config:
 service:
   type: ClusterIP
   port: 8080
+
+imagePullSecrets: []
 
 ingress:
   enabled: false
