@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.1...spark-advisor-v0.1.2) (2026-03-05)
+
+
+### Bug Fixes
+
+* cli readme bug ([834293c](https://github.com/pstysz/spark-advisor/commit/834293cf1ad70e3540007285bcb6c1bae8342fcc))
+
 ## [0.1.1](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.0...spark-advisor-v0.1.1) (2026-03-05)
 
 
