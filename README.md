@@ -1,61 +1,87 @@
-# spark-advisor
+<div align="center">
 
-AI-powered Apache Spark job analyzer and configuration advisor.
+  <img src="docs/logo.png" alt="spark-advisor logo" width="256" height="250">
+  <p>AI-powered Apache Spark job analyzer and configuration advisor.</p>
+  <p><strong>v<!-- x-release-please-version -->0.1.0<!-- /x-release-please-version --></strong></p>
+  <p><em>Stop guessing Spark configs. Let data and AI tell you what's wrong.</em></p>
 
-**Stop guessing Spark configs. Let data and AI tell you what's wrong.**
+  <p>
+    <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
+    <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
+    <img src="https://img.shields.io/badge/tests-291%20passing-brightgreen" alt="Tests">
+  </p>
+  <p>
+    <img src="https://img.shields.io/badge/Spark-E25A1C?logo=apachespark&logoColor=white" alt="Apache Spark">
+    <img src="https://img.shields.io/badge/Claude_API-191919?logo=anthropic&logoColor=white" alt="Claude API">
+    <img src="https://img.shields.io/badge/MCP-compatible-8A2BE2" alt="MCP Compatible">
+    <img src="https://img.shields.io/badge/NATS-27AAE1?logo=natsdotio&logoColor=white" alt="NATS">
+    <img src="https://img.shields.io/badge/code%20style-ruff-D7FF64?logo=ruff&logoColor=black" alt="Code style: ruff">
+  </p>
+
+  <p>
+    <a href="#features">Features</a> •
+    <a href="#quick-start">Quick Start</a> •
+    <a href="#cli-usage">CLI Usage</a> •
+    <a href="#mcp-server">MCP Server</a> •
+    <a href="#microservices">Microservices</a> •
+    <a href="#architecture">Architecture</a> •
+    <a href="#development">Development</a>
+  </p>
+
+</div>
+
+---
 
 ```
-$ spark-advisor analyze application_1763665725860_53215 -s http://localhost:18080
+$ spark-advisor analyze sample_event_logs/sample_etl_job.json
 
-╭──────────────────────── Spark Job Analysis ────────────────────────╮
-│   App ID              application_1763665725860_53215              │
-│   App Name            Spark Pi                                    │
-│   Duration            0.6 min (37s)                               │
-│   Stages              1                                           │
-│   Total Tasks         5000                                        │
-│   Shuffle Partitions  200                                         │
-│   Executors           2                                           │
-╰───────────────────────────────────────────────────────────────────╯
+╭───────────────────────────── Spark Job Analysis ─────────────────────────────╮
+│   App ID                application_1234567890_0001                          │
+│   App Name              SampleETLJob                                         │
+│   Duration              6.7 min (400s)                                       │
+│   Stages                2                                                    │
+│   Total Tasks           5                                                    │
+│   Shuffle Partitions    200                                                  │
+│   Executors             0                                                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
 
 Issues Found
 
-  🟡 WARNING: Data skew in Stage 0
-    Max task duration (169ms) is 6.3x the median (27ms)
-    → Enable AQE: spark.sql.adaptive.enabled=true
+  🔴 CRITICAL: Data skew in Stage 1
+    Max task duration (335000.0ms) is 27.9x the median (12000.0ms)
+    → Enable AQE: spark.sql.adaptive.enabled=true, spark.sql.adaptive.skewJoin.enabled=true
 
-╭──────────────────────── AI Analysis ──────────────────────────────╮
-│ This is a SparkPi computation job with 5000 tasks running on     │
-│ severely under-provisioned executors (512MB with 107% memory     │
-│ utilization). The primary issue is memory pressure causing        │
-│ overhead.                                                         │
-╰───────────────────────────────────────────────────────────────────╯
+  🔴 CRITICAL: Disk spill in Stage 1
+    22.2 GB spilled to disk — data doesn't fit in memory
+    → Increase spark.executor.memory or spark.sql.shuffle.partitions
 
-Recommendations
-┏━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
-┃ # ┃ Recommendation                          ┃ Change              ┃
-┡━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
-│ 1 │ Increase executor memory                │ 512m → 2g           │
-│ 2 │ Reduce task count                       │ 5000 → 800-1000     │
-│ 3 │ Enable Adaptive Query Execution         │ false → true        │
-└───┴─────────────────────────────────────────┴─────────────────────┘
-
-Suggested spark-defaults.conf:
-  spark.executor.memory = 2g
-  spark.sql.adaptive.enabled = true
+  🟡 WARNING: High GC pressure in Stage 1
+    GC time is 24% of total task time
+    → Increase executor memory or reduce data cached per task
 ```
 
 ## How it works
 
 ```
-Event Log / History Server  →  Parser  →  Rules Engine  →  AI Advisor  →  Report
-                                            (free, fast)    (Claude API)
+Event Log / History Server  →  Rules Engine (11 rules)  →  AI Advisor (optional)  →  Report
+                                  (free, fast)              (Claude API, ~$0.02)
 ```
 
-1. **Parser** — extracts metrics from Spark event logs or History Server REST API
-2. **Rules Engine** — 6 deterministic checks: data skew, disk spill, GC pressure, partition sizing, executor idle, task failures
-3. **AI Advisor** — Claude analyzes metrics + rule findings, identifies causal chains, suggests concrete config values with impact estimates
+1. **Data source** — parse Spark event log files or fetch from History Server REST API
+2. **Rules engine** — 11 deterministic checks: data skew, disk spill, GC pressure, partition sizing, executor idle, task failures, small files, broadcast join, serializer choice, dynamic allocation, memory overhead
+3. **AI advisor** (optional) — Claude analyzes metrics + rule findings, identifies causal chains between related problems, suggests concrete config values
 
-The rules engine runs for free and catches known patterns. The AI layer (optional, ~$0.02/analysis) adds contextual reasoning — it understands that skew in Stage 3 *causes* spill in Stage 4, which *causes* GC pressure, and recommends fixing the root cause instead of treating symptoms.
+The rules engine runs for free and catches known patterns. The AI layer adds contextual reasoning — it understands that skew in Stage 3 *causes* spill in Stage 4, which *causes* GC pressure, and recommends fixing the root cause.
+
+## Features
+
+- **11 deterministic rules** detecting data skew, GC pressure, disk spill, wrong partition count, and more
+- **AI advisor** with Claude API — prioritized recommendations with causal chains and concrete config values
+- **Agent mode** — multi-turn Claude analysis where AI autonomously explores job data using 6 tools
+- **MCP server** — use spark-advisor as tools in Claude Desktop, Cursor, or any MCP client
+- **3 microservices** — NATS-based distributed pipeline (gateway, analyzer, hs-connector)
+- **Streaming parser** — processes 100MB+ event log files line-by-line without loading into memory
+- **Rich CLI** — tables, colors, severity badges, suggested spark-defaults.conf
 
 ## Quick Start
 
@@ -69,142 +95,270 @@ The rules engine runs for free and catches known patterns. The AI layer (optiona
 ```bash
 git clone https://github.com/YOUR_USERNAME/spark-advisor.git
 cd spark-advisor
-uv sync
+uv sync --all-packages
+```
+
+### Analyze
+
+```bash
+# Rules-only (no API key needed)
+cd packages/spark-advisor-cli
+uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json --no-ai
+
+# With AI analysis (requires ANTHROPIC_API_KEY)
+export ANTHROPIC_API_KEY=sk-ant-...
+uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json
+```
+
+## What it detects
+
+| Rule               | Condition                                                | Severity                            |
+|--------------------|----------------------------------------------------------|-------------------------------------|
+| Data skew          | max/median task duration > 5x                            | CRITICAL if >10x, WARNING if >5x    |
+| Disk spill         | diskBytesSpilled > 0                                     | CRITICAL if >1GB, WARNING if >0.1GB |
+| GC pressure        | GC time > 20% of task time                               | CRITICAL if >40%, WARNING if >20%   |
+| Shuffle partitions | partition size far from 128MB target                     | WARNING                             |
+| Executor idle      | slot utilization < 40%                                   | WARNING                             |
+| Task failures      | failed_task_count > 0                                    | WARNING                             |
+| Small files        | avg input bytes/task < 10MB                              | WARNING                             |
+| Broadcast join     | threshold disabled with shuffle stages                   | WARNING if disabled, INFO if < 10MB |
+| Serializer choice  | Java serializer with shuffle stages                      | INFO                                |
+| Dynamic allocation | enabled without bounds, or disabled with low utilization | WARNING                             |
+| Memory overhead    | GC > 20% AND memory utilization > 80%                    | WARNING                             |
+
+All thresholds are configurable via `Thresholds` model.
+
+## CLI Usage
+
+### `analyze` — analyze a Spark job
+
+```bash
+# From event log file
+spark-advisor analyze /path/to/event-log.json.gz
+
+# From History Server
+spark-advisor analyze app-20250101120000-0001 -hs http://yarn:18080
+
+# With AI analysis (default if ANTHROPIC_API_KEY is set)
+spark-advisor analyze /path/to/event-log.json.gz
+
+# Without AI (rules only)
+spark-advisor analyze /path/to/event-log.json.gz --no-ai
+
+# Agent mode (multi-turn AI with tool use)
+spark-advisor analyze /path/to/event-log.json.gz --agent
+
+# Verbose mode (per-stage breakdown)
+spark-advisor analyze /path/to/event-log.json.gz --verbose
+
+# JSON output
+spark-advisor analyze /path/to/event-log.json.gz --format json
+
+# Save suggested config to file
+spark-advisor analyze /path/to/event-log.json.gz -o spark-defaults.conf
+
+# Use specific Claude model
+spark-advisor analyze /path/to/event-log.json.gz --model claude-sonnet-4-6
+```
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `source` | | required | App ID (with `-hs`) or path to event log file |
+| `--history-server` | `-hs` | `None` | Spark History Server URL |
+| `--no-ai` | | `False` | Disable AI analysis (rules only) |
+| `--agent` | | `False` | Use agent mode (multi-turn AI with tool use) |
+| `--model` | `-m` | `claude-sonnet-4-6` | Claude model for AI analysis |
+| `--output` | `-o` | `None` | Write suggested config to file |
+| `--format` | `-f` | `text` | Output format: `text` or `json` |
+| `--verbose` | `-v` | `False` | Show per-stage breakdown |
+
+### `scan` — list recent jobs from History Server
+
+```bash
+spark-advisor scan -hs http://yarn:18080 --limit 20
+```
+
+### `version`
+
+```bash
+spark-advisor version
+# spark-advisor v0.1.0
+```
+
+## MCP Server
+
+spark-advisor exposes 5 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) for Claude Desktop, Cursor, and other MCP clients.
+
+**Tools:** `analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`
+
+### Claude Desktop config
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "spark-advisor": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/spark-advisor/packages/spark-advisor-mcp", "python", "-m", "spark_advisor_mcp"],
+      "env": {
+        "ANTHROPIC_API_KEY": "sk-ant-..."
+      }
+    }
+  }
+}
+```
+
+See [docs/mcp-setup.md](docs/mcp-setup.md) for Cursor and Claude Code configuration.
+
+## Microservices
+
+Three NATS-based services for distributed analysis:
+
+```
+User → Gateway (REST) → NATS → HS Connector (fetch) → NATS → Analyzer (rules + AI) → result
+```
+
+### Start
+
+```bash
+make up    # docker compose up -d (NATS + gateway + analyzer + hs-connector)
 ```
 
 ### Usage
 
 ```bash
-# Analyze via History Server (recommended)
-spark-advisor analyze <app-id> --history-server http://yarn-master:18080
+# Submit analysis (async)
+curl -X POST http://localhost:8080/api/v1/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{"app_id": "app-20250101120000-0001"}'
 
-# Analyze from event log file
-spark-advisor analyze /path/to/event-log.json.gz
+# Poll result
+curl http://localhost:8080/api/v1/tasks/<task-id>
 
-# Scan recent jobs for issues
-spark-advisor scan --history-server http://yarn-master:18080 --limit 20
+# List recent apps
+curl http://localhost:8080/api/v1/applications?limit=20
 
-# Rules-only mode (no API key needed)
-spark-advisor analyze <app-id> -s http://yarn:18080 --no-ai
-
-# Save suggested config to file
-spark-advisor analyze <app-id> -s http://yarn:18080 -o spark-defaults.conf
+# Agent mode
+curl -X POST http://localhost:8080/api/v1/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{"app_id": "app-123", "mode": "agent"}'
 ```
 
-### AI Setup
-
-The AI advisor requires an [Anthropic API key](https://console.anthropic.com/). Set it via environment variable:
+### Stop
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+make down
 ```
-
-Or use [direnv](https://direnv.net/) for automatic loading:
-
-```bash
-echo 'export ANTHROPIC_API_KEY=sk-ant-...' > .envrc
-direnv allow
-```
-
-Cost: ~$0.02 per analysis (Claude Sonnet).
-
-## What it detects
-
-| Issue | Detection | Severity |
-|-------|-----------|----------|
-| Data skew | max/median task duration > 5x | CRITICAL if >10x, WARNING if >5x |
-| Disk spill | diskBytesSpilled > 0 | CRITICAL if >1GB, WARNING if >0.1GB |
-| GC pressure | GC time > 20% of task time | CRITICAL if >40%, WARNING if >20% |
-| Wrong partition count | partition size far from 128MB target | WARNING |
-| Over-provisioned executors | CPU utilization < 40% | WARNING |
-| Task failures | failed tasks > 0 | WARNING |
-
-All thresholds are configurable via `Thresholds` model.
 
 ## Architecture
 
-```
-src/spark_advisor/
-├── cli.py                         # Typer CLI: analyze, scan, version
-├── spark_advisor.py               # Orchestrator: combines static + AI analysis
-├── config.py                      # Thresholds and defaults
-├── model/
-│   ├── input.py                   # Pydantic models for Claude tool schema
-│   ├── metrics.py                 # TaskMetrics, StageMetrics, ExecutorMetrics, JobAnalysis
-│   ├── output.py                  # Severity, RuleResult, Recommendation, AdvisorReport
-│   └── spark_config.py            # SparkConfig wrapper with typed accessors
-├── analysis/
-│   ├── rules.py                   # Rule ABC + 6 concrete rules
-│   └── static_analysis_service.py # Runs rules, returns sorted results
-├── ai/
-│   ├── config.py                  # Tool definition (schema from Pydantic), system prompt
-│   ├── llm_analysis_service.py    # Claude API call + response validation
-│   └── prompts_builder.py         # Builds structured prompts from job data
-├── api/
-│   ├── anthropic_client.py        # Anthropic SDK wrapper
-│   └── history_server_client.py   # Spark History Server REST client
-└── util/
-    ├── bytes_helper.py            # Human-readable byte formatting
-    ├── console.py                 # Rich terminal output
-    └── event_parser.py            # Streaming event log parser (.json, .json.gz)
+```mermaid
+graph TB
+    subgraph sources["Data Sources"]
+        HS["Spark History Server"]
+        EL["Event Log File"]
+    end
+
+    subgraph packages["spark-advisor (uv monorepo, 7 packages)"]
+        MODELS["models<br/>(Pydantic contracts)"]
+        RULES["rules<br/>(11 deterministic rules)"]
+        ANALYZER["analyzer<br/>(rules + AI worker)"]
+        CONNECTOR["hs-connector<br/>(History Server client)"]
+        GATEWAY["gateway<br/>(REST API)"]
+        CLI["cli<br/>(Typer + Rich)"]
+        MCP["mcp<br/>(MCP server)"]
+    end
+
+    NATS["NATS"]
+    CLAUDE["Claude API"]
+
+    HS --> CONNECTOR
+    HS --> CLI
+    HS --> MCP
+    EL --> CLI
+    EL --> MCP
+
+    MODELS --> RULES
+    RULES --> ANALYZER
+    RULES --> CLI
+    RULES --> MCP
+    CONNECTOR --> CLI
+    CONNECTOR --> MCP
+    ANALYZER --> CLI
+
+    GATEWAY --> NATS
+    NATS --> CONNECTOR
+    NATS --> ANALYZER
+    ANALYZER --> CLAUDE
 ```
 
-### Key design decisions
-
-- **Tool schema from Pydantic** — Claude's tool `input_schema` is generated via `AnalysisToolInput.model_json_schema()`. Schema and validation stay in sync — single source of truth, no hand-written JSON Schema dicts.
-- **Streaming event log parser** — processes files line-by-line, never loads entire file into memory. Handles 100MB+ logs.
-- **Rules engine is free** — deterministic checks run without API calls. AI is optional and additive.
-- **Immutable models** — all Pydantic models use `frozen=True`. No mutable state after construction.
-- **No LangChain** — direct use of `anthropic` SDK. Full control over prompts, tool definitions, and response handling.
+**Package dependencies:**
+- **models** — shared Pydantic contracts (`JobAnalysis`, `AnalysisResult`, `SparkConfig`), zero I/O
+- **rules** — pure business logic, depends only on models
+- **analyzer** — AI worker (rules + Claude API), depends on models + rules
+- **hs-connector** — History Server client, depends only on models
+- **gateway** — REST API + NATS orchestration, depends only on models
+- **cli** — standalone CLI, depends on models + rules + analyzer + hs-connector
+- **mcp** — MCP server, depends on models + rules + analyzer + hs-connector + cli
 
 ## Development
 
 ```bash
-make dev       # Install dev dependencies
-make test      # Run 58 tests with coverage
-make lint      # Ruff + mypy (strict)
-make format    # Auto-format code
-make check     # All checks (lint + test, CI-ready)
-make demo      # Run against sample event log (no API key needed)
+make check       # Lint + mypy + all tests (CI-ready)
+make test        # Run 291 tests across 7 packages
+make lint        # Ruff + mypy (strict)
+make format      # Auto-format code
+make demo-local  # Run rules-only analysis on sample event log
+make up          # Start microservices (docker compose)
+make down        # Stop microservices
 ```
 
 ### Tech Stack
 
-| Tool | Role |
-|------|------|
-| **Python 3.12+** | Language |
-| **uv** | Package manager |
-| **Typer** | CLI framework (type-hint based) |
-| **Rich** | Terminal output (tables, colors, panels) |
-| **Pydantic v2** | Data models, validation, JSON Schema generation |
-| **httpx** | HTTP client for History Server REST API |
-| **orjson** | Fast JSON parsing for event logs |
-| **anthropic** | Claude SDK for AI analysis |
-| **Ruff** | Linter + formatter (replaces flake8, black, isort) |
-| **mypy** | Static type checker (strict mode) |
-| **pytest** | Testing with coverage, fixtures, factories |
+| Tool                  | Role                                                  |
+|-----------------------|-------------------------------------------------------|
+| **Python 3.12+**      | Language                                              |
+| **uv**                | Package manager + workspace                           |
+| **Pydantic v2**       | Data models, validation, JSON Schema for Claude tools |
+| **pydantic-settings** | Configuration (env vars, YAML, .env)                  |
+| **NATS**              | Message broker (15MB binary, replaces Kafka)          |
+| **FastStream**        | Type-safe NATS workers                                |
+| **FastAPI**           | REST API (gateway)                                    |
+| **nats-py**           | NATS client with request-reply (gateway)              |
+| **httpx**             | HTTP client for History Server                        |
+| **anthropic**         | Claude SDK for AI analysis                            |
+| **mcp**               | MCP server SDK (FastMCP, stdio)                       |
+| **Typer**             | CLI framework                                         |
+| **Rich**              | Terminal output (tables, colors, panels)              |
+| **orjson**            | Fast JSON parsing for event logs                      |
+| **Ruff**              | Linter + formatter                                    |
+| **mypy**              | Type checker (strict mode)                            |
+| **pytest**            | Testing with coverage and fixtures                    |
 
 ### Testing
 
-58 tests covering rules engine, prompt building, LLM service (mocked), API client lifecycle, and event log parser. Test data is built with factory functions (`tests/factories.py`) and pytest fixtures (`tests/conftest.py`).
+291 tests across 7 packages: models (10), rules (42), cli (48), analyzer (85), hs-connector (59), gateway (30), mcp (17).
 
 ```bash
-uv run pytest -v
+uv run pytest -v               # all packages
+cd packages/spark-advisor-rules && uv run pytest -v  # single package
 ```
 
 ## Roadmap
 
 - [x] Streaming event log parser (.json, .json.gz)
 - [x] History Server REST API client
-- [x] Rules engine (6 rules)
+- [x] Rules engine (11 rules)
 - [x] AI advisor with Claude API (tool use + structured output)
-- [x] Rich CLI output with suggested spark-defaults.conf
-- [x] Pydantic-driven tool schema (single source of truth)
-- [x] Tested against real Spark History Server
-- [ ] Agent mode — LLM-driven iterative analysis with tool calling
-- [ ] MCP server — integrate with Claude Desktop / Cursor
+- [x] Rich CLI with suggested spark-defaults.conf
+- [x] uv monorepo (7 packages)
+- [x] 3 NATS-based microservices (gateway, analyzer, hs-connector)
+- [x] Agent mode — multi-turn Claude analysis with 6 tools
+- [x] MCP server — Claude Desktop / Cursor integration (5 tools)
 - [ ] GitHub Actions CI pipeline
 - [ ] PyPI release (`pip install spark-advisor`)
+- [ ] Terminal demo GIF
 
 ## License
 
