@@ -6,14 +6,54 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "extra-files": [
-        "packages/spark-advisor-models/pyproject.toml",
-        "packages/spark-advisor-rules/pyproject.toml",
-        "packages/spark-advisor-cli/pyproject.toml",
-        "packages/spark-advisor-analyzer/pyproject.toml",
-        "packages/spark-advisor-hs-connector/pyproject.toml",
-        "packages/spark-advisor-gateway/pyproject.toml",
-        "packages/spark-advisor-mcp/pyproject.toml",
-        "README.md"
+        {
+          "type": "generic",
+          "path": "packages/spark-advisor-models/pyproject.toml"
+        },
+        {
+          "type": "generic",
+          "path": "packages/spark-advisor-rules/pyproject.toml"
+        },
+        {
+          "type": "generic",
+          "path": "packages/spark-advisor-cli/pyproject.toml"
+        },
+        {
+          "type": "generic",
+          "path": "packages/spark-advisor-analyzer/pyproject.toml"
+        },
+        {
+          "type": "generic",
+          "path": "packages/spark-advisor-hs-connector/pyproject.toml"
+        },
+        {
+          "type": "generic",
+          "path": "packages/spark-advisor-gateway/pyproject.toml"
+        },
+        {
+          "type": "generic",
+          "path": "packages/spark-advisor-mcp/pyproject.toml"
+        },
+        {
+          "type": "generic",
+          "path": "README.md"
+        },
+        {
+          "type": "generic",
+          "path": "charts/analyzer/Chart.yaml"
+        },
+        {
+          "type": "generic",
+          "path": "charts/gateway/Chart.yaml"
+        },
+        {
+          "type": "generic",
+          "path": "charts/hs-connector/Chart.yaml"
+        },
+        {
+          "type": "generic",
+          "path": "charts/spark-advisor/Chart.yaml"
+        }
       ]
     }
   },

@@ -1,0 +1,48 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/pstysz/spark-advisor-analyzer
+  tag: ""
+  pullPolicy: IfNotPresent
+
+config:
+  logLevel: "INFO"
+  nats:
+    url: "nats://localhost:4222"
+    requestSubject: "analyze.request"
+    resultSubject: "analyze.result"
+  ai:
+    enabled: true
+    model: "claude-sonnet-4-6"
+    apiTimeout: 90.0
+    maxTokens: 4096
+  thresholds:
+    skewWarningRatio: 5.0
+    skewCriticalRatio: 10.0
+    spillWarningGb: 0.1
+    spillCriticalGb: 1.0
+    gcWarningPercent: 20.0
+    gcCriticalPercent: 40.0
+    gcTargetPercent: 10.0
+    targetPartitionSizeBytes: "134217728"
+    partitionRatioMin: 0.5
+    partitionRatioMax: 2.0
+    minSlotUtilizationPercent: 40.0
+    taskFailureWarningCount: 1
+    schedulerDelayMs: 100
+    smallFileThresholdBytes: "10485760"
+    broadcastJoinDefaultBytes: "10485760"
+    memoryOverheadGcThresholdPercent: 20.0
+    memoryOverheadMemUtilizationPercent: 80.0
+
+anthropicApiKey:
+  existingSecret: ""
+  secretKey: "api-key"
+
+imagePullSecrets: []
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

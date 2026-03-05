@@ -1,0 +1,10 @@
+image:
+  repository: spark-advisor-analyzer
+  tag: ""
+  pullPolicy: Never
+
+config:
+  logLevel: "DEBUG"
+
+anthropicApiKey:
+  existingSecret: anthropic-api-key
