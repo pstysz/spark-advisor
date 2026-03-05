@@ -2,7 +2,7 @@
 name = "spark-advisor-cli"
 version = "0.1.0"
 description = "AI-powered Apache Spark job analyzer and configuration advisor"
-readme = "../../README.md"
+readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
 authors = [
