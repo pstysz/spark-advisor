@@ -1,0 +1,48 @@
+sequenceDiagram
+    participant User
+    participant Gateway
+    participant NATS
+    participant HSConnector as HS Connector
+    participant Analyzer
+    participant Claude as Claude API
+
+    User->>Gateway: POST /api/v1/analyze {app_id, mode?}
+    Gateway->>Gateway: TaskManager.create(app_id)
+    Gateway-->>User: 202 {task_id, status: PENDING}
+
+    Gateway->>Gateway: TaskExecutor.submit(task_id)
+    Gateway->>Gateway: mark_running(task_id)
+
+    Gateway->>NATS: request("fetch.job", {app_id})
+    NATS->>HSConnector: deliver message
+    HSConnector->>HSConnector: fetch_job_analysis(app_id)
+    HSConnector-->>NATS: reply(JobAnalysis)
+    NATS-->>Gateway: JobAnalysis
+
+    alt mode = standard (default)
+        Gateway->>NATS: request("analyze.request", JobAnalysis)
+        NATS->>Analyzer: deliver message
+        Analyzer->>Analyzer: StaticAnalysisService.analyze() — 11 rules
+        Analyzer->>Claude: Single-turn API call
+        Claude-->>Analyzer: AI recommendations
+        Analyzer->>Analyzer: build_advisor_report()
+        Analyzer-->>NATS: reply(AnalysisResult)
+    else mode = agent
+        Gateway->>NATS: request("analyze.agent.request", JobAnalysis)
+        NATS->>Analyzer: deliver message
+        loop max 10 iterations
+            Analyzer->>Claude: tool_choice=auto
+            Claude-->>Analyzer: tool_use (get_overview, run_rules, ...)
+            Analyzer->>Analyzer: execute tool locally
+        end
+        Analyzer->>Claude: submit_final_report
+        Claude-->>Analyzer: structured analysis
+        Analyzer->>Analyzer: build_advisor_report()
+        Analyzer-->>NATS: reply(AnalysisResult)
+    end
+
+    NATS-->>Gateway: AnalysisResult
+
+    Gateway->>Gateway: mark_completed(task_id, result)
+
+    Note over User,Gateway: User polls GET /api/v1/tasks/{task_id}

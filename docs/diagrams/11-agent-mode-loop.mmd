@@ -1,0 +1,45 @@
+sequenceDiagram
+    participant CLI as CLI / NATS Handler
+    participant Agent as AgentOrchestrator
+    participant Claude as Claude API
+    participant Tools as Tool Handlers<br/>(in-memory)
+    participant Rules as StaticAnalysisService
+
+    CLI->>Agent: run(JobAnalysis)
+    Agent->>Agent: create AgentContext(job)
+
+    Agent->>Claude: messages=[initial_message]<br/>tool_choice=auto
+
+    loop max 10 iterations
+        Claude-->>Agent: tool_use: get_job_overview
+        Agent->>Tools: execute_tool("get_job_overview", {})
+        Tools-->>Agent: JSON overview
+
+        Agent->>Claude: tool_result + continue
+        Claude-->>Agent: tool_use: run_rules_engine
+        Agent->>Tools: execute_tool("run_rules_engine", {})
+        Tools->>Rules: StaticAnalysisService.analyze()
+        Rules-->>Tools: [RuleResult, ...]
+        Tools-->>Agent: JSON findings (cached in context)
+
+        Agent->>Claude: tool_result + continue
+        Claude-->>Agent: tool_use: get_stage_details({stage_id: 2})
+        Agent->>Tools: execute_tool("get_stage_details", {stage_id: 2})
+        Tools-->>Agent: JSON stage metrics
+
+        Agent->>Claude: tool_result + continue
+    end
+
+    alt Claude calls submit_final_report
+        Claude-->>Agent: tool_use: submit_final_report({summary, severity, recommendations})
+        Agent->>Agent: AnalysisToolInput.model_validate(input)
+        Agent->>Agent: build_advisor_report()
+    else Max iterations reached
+        Agent->>Claude: "You MUST call submit_final_report now"<br/>tool_choice={"type":"tool","name":"submit_final_report"}
+        Claude-->>Agent: submit_final_report(...)
+        Agent->>Agent: build_advisor_report()
+    else Force-submit fails (ValidationError)
+        Agent->>Agent: rules-only fallback
+    end
+
+    Agent-->>CLI: AnalysisResult (rules + optional AI report)

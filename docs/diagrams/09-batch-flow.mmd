@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant HS as Spark History Server
+    participant Connector as HS Connector
+    participant NATS
+    participant Analyzer
+    participant Gateway
+
+    Note over Connector: asyncio background task<br/>triggers every N seconds
+
+    Connector->>HS: list_applications(limit=batch_size)
+    HS-->>Connector: [app_1, app_2, app_3]
+    Connector->>Connector: filter via PollingState (skip processed)
+
+    loop For each new app
+        Connector->>HS: fetch 5 REST endpoints
+        HS-->>Connector: raw data
+        Connector->>Connector: map_job_analysis() → JobAnalysis
+        Connector->>NATS: publish("analyze.request", JobAnalysis)
+        Connector->>Connector: PollingState.mark_processed(app_id)
+    end
+
+    NATS->>Analyzer: deliver message(s)
+    Analyzer->>Analyzer: 11 rules + optional AI analysis
+    Analyzer->>NATS: publish("analyze.result", AnalysisResult)
+
+    NATS->>Gateway: deliver to subscriber
+    Gateway->>Gateway: store result

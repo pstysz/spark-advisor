@@ -1,0 +1,29 @@
+graph BT
+    MODELS["spark-advisor-models<br/><i>contracts + config + utils</i>"]
+    RULES["spark-advisor-rules<br/><i>Rule ABC, 11 rules, StaticAnalysisService</i>"]
+    ANALYZER["spark-advisor-analyzer<br/><i>Claude AI, agent mode, orchestrator, FastStream worker</i>"]
+    GATEWAY["spark-advisor-gateway<br/><i>REST API, TaskManager, NATS orchestration</i>"]
+    CONNECTOR["spark-advisor-hs-connector<br/><i>HS client, poller, on-demand fetch</i>"]
+    CLI["spark-advisor-cli<br/><i>Typer CLI, Rich output, event log parser</i>"]
+    MCP["spark-advisor-mcp<br/><i>MCP server, 5 tools, stdio transport</i>"]
+
+    RULES -->|"depends on"| MODELS
+    ANALYZER -->|"depends on"| MODELS
+    ANALYZER -->|"depends on"| RULES
+    GATEWAY -->|"depends on"| MODELS
+    CONNECTOR -->|"depends on"| MODELS
+    CLI -->|"depends on"| MODELS
+    CLI -->|"depends on"| RULES
+    CLI -.->|"optional import"| ANALYZER
+    CLI -.->|"optional import"| CONNECTOR
+    MCP -->|"depends on"| MODELS
+    MCP -->|"depends on"| RULES
+    MCP -->|"depends on"| ANALYZER
+    MCP -->|"depends on"| CONNECTOR
+
+    classDef libStyle fill:#f59e0b,stroke:#d97706,color:#000
+    classDef svcStyle fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef cliStyle fill:#0891b2,stroke:#0e7490,color:#fff
+    class MODELS,RULES libStyle
+    class ANALYZER,GATEWAY,CONNECTOR svcStyle
+    class CLI,MCP cliStyle

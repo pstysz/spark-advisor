@@ -1,0 +1,46 @@
+graph LR
+    subgraph publishers["PUBLISHERS"]
+        GW_PUB["Gateway<br/>(on-demand request)"]
+        CONN_PUB["HS Connector<br/>(batch polling)"]
+    end
+
+    subgraph subjects["NATS SUBJECTS"]
+        direction TB
+        FETCH["fetch.job<br/><i>request-reply</i>"]
+        LIST["list.applications<br/><i>request-reply</i>"]
+        ANALYZE["analyze.request<br/><i>request-reply or pub</i>"]
+        AGENT["analyze.agent.request<br/><i>request-reply</i>"]
+        RESULT["analyze.result<br/><i>pub-sub</i>"]
+    end
+
+    subgraph subscribers["SUBSCRIBERS"]
+        CONN_SUB["HS Connector<br/>(on-demand handler)"]
+        ANALYZER_SUB["Analyzer<br/>(standard handler)"]
+        ANALYZER_AGENT["Analyzer<br/>(agent handler)"]
+        GW_SUB["Gateway<br/>(result listener)"]
+    end
+
+    GW_PUB -->|"request<br/>{app_id}"| FETCH
+    FETCH -->|"reply<br/>JobAnalysis"| CONN_SUB
+
+    GW_PUB -->|"request<br/>{limit}"| LIST
+    LIST -->|"reply<br/>[ApplicationSummary]"| CONN_SUB
+
+    GW_PUB -->|"request<br/>JobAnalysis"| ANALYZE
+    CONN_PUB -->|"publish<br/>JobAnalysis"| ANALYZE
+    ANALYZE -->|"subscribe"| ANALYZER_SUB
+
+    GW_PUB -.->|"request<br/>JobAnalysis"| AGENT
+    AGENT -->|"subscribe"| ANALYZER_AGENT
+
+    ANALYZER_SUB -->|"publish<br/>AnalysisResult"| RESULT
+    ANALYZER_AGENT -->|"publish<br/>AnalysisResult"| RESULT
+    RESULT -->|"subscribe"| GW_SUB
+
+    classDef pubStyle fill:#059669,stroke:#047857,color:#fff
+    classDef subjStyle fill:#ea580c,stroke:#c2410c,color:#fff
+    classDef subStyle fill:#2563eb,stroke:#1d4ed8,color:#fff
+
+    class GW_PUB,CONN_PUB pubStyle
+    class FETCH,LIST,ANALYZE,AGENT,RESULT subjStyle
+    class CONN_SUB,ANALYZER_SUB,ANALYZER_AGENT,GW_SUB subStyle

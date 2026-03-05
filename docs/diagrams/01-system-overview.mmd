@@ -1,0 +1,97 @@
+graph TB
+    subgraph sources["DATA SOURCES"]
+        direction TB
+        HS["Spark History Server<br/>(REST API)"]
+        EVENTLOG["Event Log File<br/>(json / json.gz)"]
+    end
+
+    subgraph services["SPARK-ADVISOR SERVICES"]
+        direction TB
+
+        subgraph connector["HS Connector"]
+            direction LR
+            POLL["asyncio polling<br/>(background task)"]
+            FETCH["fetch_job_analysis()"]
+            STATE["PollingState<br/>(in-memory set)"]
+            POLL --> FETCH
+            FETCH --> STATE
+        end
+
+        subgraph analyzer["Analyzer"]
+            direction TB
+            A_HANDLER["FastStream Handler<br/>(analyze.request)"]
+            AG_HANDLER["FastStream Handler<br/>(analyze.agent.request)"]
+            RULES["Static Analysis<br/>(11 Rules)"]
+            AI["LlmAnalysisService<br/>(Claude single-turn)"]
+            AGENT["AgentOrchestrator<br/>(Claude multi-turn)"]
+            A_HANDLER --> RULES
+            RULES --> AI
+            AG_HANDLER --> AGENT
+        end
+
+        subgraph gateway["Gateway"]
+            direction TB
+            REST["FastAPI<br/>(POST /analyze)"]
+            TASK["TaskManager<br/>+ TaskExecutor"]
+            REST --> TASK
+        end
+
+        subgraph mcp_box["MCP Server"]
+            MCP["spark-advisor-mcp<br/>(stdio transport)"]
+        end
+    end
+
+    subgraph nats_box["NATS"]
+        direction LR
+        FETCH_SUBJ["fetch.job"]
+        LIST_SUBJ["list.applications"]
+        ANALYZE_SUBJ["analyze.request"]
+        AGENT_SUBJ["analyze.agent.request"]
+        RESULT_SUBJ["analyze.result"]
+    end
+
+    subgraph cli_box["CLI (standalone)"]
+        CLI["spark-advisor CLI<br/>(Typer + Rich)"]
+    end
+
+    subgraph external["EXTERNAL"]
+        CLAUDE["Claude API<br/>(Anthropic)"]
+        USER["User / Client"]
+        MCP_CLIENT["MCP Client<br/>(Claude Desktop / Cursor)"]
+    end
+
+    HS -->|"REST API"| FETCH
+    FETCH -->|"publish"| ANALYZE_SUBJ
+    ANALYZE_SUBJ -->|"subscribe"| A_HANDLER
+    AGENT_SUBJ -->|"subscribe"| AG_HANDLER
+    AI -->|"API call"| CLAUDE
+    AGENT -->|"multi-turn API"| CLAUDE
+    A_HANDLER -->|"publish"| RESULT_SUBJ
+
+    USER -->|"HTTP"| REST
+    TASK -->|"request"| FETCH_SUBJ
+    FETCH_SUBJ -->|"reply"| connector
+    TASK -->|"request"| ANALYZE_SUBJ
+    TASK -.->|"request (agent mode)"| AGENT_SUBJ
+    RESULT_SUBJ -->|"subscribe"| gateway
+
+    HS -.->|"direct REST"| CLI
+    EVENTLOG -.->|"parse file"| CLI
+    CLI -.->|"optional AI / agent"| CLAUDE
+
+    HS -.->|"direct REST"| MCP
+    EVENTLOG -.->|"parse file"| MCP
+    MCP -.->|"optional AI"| CLAUDE
+    MCP_CLIENT -->|"MCP protocol<br/>(stdio)"| MCP
+
+    classDef sourceStyle fill:#059669,stroke:#047857,color:#fff
+    classDef serviceStyle fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef natsStyle fill:#ea580c,stroke:#c2410c,color:#fff
+    classDef cliStyle fill:#0891b2,stroke:#0e7490,color:#fff
+    classDef extStyle fill:#7c3aed,stroke:#6d28d9,color:#fff
+    class HS,EVENTLOG sourceStyle
+    class POLL,FETCH,STATE,A_HANDLER,AG_HANDLER,RULES,AI,AGENT,REST,TASK serviceStyle
+    class FETCH_SUBJ,LIST_SUBJ,ANALYZE_SUBJ,AGENT_SUBJ,RESULT_SUBJ natsStyle
+    class CLI cliStyle
+    class CLAUDE,USER,MCP_CLIENT extStyle
+    class MCP cliStyle

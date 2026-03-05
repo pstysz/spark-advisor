@@ -1,0 +1,65 @@
+flowchart TB
+    START(["spark-advisor analyze &lt;source&gt;"])
+    IS_HS{"--history-server<br/>flag?"}
+
+    subgraph load["Load Job Data"]
+        PARSE_FILE["parse_event_log()<br/>(streaming line-by-line)"]
+        FETCH_HS["HistoryServerClient<br/>fetch 5 REST endpoints"]
+    end
+
+    JOB["JobAnalysis"]
+    IS_AGENT{"--agent flag?"}
+    IS_AI{"ANTHROPIC_API_KEY<br/>set + no --no-ai?"}
+
+    subgraph analysis["Run Analysis"]
+        RULES_ONLY["StaticAnalysisService<br/>(11 rules)"]
+        SINGLE_TURN["AdviceOrchestrator<br/>(rules + LlmAnalysisService)"]
+        AGENT_MODE["AdviceOrchestrator<br/>(AgentOrchestrator<br/>multi-turn Claude loop)"]
+    end
+
+    RESULT["AnalysisResult"]
+    IS_FORMAT{"--format flag?"}
+
+    subgraph output["Output"]
+        JSON_OUT["JSON to stdout"]
+        RICH_OUT["Rich terminal<br/>(tables, colors, panels)"]
+        IS_VERBOSE{"--verbose?"}
+        STAGE_TABLE["Per-stage breakdown"]
+        IS_OUTPUT{"--output?"}
+        SAVE_FILE["Write spark-defaults.conf"]
+    end
+
+    START --> IS_HS
+    IS_HS -->|"yes"| FETCH_HS
+    IS_HS -->|"no (file path)"| PARSE_FILE
+    FETCH_HS --> JOB
+    PARSE_FILE --> JOB
+
+    JOB --> IS_AGENT
+    IS_AGENT -->|"yes"| AGENT_MODE
+    IS_AGENT -->|"no"| IS_AI
+    IS_AI -->|"yes"| SINGLE_TURN
+    IS_AI -->|"no"| RULES_ONLY
+    RULES_ONLY --> RESULT
+    SINGLE_TURN --> RESULT
+    AGENT_MODE --> RESULT
+
+    RESULT --> IS_FORMAT
+    IS_FORMAT -->|"json"| JSON_OUT
+    IS_FORMAT -->|"text (default)"| RICH_OUT
+    RICH_OUT --> IS_VERBOSE
+    IS_VERBOSE -->|"yes"| STAGE_TABLE
+    RICH_OUT --> IS_OUTPUT
+    IS_OUTPUT -->|"yes"| SAVE_FILE
+
+    classDef startStyle fill:#059669,stroke:#047857,color:#fff
+    classDef processStyle fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef decisionStyle fill:#f59e0b,stroke:#d97706,color:#000
+    classDef outputStyle fill:#0891b2,stroke:#0e7490,color:#fff
+    classDef agentStyle fill:#7c3aed,stroke:#6d28d9,color:#fff
+
+    class START startStyle
+    class PARSE_FILE,FETCH_HS,JOB,RULES_ONLY,SINGLE_TURN,RESULT processStyle
+    class IS_HS,IS_AGENT,IS_AI,IS_FORMAT,IS_VERBOSE,IS_OUTPUT decisionStyle
+    class JSON_OUT,RICH_OUT,STAGE_TABLE,SAVE_FILE outputStyle
+    class AGENT_MODE agentStyle
