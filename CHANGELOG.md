@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.4...spark-advisor-v0.1.5) (2026-03-05)
+
+
+### Bug Fixes
+
+* refactor + bugfixing ([99c7ca3](https://github.com/pstysz/spark-advisor/commit/99c7ca3567ecc198d0a3ea7d482831f550937b0e))
+* refactor + bugfixing ([0232401](https://github.com/pstysz/spark-advisor/commit/023240115dd9c55cd4e48519ca56ff0d7a215ed5))
+
 ## [0.1.4](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.3...spark-advisor-v0.1.4) (2026-03-05)
 
 
