@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hs-connector.fullname" . }}
+  labels:
+    {{- include "hs-connector.labels" . | nindent 4 }}
+data:
+  SA_CONNECTOR_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  SA_CONNECTOR_NATS__URL: {{ .Values.config.nats.url | default (printf "nats://%s-nats:4222" .Release.Name) | quote }}
+  SA_CONNECTOR_NATS__PUBLISH_SUBJECT: {{ .Values.config.nats.publishSubject | quote }}
+  SA_CONNECTOR_NATS__FETCH_SUBJECT: {{ .Values.config.nats.fetchSubject | quote }}
+  SA_CONNECTOR_HISTORY_SERVER_URL: {{ .Values.config.historyServerUrl | quote }}
+  SA_CONNECTOR_HISTORY_SERVER_TIMEOUT: {{ .Values.config.historyServerTimeout | quote }}
+  SA_CONNECTOR_POLL_INTERVAL_SECONDS: {{ .Values.config.pollIntervalSeconds | quote }}
+  SA_CONNECTOR_BATCH_SIZE: {{ .Values.config.batchSize | quote }}

@@ -1,0 +1,27 @@
+replicaCount: 1
+
+image:
+  repository: spark-advisor-hs-connector
+  tag: ""
+  pullPolicy: IfNotPresent
+
+config:
+  logLevel: "INFO"
+  nats:
+    url: "nats://localhost:4222"
+    publishSubject: "analyze.request"
+    fetchSubject: "fetch.job"
+  historyServerUrl: "http://localhost:18080"
+  historyServerTimeout: 30.0
+  pollIntervalSeconds: 60
+  batchSize: 50
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

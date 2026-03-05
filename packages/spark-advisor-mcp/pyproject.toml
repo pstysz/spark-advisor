@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-mcp"
-version = "0.1.0"
+version = "0.1.2" # x-release-please-version
 description = "MCP server exposing spark-advisor tools for Claude Desktop and other MCP clients"
 requires-python = ">=3.12"
 dependencies = [

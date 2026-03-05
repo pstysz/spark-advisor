@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-gateway"
-version = "0.1.0"
+version = "0.1.2" # x-release-please-version
 description = "API Gateway for spark-advisor - REST + NATS task orchestration"
 requires-python = ">=3.12"
 dependencies = [
