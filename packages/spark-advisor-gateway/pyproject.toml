@@ -4,7 +4,7 @@ version = "0.1.2" # x-release-please-version
 description = "API Gateway for spark-advisor - REST + NATS task orchestration"
 requires-python = ">=3.12"
 dependencies = [
-    "spark-advisor-models",
+    "spark-advisor-models==0.1.2",  # x-release-please-version
     "fastapi>=0.115",
     "uvicorn>=0.34",
     "nats-py>=2.9",
