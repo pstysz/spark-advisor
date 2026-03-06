@@ -23,10 +23,10 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "spark-advisor-models",
-    "spark-advisor-rules",
-    "spark-advisor-hs-connector",
-    "spark-advisor-analyzer",
+    "spark-advisor-models==0.1.2",  # x-release-please-version
+    "spark-advisor-rules==0.1.2",  # x-release-please-version
+    "spark-advisor-analyzer==0.1.2",  # x-release-please-version
+    "spark-advisor-hs-connector==0.1.2",  # x-release-please-version
     "typer>=0.15",
     "rich>=14",
     "httpx>=0.28",

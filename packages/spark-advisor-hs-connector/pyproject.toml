@@ -4,7 +4,7 @@ version = "0.1.2" # x-release-please-version
 description = "Spark History Server connector - polls and publishes jobs to NATS"
 requires-python = ">=3.12"
 dependencies = [
-    "spark-advisor-models",
+    "spark-advisor-models==0.1.2",  # x-release-please-version
     "httpx>=0.28",
     "faststream[nats]>=0.6",
     "pyyaml>=6.0",
