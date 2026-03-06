@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.6](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.5...spark-advisor-v0.1.6) (2026-03-06)
+
+
+### Features
+
+* added separate readme and pyproject descriptions in all modules ([f55ebfd](https://github.com/pstysz/spark-advisor/commit/f55ebfdcb4f7ca4e10d0753df9bc3b0a9d8664c2))
+
+
+### Bug Fixes
+
+* update internal dependencies to use pinned versions ([a3b2fe2](https://github.com/pstysz/spark-advisor/commit/a3b2fe265d064a408357e700a7464f6e8d949b7d))
+
 ## [0.1.5](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.4...spark-advisor-v0.1.5) (2026-03-05)
 
 
