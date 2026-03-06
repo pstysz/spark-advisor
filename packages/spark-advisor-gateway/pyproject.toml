@@ -2,7 +2,24 @@
 name = "spark-advisor-gateway"
 version = "0.1.2" # x-release-please-version
 description = "API Gateway for spark-advisor - REST + NATS task orchestration"
+readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12"
+authors = [
+    { name = "Pawel Stysz" },
+]
+keywords = ["spark", "apache-spark", "fastapi", "nats", "gateway", "rest-api"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Typing :: Typed",
+]
 dependencies = [
     "spark-advisor-models==0.1.2",  # x-release-please-version
     "fastapi>=0.115",
@@ -11,6 +28,11 @@ dependencies = [
     "orjson>=3.9",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pstysz/spark-advisor"
+Repository = "https://github.com/pstysz/spark-advisor"
+Issues = "https://github.com/pstysz/spark-advisor/issues"
 
 [project.scripts]
 spark-advisor-gateway = "spark_advisor_gateway.app:main"
