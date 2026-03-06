@@ -2,7 +2,22 @@
 name = "spark-advisor-mcp"
 version = "0.1.2" # x-release-please-version
 description = "MCP server exposing spark-advisor tools for Claude Desktop and other MCP clients"
+readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12"
+authors = [
+    { name = "Pawel Stysz" },
+]
+keywords = ["spark", "apache-spark", "mcp", "claude", "ai", "model-context-protocol"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
 dependencies = [
     "spark-advisor-models==0.1.2",  # x-release-please-version
     "spark-advisor-rules==0.1.2",  # x-release-please-version
@@ -13,6 +28,11 @@ dependencies = [
     "httpx>=0.28",
     "orjson>=3.10",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pstysz/spark-advisor"
+Repository = "https://github.com/pstysz/spark-advisor"
+Issues = "https://github.com/pstysz/spark-advisor/issues"
 
 [project.scripts]
 spark-advisor-mcp = "spark_advisor_mcp.server:main"
