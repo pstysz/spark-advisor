@@ -2,13 +2,34 @@
 name = "spark-advisor-hs-connector"
 version = "0.1.5" # x-release-please-version
 description = "Spark History Server connector - polls and publishes jobs to NATS"
+readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12"
+authors = [
+    { name = "Pawel Stysz" },
+]
+keywords = ["spark", "apache-spark", "history-server", "nats", "connector", "monitoring"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
+]
 dependencies = [
-    "spark-advisor-models",
+    "spark-advisor-models==0.1.2",  # x-release-please-version
     "httpx>=0.28",
     "faststream[nats]>=0.6",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pstysz/spark-advisor"
+Repository = "https://github.com/pstysz/spark-advisor"
+Issues = "https://github.com/pstysz/spark-advisor/issues"
 
 [project.scripts]
 spark-advisor-hs-connector = "spark_advisor_hs_connector.app:main"

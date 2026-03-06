@@ -2,14 +2,35 @@
 name = "spark-advisor-analyzer"
 version = "0.1.5" # x-release-please-version
 description = "AI-powered Spark job analyzer - NATS worker service"
+readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12"
+authors = [
+    { name = "Pawel Stysz" },
+]
+keywords = ["spark", "apache-spark", "ai", "claude", "nats", "performance", "analyzer"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
 dependencies = [
-    "spark-advisor-models",
-    "spark-advisor-rules",
+    "spark-advisor-models==0.1.2",  # x-release-please-version
+    "spark-advisor-rules==0.1.2",  # x-release-please-version
     "anthropic>=0.52",
     "faststream[nats]>=0.6",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pstysz/spark-advisor"
+Repository = "https://github.com/pstysz/spark-advisor"
+Issues = "https://github.com/pstysz/spark-advisor/issues"
 
 [project.scripts]
 spark-advisor-analyzer = "spark_advisor_analyzer.app:main"
