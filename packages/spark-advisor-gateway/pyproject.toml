@@ -26,7 +26,8 @@ dependencies = [
     "uvicorn>=0.34",
     "nats-py>=2.9",
     "orjson>=3.9",
-    "pyyaml>=6.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.20",
 ]
 
 [project.urls]

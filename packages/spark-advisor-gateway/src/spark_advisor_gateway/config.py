@@ -38,4 +38,6 @@ class GatewaySettings(BaseServiceSettings):
 
     server: ServerSettings = ServerSettings()
     nats: GatewayNatsSettings = GatewayNatsSettings()
-    max_stored_tasks: int = 1000
+    database_url: str = "sqlite+aiosqlite:///data/spark_advisor.db"
+    task_stream_timeout: float = 120.0
+    task_poll_interval: float = 0.5

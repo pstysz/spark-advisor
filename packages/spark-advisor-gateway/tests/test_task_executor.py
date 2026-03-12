@@ -10,9 +10,8 @@ from spark_advisor_gateway.config import GatewaySettings
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.models import TaskStatus
-from spark_advisor_gateway.task.store import InMemoryTaskStore
-from spark_advisor_models.model import AnalysisResult
-from spark_advisor_models.model.output import AnalysisMode
+from spark_advisor_gateway.task.store import SqlAlchemyTaskStore
+from spark_advisor_models.model import AnalysisMode, AnalysisResult
 from spark_advisor_models.testing import make_job
 
 
@@ -22,9 +21,11 @@ def _make_reply(data: bytes) -> MagicMock:
     return msg
 
 
-def _setup() -> tuple[AsyncMock, TaskManager, TaskExecutor]:
+async def _setup() -> tuple[AsyncMock, TaskManager, TaskExecutor]:
     nc = AsyncMock()
-    manager = TaskManager(InMemoryTaskStore())
+    store = SqlAlchemyTaskStore("sqlite+aiosqlite:///:memory:")
+    await store.init()
+    manager = TaskManager(store)
     settings = GatewaySettings()
     executor = TaskExecutor(nc, manager, settings)
     return nc, manager, executor
@@ -32,7 +33,7 @@ def _setup() -> tuple[AsyncMock, TaskManager, TaskExecutor]:
 
 @pytest.mark.asyncio
 async def test_execute_success() -> None:
-    nc, manager, executor = _setup()
+    nc, manager, executor = await _setup()
     job = make_job()
 
     job_bytes = orjson.dumps(job.model_dump(mode="json"))
@@ -59,7 +60,7 @@ async def test_execute_success() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_marks_running() -> None:
-    nc, manager, executor = _setup()
+    nc, manager, executor = await _setup()
 
     started_event = asyncio.Event()
 
@@ -81,7 +82,7 @@ async def test_execute_marks_running() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_marks_failed_on_error() -> None:
-    nc, manager, executor = _setup()
+    nc, manager, executor = await _setup()
     nc.request = AsyncMock(side_effect=TimeoutError("NATS timeout"))
 
     task = await manager.create("app-fail")
@@ -97,7 +98,7 @@ async def test_execute_marks_failed_on_error() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_sends_correct_subjects() -> None:
-    nc, manager, executor = _setup()
+    nc, manager, executor = await _setup()
     job = make_job()
     result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
 
@@ -119,7 +120,7 @@ async def test_execute_sends_correct_subjects() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_agent_mode_uses_agent_subject() -> None:
-    nc, manager, executor = _setup()
+    nc, manager, executor = await _setup()
     job = make_job()
     result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
 
@@ -141,7 +142,7 @@ async def test_execute_agent_mode_uses_agent_subject() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_agent_mode_uses_agent_timeout() -> None:
-    nc, manager, executor = _setup()
+    nc, manager, executor = await _setup()
     job = make_job()
     result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
 
@@ -162,7 +163,7 @@ async def test_execute_agent_mode_uses_agent_timeout() -> None:
 
 @pytest.mark.asyncio
 async def test_execute_standard_mode_default() -> None:
-    nc, manager, executor = _setup()
+    nc, manager, executor = await _setup()
     job = make_job()
     result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
 

@@ -33,7 +33,7 @@ class HistoryServerPoller:
     async def poll(self) -> int:
         apps = await asyncio.to_thread(self._hs_client.list_applications, limit=self._batch_size)
         all_ids = [app.id for app in apps]
-        new_ids = self._polling_state.filter_new(all_ids)
+        new_ids = self._polling_state.filter_new_and_mark(all_ids)
 
         if not new_ids:
             logger.debug("No new applications found")
@@ -43,10 +43,10 @@ class HistoryServerPoller:
         for app_id in new_ids:
             try:
                 await self._fetch_and_publish(app_id)
-                self._polling_state.mark_processed(app_id)
                 published += 1
             except Exception:
                 logger.exception("Failed to fetch/publish app %s, will retry next cycle", app_id)
+                self._polling_state.remove(app_id)
 
         logger.info("Poll complete: %d/%d new apps published", published, len(new_ids))
         return published

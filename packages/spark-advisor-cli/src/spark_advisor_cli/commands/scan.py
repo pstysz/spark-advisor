@@ -8,14 +8,14 @@ console = Console()
 
 
 def scan(
-    history_server: Annotated[
-        str,
-        typer.Option("--history-server", "-hs", help="Spark History Server URL (e.g. http://yarn:18080)"),
-    ],
-    limit: Annotated[
-        int,
-        typer.Option("--limit", "-l", help="Maximum number of applications to list"),
-    ] = 20,
+        history_server: Annotated[
+            str,
+            typer.Option("--history-server", "-hs", help="Spark History Server URL (e.g. http://yarn:18080)"),
+        ],
+        limit: Annotated[
+            int,
+            typer.Option("--limit", "-l", help="Maximum number of applications to list"),
+        ] = 20,
 ) -> None:
     """List recent Spark applications from History Server."""
     from spark_advisor_hs_connector.history_server_client import HistoryServerClient
@@ -47,8 +47,7 @@ def scan(
 
         if latest:
             if latest.duration > 0:
-                duration_min = latest.duration / 60_000
-                duration = f"{duration_min:.1f} min"
+                duration = f"{latest.duration / 60_000:.1f} min"
             status = "[green]completed[/]" if latest.completed else "[yellow]running[/]"
             spark_version = latest.app_spark_version
 

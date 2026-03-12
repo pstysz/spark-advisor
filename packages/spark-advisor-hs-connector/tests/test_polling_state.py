@@ -53,3 +53,45 @@ class TestPollingState:
         assert not state.is_processed("b")
         assert state.is_processed("c")
         assert state.is_processed("d")
+
+    def test_filter_new_and_mark_returns_new_only(self) -> None:
+        state = PollingState()
+        state.mark_processed("app-001")
+        new = state.filter_new_and_mark(["app-001", "app-002", "app-003"])
+        assert new == ["app-002", "app-003"]
+
+    def test_filter_new_and_mark_marks_atomically(self) -> None:
+        state = PollingState()
+        state.filter_new_and_mark(["app-001", "app-002"])
+        assert state.is_processed("app-001")
+        assert state.is_processed("app-002")
+        assert state.processed_count == 2
+
+    def test_filter_new_and_mark_empty_input(self) -> None:
+        state = PollingState()
+        assert state.filter_new_and_mark([]) == []
+
+    def test_filter_new_and_mark_all_known(self) -> None:
+        state = PollingState()
+        state.mark_processed("app-001")
+        assert state.filter_new_and_mark(["app-001"]) == []
+
+    def test_filter_new_and_mark_respects_eviction(self) -> None:
+        state = PollingState(max_size=2)
+        state.mark_processed("app-001")
+        state.filter_new_and_mark(["app-002", "app-003"])
+        assert not state.is_processed("app-001")
+        assert state.is_processed("app-002")
+        assert state.is_processed("app-003")
+
+    def test_remove_existing(self) -> None:
+        state = PollingState()
+        state.mark_processed("app-001")
+        state.remove("app-001")
+        assert not state.is_processed("app-001")
+        assert state.processed_count == 0
+
+    def test_remove_nonexistent_is_noop(self) -> None:
+        state = PollingState()
+        state.remove("nonexistent")
+        assert state.processed_count == 0

@@ -4,7 +4,7 @@ from typing import Any
 import httpx
 from pydantic import TypeAdapter
 
-from spark_advisor_hs_connector.model.output import ApplicationSummary
+from spark_advisor_models.model import ApplicationSummary
 
 logger = logging.getLogger(__name__)
 

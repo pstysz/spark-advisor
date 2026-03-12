@@ -2,6 +2,7 @@ from abc import ABC
 from typing import ClassVar
 
 from spark_advisor_models.config import Thresholds
+from spark_advisor_models.defaults import DEFAULT_THRESHOLDS
 from spark_advisor_models.model import JobAnalysis, RuleResult, Severity, StageMetrics
 
 
@@ -9,7 +10,7 @@ class Rule(ABC):
     rule_id: ClassVar[str]
 
     def __init__(self, thresholds: Thresholds | None = None) -> None:
-        self._thresholds = thresholds or Thresholds()
+        self._thresholds = thresholds or DEFAULT_THRESHOLDS
 
     def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
         results: list[RuleResult] = []
@@ -335,7 +336,7 @@ class DynamicAllocationRule(Rule):
                         "Dynamic allocation without bounds",
                         f"Dynamic allocation enabled but {', '.join(missing)} not set",
                         current_value="spark.dynamicAllocation.enabled = true",
-                        recommended_value=f"Set {', '.join(f'spark.dynamicAllocation.{m}' for m in missing)}",
+                        recommended_value=", ".join(f"spark.dynamicAllocation.{m} = <value>" for m in missing),
                         estimated_impact="Unbounded dynamic allocation can over-provision resources",
                     )
                 )

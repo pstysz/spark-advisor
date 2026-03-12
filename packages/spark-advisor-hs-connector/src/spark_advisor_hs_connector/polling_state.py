@@ -24,6 +24,19 @@ class PollingState:
         with self._lock:
             return [aid for aid in app_ids if aid not in self._processed]
 
+    def filter_new_and_mark(self, app_ids: list[str]) -> list[str]:
+        with self._lock:
+            new = [aid for aid in app_ids if aid not in self._processed]
+            for aid in new:
+                self._processed[aid] = None
+                if len(self._processed) > self._max_size:
+                    self._processed.popitem(last=False)
+            return new
+
+    def remove(self, app_id: str) -> None:
+        with self._lock:
+            self._processed.pop(app_id, None)
+
     @property
     def processed_count(self) -> int:
         with self._lock:

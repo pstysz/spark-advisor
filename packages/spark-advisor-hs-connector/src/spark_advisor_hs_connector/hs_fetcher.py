@@ -61,5 +61,4 @@ def fetch_task_summaries(
     max_workers = min(8, len(stages_data))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         results = executor.map(_fetch_one, stages_data)
-
-    return dict(results)
+        return dict(results)

@@ -4,8 +4,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from spark_advisor_models.config import Thresholds
 from spark_advisor_models.model import (
     AdvisorReport,
+    AnalysisMode,
     AnalysisResult,
     JobAnalysis,
     RuleResult,
@@ -20,7 +22,37 @@ SEVERITY_ICONS = {
 }
 
 
-def print_job_overview(console: Console, job: JobAnalysis) -> None:
+def print_analysis_result(
+    console: Console,
+    result: AnalysisResult,
+    *,
+    mode: AnalysisMode,
+    verbose: bool = False,
+    output_config: Path | None = None,
+    thresholds: Thresholds,
+) -> None:
+    _print_job_overview(console, result.job)
+
+    if verbose:
+        _print_stage_breakdown(console, result.job, thresholds=thresholds)
+
+    _print_rule_results(console, result.rule_results)
+
+    if result.ai_report:
+        _print_ai_report(console, result.ai_report)
+        if output_config and result.ai_report.suggested_config:
+            _save_config_file(console, output_config, result.ai_report)
+    elif mode != AnalysisMode.STATIC and not result.rule_results:
+        console.print("[green]No issues found — skipping AI analysis.[/]")
+
+    if mode == AnalysisMode.STATIC:
+        console.print("[dim]AI analysis disabled. Set ANTHROPIC_API_KEY and use --mode ai/agent to enable.[/]")
+
+    if output_config and mode == AnalysisMode.STATIC:
+        console.print("[yellow]Warning: --output requires AI analysis to generate config file.[/]")
+
+
+def _print_job_overview(console: Console, job: JobAnalysis) -> None:
     duration_min = job.duration_ms / 60_000
     stage_count = len(job.stages)
     total_tasks = sum(s.tasks.task_count for s in job.stages)
@@ -42,7 +74,7 @@ def print_job_overview(console: Console, job: JobAnalysis) -> None:
     console.print(Panel(table, title="[bold]Spark Job Analysis[/]", border_style="blue"))
 
 
-def print_stage_breakdown(console: Console, job: JobAnalysis) -> None:
+def _print_stage_breakdown(console: Console, job: JobAnalysis, *, thresholds: Thresholds) -> None:
     table = Table(title="Stage Breakdown", show_lines=True)
     table.add_column("Stage", style="bold", width=6)
     table.add_column("Name", min_width=15)
@@ -63,9 +95,9 @@ def print_stage_breakdown(console: Console, job: JobAnalysis) -> None:
 
         gc_pct = s.gc_time_percent
         gc_str = f"{gc_pct:.0f}%"
-        if gc_pct > 40:
+        if gc_pct > thresholds.gc_critical_percent:
             gc_str = f"[bold red]{gc_pct:.0f}%[/]"
-        elif gc_pct > 20:
+        elif gc_pct > thresholds.gc_warning_percent:
             gc_str = f"[yellow]{gc_pct:.0f}%[/]"
 
         table.add_row(
@@ -82,26 +114,6 @@ def print_stage_breakdown(console: Console, job: JobAnalysis) -> None:
     console.print(table)
 
 
-def print_analysis_result(
-    console: Console,
-    result: AnalysisResult,
-    *,
-    use_ai: bool = True,
-    output_config: Path | None = None,
-) -> None:
-    _print_rule_results(console, result.rule_results)
-
-    if result.ai_report:
-        _print_ai_report(console, result.ai_report)
-        if output_config and result.ai_report.suggested_config:
-            _save_config_file(console, output_config, result.ai_report)
-    elif use_ai and not result.rule_results:
-        console.print("[green]No issues found — skipping AI analysis.[/]")
-
-    if not use_ai:
-        console.print("[dim]AI analysis disabled. Set ANTHROPIC_API_KEY and remove --no-ai to enable.[/]")
-
-
 def _print_rule_results(console: Console, results: list[RuleResult]) -> None:
     if not results:
         console.print("\n[green] No issues detected by rules engine[/]\n")
@@ -111,10 +123,10 @@ def _print_rule_results(console: Console, results: list[RuleResult]) -> None:
 
     for result in results:
         icon = SEVERITY_ICONS.get(result.severity, "")
-        console.print(f"  {icon}: {result.title}")
-        console.print(f"    {result.message}", style="dim")
+        console.print(f"  {icon}: {result.title}", highlight=False)
+        console.print(f"    {result.message}", style="dim", highlight=False)
         if result.recommended_value:
-            console.print(f"    → {result.recommended_value}", style="green")
+            console.print(f"    → {result.recommended_value}", style="green", highlight=False)
         console.print()
 
 

@@ -6,7 +6,8 @@ from spark_advisor_models.model.metrics import JobAnalysis
 
 
 class AnalysisMode(StrEnum):
-    STANDARD = "standard"
+    STATIC = "static"
+    AI = "ai"
     AGENT = "agent"
 
 
@@ -22,8 +23,7 @@ class Severity(StrEnum):
 
     @property
     def order(self) -> int:
-        _ORDER = {"CRITICAL": 0, "WARNING": 1, "INFO": 2}
-        return _ORDER[self.value]
+        return list(Severity).index(self)
 
 
 class RuleResult(BaseModel):

@@ -13,20 +13,17 @@ class TestAnalyzeSparkJob:
     def test_analyze_from_event_log(self) -> None:
         from spark_advisor_mcp.server import analyze_spark_job
 
-        result = analyze_spark_job(str(SAMPLE_LOG), no_ai=True)
+        result = analyze_spark_job(str(SAMPLE_LOG), mode="static")
 
         assert "## Job Overview" in result
         assert "## Rule Findings" in result
         assert "application_1234567890_0001" in result
 
-    def test_analyze_no_ai_skips_ai(self) -> None:
+    def test_analyze_static_mode_skips_ai(self) -> None:
         from spark_advisor_mcp.server import analyze_spark_job
 
-        with (
-            patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}),
-            patch("spark_advisor_mcp.server._ai_available", return_value=True),
-        ):
-            result = analyze_spark_job(str(SAMPLE_LOG), no_ai=True)
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}):
+            result = analyze_spark_job(str(SAMPLE_LOG), mode="static")
 
         assert "AI Analysis" not in result
         assert "## Rule Findings" in result
@@ -35,16 +32,16 @@ class TestAnalyzeSparkJob:
         from spark_advisor_mcp.server import analyze_spark_job
 
         with pytest.raises(FileNotFoundError, match="not found"):
-            analyze_spark_job("/nonexistent/file.json", no_ai=True)
+            analyze_spark_job("/nonexistent/file.json", mode="static")
 
-    def test_agent_mode_without_api_key_returns_error(self) -> None:
+    def test_ai_mode_downgrades_without_api_key(self) -> None:
         from spark_advisor_mcp.server import analyze_spark_job
 
         with patch.dict("os.environ", {}, clear=True):
-            result = analyze_spark_job(str(SAMPLE_LOG), agent=True)
+            result = analyze_spark_job(str(SAMPLE_LOG), mode="ai")
 
-        assert "Error" in result
-        assert "ANTHROPIC_API_KEY" in result
+        assert "AI Analysis" not in result
+        assert "## Rule Findings" in result
 
 
 class TestGetJobConfig:
@@ -84,8 +81,8 @@ class TestSuggestConfig:
 
 class TestScanRecentJobs:
     def test_scan_with_mock_hs(self) -> None:
-        from spark_advisor_hs_connector.model.output import ApplicationSummary, Attempt
         from spark_advisor_mcp.server import scan_recent_jobs
+        from spark_advisor_models.model import ApplicationSummary, Attempt
 
         mock_apps = [
             ApplicationSummary(
