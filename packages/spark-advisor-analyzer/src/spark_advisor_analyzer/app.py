@@ -1,4 +1,5 @@
 import logging
+import os
 
 from faststream import FastStream
 from faststream.nats import NatsBroker
@@ -20,13 +21,12 @@ async def on_startup() -> None:
     logger = logging.getLogger(__name__)
 
     client: AnthropicClient | None = None
-    if settings.ai.enabled:
-        try:
-            client = AnthropicClient(settings.ai.api_timeout)
-            client.open()
-            app.context.set_global(ContextKey.AI_CLIENT, client)
-        except ValueError:
-            logger.warning("ANTHROPIC_API_KEY not set — AI analysis disabled")
+    if settings.ai.enabled and os.environ.get("ANTHROPIC_API_KEY"):
+        client = AnthropicClient(settings.ai.api_timeout)
+        client.open()
+        app.context.set_global(ContextKey.AI_CLIENT, client)
+    elif settings.ai.enabled:
+        logger.warning("ANTHROPIC_API_KEY not set — AI analysis disabled")
 
     orchestrator = create_analysis_stack(
         client=client,

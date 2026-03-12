@@ -23,10 +23,8 @@ dependencies = [
     "spark-advisor-rules==0.1.6",  # x-release-please-version
     "spark-advisor-analyzer==0.1.6",  # x-release-please-version
     "spark-advisor-hs-connector==0.1.6",  # x-release-please-version
+    "spark-advisor-cli==0.1.6",  # x-release-please-version
     "mcp>=1.26",
-    "anthropic>=0.52",
-    "httpx>=0.28",
-    "orjson>=3.10",
 ]
 
 [project.urls]
@@ -49,6 +47,7 @@ spark-advisor-models = { workspace = true }
 spark-advisor-rules = { workspace = true }
 spark-advisor-analyzer = { workspace = true }
 spark-advisor-hs-connector = { workspace = true }
+spark-advisor-cli = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -77,6 +76,7 @@ known-first-party = [
     "spark_advisor_rules",
     "spark_advisor_analyzer",
     "spark_advisor_hs_connector",
+    "spark_advisor_cli",
 ]
 
 [tool.ruff.lint.flake8-type-checking]

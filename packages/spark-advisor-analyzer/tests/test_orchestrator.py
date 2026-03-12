@@ -3,8 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
-from spark_advisor_models.model import AdvisorReport, AnalysisResult, Severity
-from spark_advisor_models.model.output import AnalysisMode
+from spark_advisor_models.model import AdvisorReport, AnalysisMode, AnalysisResult, Severity
 from spark_advisor_models.testing import make_job, make_rule_result
 from spark_advisor_rules import StaticAnalysisService
 

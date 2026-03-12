@@ -7,8 +7,7 @@ from pydantic import BaseModel
 
 from spark_advisor_analyzer.config import ContextKey
 from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
-from spark_advisor_models.model import AnalysisResult, JobAnalysis
-from spark_advisor_models.model.output import AnalysisMode
+from spark_advisor_models.model import AnalysisMode, AnalysisResult, JobAnalysis
 
 router = NatsRouter()
 logger = logging.getLogger(__name__)

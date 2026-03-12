@@ -47,6 +47,10 @@ services:
         condition: service_healthy
     environment:
       SA_GATEWAY_NATS__URL: "nats://nats:4222"
+      SA_GATEWAY_DATABASE_URL: "sqlite+aiosqlite:////data/spark_advisor.db"
+    volumes:
+      - gateway-data:/data
 
 volumes:
   nats-data:
+  gateway-data:

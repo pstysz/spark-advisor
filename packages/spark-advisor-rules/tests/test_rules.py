@@ -161,11 +161,14 @@ class TestExecutorIdleRule:
         assert results[0].severity == Severity.WARNING
         assert "8%" in results[0].message
 
-    def test_zero_task_time_skips(self):
+    def test_zero_task_time_reports_zero_utilization(self):
         job = make_job(
             executors=make_executors(total_task_time_ms=0),
         )
-        assert ExecutorIdleRule().evaluate(job) == []
+        results = ExecutorIdleRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+        assert "0%" in results[0].message
 
     def test_default_cores_one(self):
         # No spark.executor.cores set → defaults to 1

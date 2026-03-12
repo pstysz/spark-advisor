@@ -55,7 +55,18 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "gateway.fullname" . }}
+          {{- if .Values.config.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.config.persistence.mountPath }}
+          {{- end }}
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- if .Values.config.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "gateway.fullname" . }}-data
+      {{- end }}

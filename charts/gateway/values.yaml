@@ -20,7 +20,12 @@ config:
     analyzeTimeout: 120.0
     analyzeAgentTimeout: 300.0
     listAppsTimeout: 10.0
-  maxStoredTasks: 1000
+  databaseUrl: "sqlite+aiosqlite:////data/spark_advisor.db"
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    mountPath: /data
 
 service:
   type: ClusterIP

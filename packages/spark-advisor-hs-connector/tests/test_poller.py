@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from spark_advisor_hs_connector.hs_fetcher import deduplicate_stages, resolve_base_path
-from spark_advisor_hs_connector.model.output import ApplicationSummary, Attempt
 from spark_advisor_hs_connector.poller import HistoryServerPoller
 from spark_advisor_hs_connector.polling_state import PollingState
+from spark_advisor_models.model import ApplicationSummary, Attempt
 
 
 def _make_app_summary(app_id: str) -> ApplicationSummary:

@@ -17,4 +17,4 @@ data:
   SA_GATEWAY_NATS__ANALYZE_TIMEOUT: {{ .Values.config.nats.analyzeTimeout | quote }}
   SA_GATEWAY_NATS__ANALYZE_AGENT_TIMEOUT: {{ .Values.config.nats.analyzeAgentTimeout | quote }}
   SA_GATEWAY_NATS__LIST_APPS_TIMEOUT: {{ .Values.config.nats.listAppsTimeout | quote }}
-  SA_GATEWAY_MAX_STORED_TASKS: {{ .Values.config.maxStoredTasks | quote }}
+  SA_GATEWAY_DATABASE_URL: {{ .Values.config.databaseUrl | quote }}

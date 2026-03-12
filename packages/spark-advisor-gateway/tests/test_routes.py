@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import orjson
 import pytest
 
-from spark_advisor_models.model.output import AnalysisMode
+from spark_advisor_models.model import AnalysisMode, AnalysisResult
+from spark_advisor_models.testing import make_job
 
 if TYPE_CHECKING:
     from httpx import AsyncClient
@@ -39,7 +40,7 @@ async def test_analyze_default_mode_is_standard(client: AsyncClient, task_execut
         response = await client.post("/api/v1/analyze", json={"app_id": "app-123"})
     assert response.status_code == 202
     call_args = mock_submit.call_args
-    assert call_args.args[2] == AnalysisMode.STANDARD
+    assert call_args.args[2] == AnalysisMode.AI
 
 
 @pytest.mark.asyncio
@@ -62,7 +63,9 @@ async def test_get_task_returns_pending(client: AsyncClient, task_manager: TaskM
 async def test_list_tasks_empty(client: AsyncClient) -> None:
     response = await client.get("/api/v1/tasks")
     assert response.status_code == 200
-    assert response.json() == []
+    data = response.json()
+    assert data["items"] == []
+    assert data["total"] == 0
 
 
 @pytest.mark.asyncio
@@ -72,7 +75,8 @@ async def test_list_tasks_returns_created(client: AsyncClient, task_manager: Tas
     response = await client.get("/api/v1/tasks")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
+    assert len(data["items"]) == 2
+    assert data["total"] == 2
 
 
 @pytest.mark.asyncio
@@ -81,7 +85,76 @@ async def test_list_tasks_respects_limit(client: AsyncClient, task_manager: Task
         await task_manager.create(f"app-{i}")
     response = await client.get("/api/v1/tasks?limit=2")
     assert response.status_code == 200
-    assert len(response.json()) == 2
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["total"] == 5
+    assert data["limit"] == 2
+    assert data["offset"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_with_offset(client: AsyncClient, task_manager: TaskManager) -> None:
+    for i in range(5):
+        await task_manager.create(f"app-{i}")
+    response = await client.get("/api/v1/tasks?limit=2&offset=2")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["total"] == 5
+    assert data["offset"] == 2
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_filter_by_status(client: AsyncClient, task_manager: TaskManager) -> None:
+    t1 = await task_manager.create("app-a")
+    await task_manager.create("app-b")
+    await task_manager.mark_running(t1.task_id)
+    response = await client.get("/api/v1/tasks?status=running")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["status"] == "running"
+    assert data["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_invalid_status_returns_422(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/tasks?status=invalid")
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_filter_by_app_id(client: AsyncClient, task_manager: TaskManager) -> None:
+    await task_manager.create("app-a")
+    await task_manager.create("app-b")
+    await task_manager.create("app-a")
+    response = await client.get("/api/v1/tasks?app_id=app-a")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_task_stats_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/tasks/stats")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["counts"] == {}
+    assert data["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_task_stats_with_tasks(client: AsyncClient, task_manager: TaskManager) -> None:
+    t1 = await task_manager.create("app-a")
+    await task_manager.create("app-b")
+    await task_manager.mark_running(t1.task_id)
+    response = await client.get("/api/v1/tasks/stats")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["counts"]["running"] == 1
+    assert data["counts"]["pending"] == 1
+    assert data["total"] == 2
 
 
 def _nats_reply(data: object) -> MagicMock:
@@ -143,3 +216,75 @@ async def test_list_applications_returns_502_on_error(client: AsyncClient, mock_
     response = await client.get("/api/v1/applications")
     assert response.status_code == 502
     assert "Connection refused" in response.json()["detail"]
+
+
+def _parse_sse_events(body: str) -> list[dict[str, str]]:
+    events: list[dict[str, str]] = []
+    for block in body.strip().split("\n\n"):
+        event: dict[str, str] = {}
+        for line in block.strip().split("\n"):
+            if line.startswith("event: "):
+                event["event"] = line[7:]
+            elif line.startswith("data: "):
+                event["data"] = line[6:]
+        if event:
+            events.append(event)
+    return events
+
+
+@pytest.mark.asyncio
+async def test_stream_task_not_found(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/tasks/nonexistent/stream")
+    assert response.status_code == 200
+    events = _parse_sse_events(response.text)
+    assert len(events) == 1
+    assert events[0]["event"] == "error"
+    assert "not found" in events[0]["data"].lower()
+
+
+@pytest.mark.asyncio
+async def test_stream_task_completed(client: AsyncClient, task_manager: TaskManager) -> None:
+    task = await task_manager.create("app-123")
+    job = make_job(app_id="app-123")
+    result = AnalysisResult(app_id="app-123", job=job, rule_results=[])
+    await task_manager.mark_completed(task.task_id, result)
+
+    response = await client.get(f"/api/v1/tasks/{task.task_id}/stream")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = _parse_sse_events(response.text)
+    assert len(events) == 1
+    assert events[0]["event"] == "status"
+    data = orjson.loads(events[0]["data"])
+    assert data["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_stream_task_failed(client: AsyncClient, task_manager: TaskManager) -> None:
+    task = await task_manager.create("app-123")
+    await task_manager.mark_failed(task.task_id, "OOM killed")
+
+    response = await client.get(f"/api/v1/tasks/{task.task_id}/stream")
+    events = _parse_sse_events(response.text)
+    assert len(events) == 1
+    assert events[0]["event"] == "status"
+    data = orjson.loads(events[0]["data"])
+    assert data["status"] == "failed"
+    assert data["error"] == "OOM killed"
+
+
+@pytest.mark.asyncio
+async def test_stream_task_transitions(client: AsyncClient, task_manager: TaskManager) -> None:
+    task = await task_manager.create("app-123")
+    await task_manager.mark_running(task.task_id)
+
+    job = make_job(app_id="app-123")
+    result = AnalysisResult(app_id="app-123", job=job, rule_results=[])
+    await task_manager.mark_completed(task.task_id, result)
+
+    response = await client.get(f"/api/v1/tasks/{task.task_id}/stream")
+    events = _parse_sse_events(response.text)
+    assert len(events) == 1
+    assert events[0]["event"] == "status"
+    data = orjson.loads(events[0]["data"])
+    assert data["status"] == "completed"

@@ -46,8 +46,7 @@ def _ai_available() -> bool:
 def analyze_spark_job(
     source: str,
     history_server: str | None = None,
-    no_ai: bool = False,
-    agent: bool = False,
+    mode: str = "ai",
 ) -> str:
     """Analyze a Spark job and get optimization recommendations.
 
@@ -58,38 +57,22 @@ def analyze_spark_job(
     Args:
         source: Path to event log file (.json or .json.gz) or app ID (with history_server).
         history_server: Spark History Server URL (e.g. http://yarn:18080). Required when source is an app ID.
-        no_ai: Disable AI analysis (rules only). Defaults to False.
-        agent: Use agent mode (multi-turn AI with tool use for deeper analysis). Defaults to False.
+        mode: Analysis mode — "static" (rules only), "ai" (rules + AI), "agent" (multi-turn AI).
     """
-    from spark_advisor_analyzer.factory import create_analysis_stack
-    from spark_advisor_models.config import AiSettings, Thresholds
-    from spark_advisor_models.model.output import AnalysisMode
+    from spark_advisor_analyzer.factory import create_analysis_context
+    from spark_advisor_models.defaults import DEFAULT_THRESHOLDS
+    from spark_advisor_models.model import AnalysisMode
 
-    if agent and not _ai_available():
-        return "Error: agent mode requires ANTHROPIC_API_KEY environment variable."
+    analysis_mode = AnalysisMode(mode)
+
+    if analysis_mode in (AnalysisMode.AI, AnalysisMode.AGENT) and not _ai_available():
+        analysis_mode = AnalysisMode.STATIC
 
     job = _load_job(source, history_server)
-    thresholds = Thresholds()
-    use_ai = not no_ai and _ai_available()
-    mode = AnalysisMode.AGENT if agent else AnalysisMode.STANDARD
+    use_ai = analysis_mode in (AnalysisMode.AI, AnalysisMode.AGENT)
 
-    client = None
-    ai_settings: AiSettings | None = None
-    if use_ai:
-        from spark_advisor_analyzer.ai.client import AnthropicClient
-
-        ai_settings = AiSettings()
-        client = AnthropicClient(timeout=ai_settings.api_timeout)
-        client.open()
-
-    try:
-        orchestrator = create_analysis_stack(
-            client=client, ai_settings=ai_settings, thresholds=thresholds,
-        )
-        result = orchestrator.run(job, mode=mode)
-    finally:
-        if client is not None:
-            client.close()
+    with create_analysis_context(mode=analysis_mode, thresholds=DEFAULT_THRESHOLDS) as orchestrator:
+        result = orchestrator.run(job, mode=analysis_mode)
 
     return format_analysis_result(result, use_ai=use_ai)
 
@@ -144,11 +127,11 @@ def suggest_config(
         source: Path to event log file (.json or .json.gz) or app ID (with history_server).
         history_server: Spark History Server URL. Required when source is an app ID.
     """
-    from spark_advisor_models.config import Thresholds
+    from spark_advisor_models.defaults import DEFAULT_THRESHOLDS
     from spark_advisor_rules import StaticAnalysisService, rules_for_threshold
 
     job = _load_job(source, history_server)
-    thresholds = Thresholds()
+    thresholds = DEFAULT_THRESHOLDS
     static = StaticAnalysisService(rules_for_threshold(thresholds))
     rule_results = static.analyze(job)
     return format_suggested_config(rule_results)

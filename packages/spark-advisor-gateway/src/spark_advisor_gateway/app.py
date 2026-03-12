@@ -13,7 +13,7 @@ from spark_advisor_gateway.api.routes import create_router
 from spark_advisor_gateway.config import GatewaySettings, StateKey
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
-from spark_advisor_gateway.task.store import InMemoryTaskStore
+from spark_advisor_gateway.task.store import SqlAlchemyTaskStore
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -21,33 +21,30 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    settings: GatewaySettings = getattr(app.state, StateKey.SETTINGS)
+def create_app(settings: GatewaySettings) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        nc = await nats.connect(settings.nats.url)
+        logger.info("Connected to NATS: %s", settings.nats.url)
 
-    nc = await nats.connect(settings.nats.url)
-    logger.info("Connected to NATS: %s", settings.nats.url)
+        store = SqlAlchemyTaskStore(settings.database_url)
+        await store.init()
 
-    store = InMemoryTaskStore(max_size=settings.max_stored_tasks)
-    task_manager = TaskManager(store)
-    task_executor = TaskExecutor(nc, task_manager, settings)
+        task_manager = TaskManager(store)
+        task_executor = TaskExecutor(nc, task_manager, settings)
 
-    setattr(app.state, StateKey.NC, nc)
-    setattr(app.state, StateKey.TASK_MANAGER, task_manager)
-    setattr(app.state, StateKey.TASK_EXECUTOR, task_executor)
+        setattr(_app.state, StateKey.NC, nc)
+        setattr(_app.state, StateKey.SETTINGS, settings)
+        setattr(_app.state, StateKey.TASK_MANAGER, task_manager)
+        setattr(_app.state, StateKey.TASK_EXECUTOR, task_executor)
 
-    yield
+        yield
 
-    await nc.drain()
-    logger.info("Disconnected from NATS")
-
-
-def create_app(settings: GatewaySettings | None = None) -> FastAPI:
-    if settings is None:
-        settings = GatewaySettings()
+        await nc.drain()
+        await store.close()
+        logger.info("Disconnected from NATS")
 
     app = FastAPI(title="Spark Advisor Gateway", lifespan=lifespan)
-    setattr(app.state, StateKey.SETTINGS, settings)
 
     app.include_router(create_health_router())
     app.include_router(create_router())

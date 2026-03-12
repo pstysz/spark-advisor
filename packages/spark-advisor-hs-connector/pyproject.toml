@@ -23,7 +23,6 @@ dependencies = [
     "spark-advisor-models==0.1.6",  # x-release-please-version
     "httpx>=0.28",
     "faststream[nats]>=0.6",
-    "pyyaml>=6.0",
 ]
 
 [project.urls]

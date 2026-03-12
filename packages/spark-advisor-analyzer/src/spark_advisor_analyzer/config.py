@@ -3,6 +3,7 @@ from enum import StrEnum
 from pydantic_settings import SettingsConfigDict
 
 from spark_advisor_models.config import AiSettings, Thresholds
+from spark_advisor_models.defaults import DEFAULT_AI_SETTINGS, DEFAULT_THRESHOLDS
 from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
 
 
@@ -23,5 +24,5 @@ class AnalyzerSettings(BaseServiceSettings):
     )
 
     nats: AnalyzerNatsSettings = AnalyzerNatsSettings()
-    thresholds: Thresholds = Thresholds()
-    ai: AiSettings = AiSettings()
+    thresholds: Thresholds = DEFAULT_THRESHOLDS
+    ai: AiSettings = DEFAULT_AI_SETTINGS

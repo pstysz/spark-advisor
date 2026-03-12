@@ -5,10 +5,7 @@ from typing import TYPE_CHECKING
 from spark_advisor_models.util.bytes import format_bytes
 
 if TYPE_CHECKING:
-    from spark_advisor_hs_connector.model.output import ApplicationSummary
-    from spark_advisor_models.model import AnalysisResult, JobAnalysis
-    from spark_advisor_models.model.output import RuleResult
-    from spark_advisor_models.model.spark_config import SparkConfig
+    from spark_advisor_models.model import AnalysisResult, ApplicationSummary, JobAnalysis, RuleResult, SparkConfig
 
 
 def format_job_overview(job: JobAnalysis) -> str:

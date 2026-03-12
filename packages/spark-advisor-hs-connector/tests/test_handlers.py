@@ -6,8 +6,7 @@ from faststream.nats import TestNatsBroker
 
 from spark_advisor_hs_connector.app import app, broker
 from spark_advisor_hs_connector.history_server_client import HistoryServerClient
-from spark_advisor_hs_connector.model.output import ApplicationSummary, Attempt
-from spark_advisor_models.model import JobAnalysis
+from spark_advisor_models.model import ApplicationSummary, Attempt, JobAnalysis
 
 ENVIRONMENT = {
     "sparkProperties": [["spark.executor.memory", "4g"]],

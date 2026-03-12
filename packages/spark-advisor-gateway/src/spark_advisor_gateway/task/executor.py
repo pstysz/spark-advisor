@@ -5,9 +5,10 @@ import logging
 from typing import TYPE_CHECKING
 
 import orjson
+from fastapi import HTTPException
+from pydantic import TypeAdapter
 
-from spark_advisor_models.model import AnalysisResult
-from spark_advisor_models.model.output import AnalysisMode
+from spark_advisor_models.model import AnalysisMode, AnalysisResult, ApplicationSummary
 
 if TYPE_CHECKING:
     import nats.aio.client
@@ -17,37 +18,50 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_APP_LIST_ADAPTER: TypeAdapter[list[ApplicationSummary]] = TypeAdapter(list[ApplicationSummary])
+
 
 class TaskExecutor:
     def __init__(
-        self,
-        nc: nats.aio.client.Client,
-        task_manager: TaskManager,
-        settings: GatewaySettings,
+            self,
+            nc: nats.aio.client.Client,
+            task_manager: TaskManager,
+            settings: GatewaySettings,
     ) -> None:
         self._nc = nc
         self._tasks = task_manager
         self._settings = settings
         self._background_tasks: set[asyncio.Task[None]] = set()
 
-    def submit(self, task_id: str, app_id: str, mode: AnalysisMode = AnalysisMode.STANDARD) -> None:
+    async def list_applications(self, limit: int) -> list[ApplicationSummary]:
+        reply = await self._nc.request(
+            self._settings.nats.list_apps_subject,
+            orjson.dumps({"limit": limit}),
+            timeout=self._settings.nats.list_apps_timeout,
+        )
+        data = orjson.loads(reply.data)
+        if isinstance(data, dict) and "error" in data:
+            raise HTTPException(status_code=502, detail=data["error"])
+        return _APP_LIST_ADAPTER.validate_python(data)
+
+    def submit(self, task_id: str, app_id: str, mode: AnalysisMode = AnalysisMode.AI) -> None:
         task = asyncio.create_task(self._execute(task_id, app_id, mode))
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
 
-    async def _execute(self, task_id: str, app_id: str, mode: AnalysisMode = AnalysisMode.STANDARD) -> None:
+    async def _execute(self, task_id: str, app_id: str, mode: AnalysisMode = AnalysisMode.AI) -> None:
         try:
             await self._tasks.mark_running(task_id)
 
-            fetch_reply = await self._nc.request(
+            fetch_job_reply = await self._nc.request(
                 self._settings.nats.fetch_subject,
                 orjson.dumps({"app_id": app_id}),
                 timeout=self._settings.nats.fetch_timeout,
             )
 
-            fetch_data = orjson.loads(fetch_reply.data)
-            if "error" in fetch_data:
-                await self._tasks.mark_failed(task_id, f"Fetch failed: {fetch_data['error']}")
+            job_data = orjson.loads(fetch_job_reply.data)
+            if "error" in job_data:
+                await self._tasks.mark_failed(task_id, f"Fetch failed: {job_data['error']}")
                 return
 
             if mode == AnalysisMode.AGENT:
@@ -59,7 +73,7 @@ class TaskExecutor:
 
             analyze_reply = await self._nc.request(
                 subject,
-                fetch_reply.data,
+                job_data,
                 timeout=timeout,
             )
 
