@@ -2,16 +2,33 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, text
+from sqlalchemy import DateTime, String, Text, func, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as _create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from spark_advisor_gateway.task.db_models import Base, TaskRow
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
 from spark_advisor_models.model import AnalysisResult
 
 
-class SqlAlchemyTaskStore:
+class _Base(DeclarativeBase):
+    pass
+
+
+class TaskRow(_Base):
+    __tablename__ = "tasks"
+
+    task_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    app_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class TaskStore:
     def __init__(self, database_url: str) -> None:
         self._engine: AsyncEngine = _create_async_engine(database_url, echo=False)
         self._session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
@@ -19,9 +36,9 @@ class SqlAlchemyTaskStore:
         )
 
     async def init(self) -> None:
-        async with self._engine.begin() as conn: # type: ignore[attr-defined]
+        async with self._engine.begin() as conn:
             await conn.execute(text("PRAGMA journal_mode=WAL"))
-            await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_Base.metadata.create_all)
 
     async def close(self) -> None:
         await self._engine.dispose()

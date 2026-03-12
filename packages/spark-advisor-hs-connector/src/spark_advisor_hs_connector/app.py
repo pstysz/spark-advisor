@@ -7,9 +7,9 @@ from faststream.nats import NatsBroker
 
 from spark_advisor_hs_connector.config import ConnectorSettings, ContextKey
 from spark_advisor_hs_connector.handlers import router
-from spark_advisor_hs_connector.history_server_client import HistoryServerClient
-from spark_advisor_hs_connector.poller import HistoryServerPoller
-from spark_advisor_hs_connector.polling_state import PollingState
+from spark_advisor_hs_connector.history_server.client import HistoryServerClient
+from spark_advisor_hs_connector.history_server.poller import HistoryServerPoller
+from spark_advisor_hs_connector.store import PollingStore
 
 settings = ConnectorSettings()
 broker = NatsBroker(settings.nats.url)
@@ -26,17 +26,20 @@ async def on_startup() -> None:
     hs_client = HistoryServerClient(settings.history_server_url, settings.history_server_timeout)
     hs_client.open()
 
-    polling_state = PollingState(max_size=settings.max_processed_apps)
+    polling_state = PollingStore(database_url=settings.database_url, max_size=settings.max_processed_apps)
+    await polling_state.init()
+
     poller = HistoryServerPoller(
         hs_client=hs_client,
         broker=broker,
-        publish_subject=settings.nats.publish_subject,
-        polling_state=polling_state,
+        publish_subject=settings.nats.analyze_request_subject,
+        store=polling_state,
         batch_size=settings.batch_size,
     )
 
     app.context.set_global(ContextKey.POLLER, poller)
     app.context.set_global(ContextKey.HS_CLIENT, hs_client)
+    app.context.set_global(ContextKey.POLLING_STATE, polling_state)
 
     logger.info(
         "HS Connector started: history_server=%s poll_interval=%ds",
@@ -53,6 +56,11 @@ async def on_shutdown() -> None:
         with contextlib.suppress(asyncio.CancelledError):
             await polling_task
         logger.info("Polling task cancelled")
+
+    polling_state: PollingStore | None = app.context.get(ContextKey.POLLING_STATE)
+    if polling_state is not None:
+        await polling_state.close()
+        logger.info("PollingState database closed")
 
     hs_client: HistoryServerClient | None = app.context.get(ContextKey.HS_CLIENT)
     if hs_client is not None:

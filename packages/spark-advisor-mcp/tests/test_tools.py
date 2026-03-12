@@ -101,7 +101,7 @@ class TestScanRecentJobs:
         ]
 
         with patch(
-            "spark_advisor_hs_connector.history_server_client.HistoryServerClient"
+            "spark_advisor_hs_connector.history_server.client.HistoryServerClient"
         ) as mock_cls:
             mock_client = MagicMock()
             mock_client.list_applications.return_value = mock_apps
@@ -120,7 +120,7 @@ class TestScanRecentJobs:
         from spark_advisor_mcp.server import scan_recent_jobs
 
         with patch(
-            "spark_advisor_hs_connector.history_server_client.HistoryServerClient"
+            "spark_advisor_hs_connector.history_server.client.HistoryServerClient"
         ) as mock_cls:
             mock_client = MagicMock()
             mock_client.list_applications.return_value = []
@@ -159,7 +159,7 @@ class TestExplainMetric:
         assert "1.0 GB" in result
 
     def test_all_known_metrics(self) -> None:
-        from spark_advisor_mcp.formatting import METRIC_EXPLANATIONS
+        from spark_advisor_mcp.metric_explanations import METRIC_EXPLANATIONS
         from spark_advisor_mcp.server import explain_metric
 
         for metric_name in METRIC_EXPLANATIONS:

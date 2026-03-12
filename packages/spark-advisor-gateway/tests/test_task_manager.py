@@ -4,13 +4,13 @@ import pytest
 
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.models import TaskStatus
-from spark_advisor_gateway.task.store import SqlAlchemyTaskStore
+from spark_advisor_gateway.task.store import TaskStore
 from spark_advisor_models.model import AnalysisResult
 from spark_advisor_models.testing import make_job
 
 
 async def _make_manager() -> TaskManager:
-    store = SqlAlchemyTaskStore("sqlite+aiosqlite:///:memory:")
+    store = TaskStore("sqlite+aiosqlite:///:memory:")
     await store.init()
     return TaskManager(store)
 

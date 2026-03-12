@@ -23,6 +23,8 @@ dependencies = [
     "spark-advisor-models==0.1.6",  # x-release-please-version
     "httpx>=0.28",
     "faststream[nats]>=0.6",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.20",
 ]
 
 [project.urls]

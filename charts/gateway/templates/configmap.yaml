@@ -9,10 +9,10 @@ data:
   SA_GATEWAY_SERVER__HOST: {{ .Values.config.server.host | quote }}
   SA_GATEWAY_SERVER__PORT: {{ .Values.config.server.port | quote }}
   SA_GATEWAY_NATS__URL: {{ .Values.config.nats.url | default (printf "nats://%s-nats:4222" .Release.Name) | quote }}
-  SA_GATEWAY_NATS__FETCH_SUBJECT: {{ .Values.config.nats.fetchSubject | quote }}
-  SA_GATEWAY_NATS__ANALYZE_SUBJECT: {{ .Values.config.nats.analyzeSubject | quote }}
-  SA_GATEWAY_NATS__ANALYZE_AGENT_SUBJECT: {{ .Values.config.nats.analyzeAgentSubject | quote }}
-  SA_GATEWAY_NATS__LIST_APPS_SUBJECT: {{ .Values.config.nats.listAppsSubject | quote }}
+  SA_GATEWAY_NATS__FETCH_JOB_SUBJECT: {{ .Values.config.nats.fetchJobSubject | quote }}
+  SA_GATEWAY_NATS__ANALYZE_REQUEST_SUBJECT: {{ .Values.config.nats.analyzeRequestSubject | quote }}
+  SA_GATEWAY_NATS__ANALYZE_AGENT_REQUEST_SUBJECT: {{ .Values.config.nats.analyzeAgentRequestSubject | quote }}
+  SA_GATEWAY_NATS__LIST_APPLICATIONS_SUBJECT: {{ .Values.config.nats.listApplicationsSubject | quote }}
   SA_GATEWAY_NATS__FETCH_TIMEOUT: {{ .Values.config.nats.fetchTimeout | quote }}
   SA_GATEWAY_NATS__ANALYZE_TIMEOUT: {{ .Values.config.nats.analyzeTimeout | quote }}
   SA_GATEWAY_NATS__ANALYZE_AGENT_TIMEOUT: {{ .Values.config.nats.analyzeAgentTimeout | quote }}

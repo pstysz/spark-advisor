@@ -12,10 +12,10 @@ config:
     port: 8080
   nats:
     url: "nats://localhost:4222"
-    fetchSubject: "fetch.job"
-    analyzeSubject: "analyze.request"
-    analyzeAgentSubject: "analyze.agent.request"
-    listAppsSubject: "list.applications"
+    fetchJobSubject: "fetch.job"
+    analyzeRequestSubject: "analyze.request"
+    analyzeAgentRequestSubject: "analyze.agent.request"
+    listApplicationsSubject: "list.applications"
     fetchTimeout: 30.0
     analyzeTimeout: 120.0
     analyzeAgentTimeout: 300.0

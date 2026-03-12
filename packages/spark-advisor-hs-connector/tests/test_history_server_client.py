@@ -4,7 +4,7 @@ import httpx
 import pytest
 import respx
 
-from spark_advisor_hs_connector.history_server_client import HistoryServerClient
+from spark_advisor_hs_connector.history_server.client import HistoryServerClient
 
 BASE = "http://spark-hs:18080/api/v1"
 

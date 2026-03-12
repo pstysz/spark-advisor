@@ -2,12 +2,12 @@ import uuid
 from datetime import UTC, datetime
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
-from spark_advisor_gateway.task.store import SqlAlchemyTaskStore
+from spark_advisor_gateway.task.store import TaskStore
 from spark_advisor_models.model import AnalysisResult
 
 
 class TaskManager:
-    def __init__(self, store: SqlAlchemyTaskStore) -> None:
+    def __init__(self, store: TaskStore) -> None:
         self._store = store
 
     async def create(self, app_id: str) -> AnalysisTask:

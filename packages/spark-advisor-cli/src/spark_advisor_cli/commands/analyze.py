@@ -35,8 +35,8 @@ def _load_job(source: str, history_server: str | None) -> JobAnalysis:
 
 
 def _fetch_from_history_server(app_id: str, history_server_url: str) -> JobAnalysis:
-    from spark_advisor_hs_connector.history_server_client import HistoryServerClient
-    from spark_advisor_hs_connector.hs_fetcher import fetch_job_analysis
+    from spark_advisor_hs_connector.history_server.client import HistoryServerClient
+    from spark_advisor_hs_connector.job_analysis_builder import fetch_job_analysis
 
     with HistoryServerClient(history_server_url) as client:
         return fetch_job_analysis(client, app_id)

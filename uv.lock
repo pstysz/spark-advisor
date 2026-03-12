@@ -1369,9 +1369,11 @@ name = "spark-advisor-hs-connector"
 version = "0.1.6"
 source = { editable = "packages/spark-advisor-hs-connector" }
 dependencies = [
+    { name = "aiosqlite" },
     { name = "faststream", extra = ["nats"] },
     { name = "httpx" },
     { name = "spark-advisor-models" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
 [package.dev-dependencies]
@@ -1386,9 +1388,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.20" },
     { name = "faststream", extras = ["nats"], specifier = ">=0.6" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "spark-advisor-models", editable = "packages/spark-advisor-models" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
 
 [package.metadata.requires-dev]
