@@ -14,11 +14,12 @@ broker = NatsBroker(settings.nats.url)
 broker.include_router(router)
 app = FastStream(broker)
 
+logger = logging.getLogger(__name__)
+
 
 @app.on_startup
 async def on_startup() -> None:
     logging.basicConfig(level=settings.log_level)
-    logger = logging.getLogger(__name__)
 
     client: AnthropicClient | None = None
     if settings.ai.enabled and os.environ.get("ANTHROPIC_API_KEY"):

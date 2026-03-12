@@ -7,6 +7,11 @@ from pydantic import BaseModel
 
 from spark_advisor_analyzer.config import ContextKey
 from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
+from spark_advisor_models.defaults import (
+    NATS_ANALYZE_AGENT_REQUEST_SUBJECT,
+    NATS_ANALYZE_REQUEST_SUBJECT,
+    NATS_ANALYZE_RESULT_SUBJECT,
+)
 from spark_advisor_models.model import AnalysisMode, AnalysisResult, JobAnalysis
 
 router = NatsRouter()
@@ -17,8 +22,8 @@ class ErrorResponse(BaseModel):
     error: str
 
 
-@router.subscriber("analyze.request")
-@router.publisher("analyze.result")
+@router.subscriber(NATS_ANALYZE_REQUEST_SUBJECT)
+@router.publisher(NATS_ANALYZE_RESULT_SUBJECT)
 async def handle_analyze(
     job: JobAnalysis,
     orchestrator: AdviceOrchestrator = Context(ContextKey.ORCHESTRATOR),  # type: ignore[assignment]  # noqa: B008
@@ -30,8 +35,8 @@ async def handle_analyze(
         return ErrorResponse(error=str(e))
 
 
-@router.subscriber("analyze.agent.request")
-@router.publisher("analyze.result")
+@router.subscriber(NATS_ANALYZE_AGENT_REQUEST_SUBJECT)
+@router.publisher(NATS_ANALYZE_RESULT_SUBJECT)
 async def handle_agent_analyze(
     job: JobAnalysis,
     orchestrator: AdviceOrchestrator = Context(ContextKey.ORCHESTRATOR),  # type: ignore[assignment]  # noqa: B008

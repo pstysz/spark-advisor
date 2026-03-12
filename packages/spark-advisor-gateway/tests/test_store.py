@@ -6,13 +6,13 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
-from spark_advisor_gateway.task.store import SqlAlchemyTaskStore
+from spark_advisor_gateway.task.store import TaskStore
 from spark_advisor_models.model import AnalysisResult
 from spark_advisor_models.testing import make_job
 
 
-async def _make_store() -> SqlAlchemyTaskStore:
-    store = SqlAlchemyTaskStore("sqlite+aiosqlite:///:memory:")
+async def _make_store() -> TaskStore:
+    store = TaskStore("sqlite+aiosqlite:///:memory:")
     await store.init()
     return store
 
@@ -227,7 +227,7 @@ async def test_concurrent_operations() -> None:
 
 @pytest.mark.asyncio
 async def test_init_creates_table() -> None:
-    store = SqlAlchemyTaskStore("sqlite+aiosqlite:///:memory:")
+    store = TaskStore("sqlite+aiosqlite:///:memory:")
     await store.init()
 
     task = _make_task()
@@ -238,7 +238,7 @@ async def test_init_creates_table() -> None:
 
 @pytest.mark.asyncio
 async def test_init_idempotent() -> None:
-    store = SqlAlchemyTaskStore("sqlite+aiosqlite:///:memory:")
+    store = TaskStore("sqlite+aiosqlite:///:memory:")
     await store.init()
     await store.init()
 

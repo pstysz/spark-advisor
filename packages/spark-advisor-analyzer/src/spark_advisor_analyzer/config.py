@@ -3,7 +3,12 @@ from enum import StrEnum
 from pydantic_settings import SettingsConfigDict
 
 from spark_advisor_models.config import AiSettings, Thresholds
-from spark_advisor_models.defaults import DEFAULT_AI_SETTINGS, DEFAULT_THRESHOLDS
+from spark_advisor_models.defaults import (
+    DEFAULT_AI_SETTINGS,
+    DEFAULT_THRESHOLDS,
+    NATS_ANALYZE_REQUEST_SUBJECT,
+    NATS_ANALYZE_RESULT_SUBJECT,
+)
 from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
 
 
@@ -13,8 +18,8 @@ class ContextKey(StrEnum):
 
 
 class AnalyzerNatsSettings(NatsSettings):
-    request_subject: str = "analyze.request"
-    result_subject: str = "analyze.result"
+    analyze_request_subject: str = NATS_ANALYZE_REQUEST_SUBJECT
+    analyze_result_subject: str = NATS_ANALYZE_RESULT_SUBJECT
 
 
 class AnalyzerSettings(BaseServiceSettings):

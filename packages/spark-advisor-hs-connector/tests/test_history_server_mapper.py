@@ -1,6 +1,6 @@
 from typing import Any
 
-from spark_advisor_hs_connector.history_server_mapper import map_job_analysis
+from spark_advisor_hs_connector.history_server.mapper import map_job_analysis
 
 APP_INFO: dict[str, Any] = {
     "id": "app-001",

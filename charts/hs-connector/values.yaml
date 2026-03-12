@@ -9,12 +9,19 @@ config:
   logLevel: "INFO"
   nats:
     url: "nats://localhost:4222"
-    publishSubject: "analyze.request"
-    fetchSubject: "fetch.job"
+    analyzeRequestSubject: "analyze.request"
+    fetchJobSubject: "fetch.job"
   historyServerUrl: "http://localhost:18080"
   historyServerTimeout: 30.0
   pollIntervalSeconds: 60
   batchSize: 50
+  maxProcessedApps: 10000
+  databaseUrl: "sqlite+aiosqlite:////data/hs_connector.db"
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    mountPath: /data
 
 imagePullSecrets: []
 

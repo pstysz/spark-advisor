@@ -35,7 +35,7 @@ class TaskExecutor:
 
     async def list_applications(self, limit: int) -> list[ApplicationSummary]:
         reply = await self._nc.request(
-            self._settings.nats.list_apps_subject,
+            self._settings.nats.list_applications_subject,
             orjson.dumps({"limit": limit}),
             timeout=self._settings.nats.list_apps_timeout,
         )
@@ -54,7 +54,7 @@ class TaskExecutor:
             await self._tasks.mark_running(task_id)
 
             fetch_job_reply = await self._nc.request(
-                self._settings.nats.fetch_subject,
+                self._settings.nats.fetch_job_subject,
                 orjson.dumps({"app_id": app_id}),
                 timeout=self._settings.nats.fetch_timeout,
             )
@@ -65,10 +65,10 @@ class TaskExecutor:
                 return
 
             if mode == AnalysisMode.AGENT:
-                subject = self._settings.nats.analyze_agent_subject
+                subject = self._settings.nats.analyze_agent_request_subject
                 timeout = self._settings.nats.analyze_agent_timeout
             else:
-                subject = self._settings.nats.analyze_subject
+                subject = self._settings.nats.analyze_request_subject
                 timeout = self._settings.nats.analyze_timeout
 
             analyze_reply = await self._nc.request(

@@ -1,0 +1,17 @@
+{{- if .Values.config.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "hs-connector.fullname" . }}-data
+  labels:
+    {{- include "hs-connector.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.config.persistence.storageClass }}
+  storageClassName: {{ .Values.config.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.config.persistence.size }}
+{{- end }}

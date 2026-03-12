@@ -9,10 +9,10 @@ from spark_advisor_mcp.formatting import (
     format_analysis_result,
     format_config_table,
     format_job_overview,
-    format_metric_explanation,
     format_scan_results,
     format_suggested_config,
 )
+from spark_advisor_mcp.metric_explanations import format_metric_explanation
 from spark_advisor_models.model import JobAnalysis
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
@@ -23,8 +23,8 @@ mcp = FastMCP("spark-advisor")
 
 def _load_job(source: str, history_server: str | None = None) -> JobAnalysis:
     if history_server:
-        from spark_advisor_hs_connector.history_server_client import HistoryServerClient
-        from spark_advisor_hs_connector.hs_fetcher import fetch_job_analysis
+        from spark_advisor_hs_connector.history_server.client import HistoryServerClient
+        from spark_advisor_hs_connector.job_analysis_builder import fetch_job_analysis
 
         with HistoryServerClient(history_server) as client:
             return fetch_job_analysis(client, source)
@@ -88,7 +88,7 @@ def scan_recent_jobs(
         history_server: Spark History Server URL (e.g. http://yarn:18080).
         limit: Maximum number of applications to list. Defaults to 20.
     """
-    from spark_advisor_hs_connector.history_server_client import HistoryServerClient
+    from spark_advisor_hs_connector.history_server.client import HistoryServerClient
 
     with HistoryServerClient(history_server) as client:
         apps = client.list_applications(limit=limit)

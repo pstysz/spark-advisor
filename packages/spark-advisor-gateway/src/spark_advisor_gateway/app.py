@@ -13,7 +13,7 @@ from spark_advisor_gateway.api.routes import create_router
 from spark_advisor_gateway.config import GatewaySettings, StateKey
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
-from spark_advisor_gateway.task.store import SqlAlchemyTaskStore
+from spark_advisor_gateway.task.store import TaskStore
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -27,7 +27,7 @@ def create_app(settings: GatewaySettings) -> FastAPI:
         nc = await nats.connect(settings.nats.url)
         logger.info("Connected to NATS: %s", settings.nats.url)
 
-        store = SqlAlchemyTaskStore(settings.database_url)
+        store = TaskStore(settings.database_url)
         await store.init()
 
         task_manager = TaskManager(store)

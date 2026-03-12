@@ -10,7 +10,12 @@ from spark_advisor_gateway.config import GatewaySettings
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.models import TaskStatus
-from spark_advisor_gateway.task.store import SqlAlchemyTaskStore
+from spark_advisor_gateway.task.store import TaskStore
+from spark_advisor_models.defaults import (
+    NATS_ANALYZE_AGENT_REQUEST_SUBJECT,
+    NATS_ANALYZE_REQUEST_SUBJECT,
+    NATS_FETCH_JOB_SUBJECT,
+)
 from spark_advisor_models.model import AnalysisMode, AnalysisResult
 from spark_advisor_models.testing import make_job
 
@@ -23,7 +28,7 @@ def _make_reply(data: bytes) -> MagicMock:
 
 async def _setup() -> tuple[AsyncMock, TaskManager, TaskExecutor]:
     nc = AsyncMock()
-    store = SqlAlchemyTaskStore("sqlite+aiosqlite:///:memory:")
+    store = TaskStore("sqlite+aiosqlite:///:memory:")
     await store.init()
     manager = TaskManager(store)
     settings = GatewaySettings()
@@ -114,8 +119,8 @@ async def test_execute_sends_correct_subjects() -> None:
     await asyncio.sleep(0.1)
 
     calls = nc.request.call_args_list
-    assert calls[0].args[0] == "fetch.job"
-    assert calls[1].args[0] == "analyze.request"
+    assert calls[0].args[0] == NATS_FETCH_JOB_SUBJECT
+    assert calls[1].args[0] == NATS_ANALYZE_REQUEST_SUBJECT
 
 
 @pytest.mark.asyncio
@@ -136,8 +141,8 @@ async def test_execute_agent_mode_uses_agent_subject() -> None:
     await asyncio.sleep(0.1)
 
     calls = nc.request.call_args_list
-    assert calls[0].args[0] == "fetch.job"
-    assert calls[1].args[0] == "analyze.agent.request"
+    assert calls[0].args[0] == NATS_FETCH_JOB_SUBJECT
+    assert calls[1].args[0] == NATS_ANALYZE_AGENT_REQUEST_SUBJECT
 
 
 @pytest.mark.asyncio
@@ -179,5 +184,5 @@ async def test_execute_standard_mode_default() -> None:
     await asyncio.sleep(0.1)
 
     calls = nc.request.call_args_list
-    assert calls[1].args[0] == "analyze.request"
+    assert calls[1].args[0] == NATS_ANALYZE_REQUEST_SUBJECT
     assert calls[1].kwargs["timeout"] == 120.0

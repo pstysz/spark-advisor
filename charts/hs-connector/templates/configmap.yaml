@@ -7,9 +7,11 @@ metadata:
 data:
   SA_CONNECTOR_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
   SA_CONNECTOR_NATS__URL: {{ .Values.config.nats.url | default (printf "nats://%s-nats:4222" .Release.Name) | quote }}
-  SA_CONNECTOR_NATS__PUBLISH_SUBJECT: {{ .Values.config.nats.publishSubject | quote }}
-  SA_CONNECTOR_NATS__FETCH_SUBJECT: {{ .Values.config.nats.fetchSubject | quote }}
+  SA_CONNECTOR_NATS__ANALYZE_REQUEST_SUBJECT: {{ .Values.config.nats.analyzeRequestSubject | quote }}
+  SA_CONNECTOR_NATS__FETCH_JOB_SUBJECT: {{ .Values.config.nats.fetchJobSubject | quote }}
   SA_CONNECTOR_HISTORY_SERVER_URL: {{ .Values.config.historyServerUrl | quote }}
   SA_CONNECTOR_HISTORY_SERVER_TIMEOUT: {{ .Values.config.historyServerTimeout | quote }}
   SA_CONNECTOR_POLL_INTERVAL_SECONDS: {{ .Values.config.pollIntervalSeconds | quote }}
   SA_CONNECTOR_BATCH_SIZE: {{ .Values.config.batchSize | quote }}
+  SA_CONNECTOR_MAX_PROCESSED_APPS: {{ .Values.config.maxProcessedApps | quote }}
+  SA_CONNECTOR_DATABASE_URL: {{ .Values.config.databaseUrl | quote }}

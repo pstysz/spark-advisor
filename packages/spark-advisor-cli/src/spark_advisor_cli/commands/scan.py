@@ -18,7 +18,7 @@ def scan(
         ] = 20,
 ) -> None:
     """List recent Spark applications from History Server."""
-    from spark_advisor_hs_connector.history_server_client import HistoryServerClient
+    from spark_advisor_hs_connector.history_server.client import HistoryServerClient
 
     with console.status("[bold blue]Fetching applications...[/]"):
         try:

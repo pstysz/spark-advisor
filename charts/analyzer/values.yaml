@@ -9,8 +9,8 @@ config:
   logLevel: "INFO"
   nats:
     url: "nats://localhost:4222"
-    requestSubject: "analyze.request"
-    resultSubject: "analyze.result"
+    analyzeRequestSubject: "analyze.request"
+    analyzeResultSubject: "analyze.result"
   ai:
     enabled: true
     model: "claude-sonnet-4-6"
