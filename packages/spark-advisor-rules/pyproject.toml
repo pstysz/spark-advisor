@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-rules"
-version = "0.1.6" # x-release-please-version
+version = "0.1.7" # x-release-please-version
 description = "Deterministic rules engine for Spark job analysis"
 readme = "README.md"
 license = "Apache-2.0"
@@ -20,7 +20,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "spark-advisor-models==0.1.6",  # x-release-please-version
+    "spark-advisor-models==0.1.7",  # x-release-please-version
 ]
 
 [project.urls]
