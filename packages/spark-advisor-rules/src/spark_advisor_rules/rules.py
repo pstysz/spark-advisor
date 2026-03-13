@@ -192,12 +192,17 @@ class ExecutorIdleRule(Rule):
         if utilization is None or utilization > self._thresholds.min_slot_utilization_percent:
             return []
 
+        severity = (
+            Severity.CRITICAL
+            if utilization < self._thresholds.min_slot_utilization_critical_percent
+            else Severity.WARNING
+        )
         idle_pct = 100 - utilization
         cores = job.config.executor_cores
 
         return [
             self._result(
-                Severity.WARNING,
+                severity,
                 "Executor over-provisioning",
                 f"Slot utilization is only {utilization:.0f}% — {idle_pct:.0f}% idle",
                 current_value=f"{job.executors.executor_count} executors x {cores} cores, {utilization:.0f}% utilized",
@@ -218,8 +223,10 @@ class TaskFailureRule(Rule):
         if failed < self._thresholds.task_failure_warning_count:
             return None
 
+        severity = Severity.CRITICAL if failed >= self._thresholds.task_failure_critical_count else Severity.WARNING
+
         return self._result(
-            Severity.WARNING,
+            severity,
             f"Task failures in Stage {stage.stage_id}",
             f"{failed} of {stage.tasks.task_count} tasks failed",
             stage_id=stage.stage_id,
@@ -237,9 +244,10 @@ class SmallFileRule(Rule):
         avg_input = stage.input_bytes / stage.tasks.task_count
         if avg_input >= self._thresholds.small_file_threshold_bytes:
             return None
+        severity = Severity.CRITICAL if avg_input < self._thresholds.small_file_critical_bytes else Severity.WARNING
         avg_mb = avg_input / (1024 * 1024)
         return self._result(
-            Severity.WARNING,
+            severity,
             f"Small input partitions in Stage {stage.stage_id}",
             f"Average input per task is {avg_mb:.1f} MB across {stage.tasks.task_count} tasks",
             stage_id=stage.stage_id,

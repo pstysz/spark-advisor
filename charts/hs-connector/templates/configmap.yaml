@@ -6,7 +6,7 @@ metadata:
     {{- include "hs-connector.labels" . | nindent 4 }}
 data:
   SA_CONNECTOR_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
-  SA_CONNECTOR_NATS__URL: {{ .Values.config.nats.url | default (printf "nats://%s-nats:4222" .Release.Name) | quote }}
+  SA_CONNECTOR_NATS__URL: {{ .Values.config.nats.url | quote }}
   SA_CONNECTOR_NATS__ANALYZE_REQUEST_SUBJECT: {{ .Values.config.nats.analyzeRequestSubject | quote }}
   SA_CONNECTOR_NATS__FETCH_JOB_SUBJECT: {{ .Values.config.nats.fetchJobSubject | quote }}
   SA_CONNECTOR_HISTORY_SERVER_URL: {{ .Values.config.historyServerUrl | quote }}

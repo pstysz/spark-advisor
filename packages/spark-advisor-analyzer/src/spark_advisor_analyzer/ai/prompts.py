@@ -161,7 +161,10 @@ def build_system_prompt(thresholds: Thresholds | None = None) -> str:
         gc_warning=t.gc_warning_percent,
         gc_critical=t.gc_critical_percent,
         min_slot=t.min_slot_utilization_percent,
+        min_slot_critical=t.min_slot_utilization_critical_percent,
         scheduler_delay_ms=t.scheduler_delay_ms,
         spill_warning_gb=t.spill_warning_gb,
         spill_critical_gb=t.spill_critical_gb,
+        task_failure_warning=t.task_failure_warning_count,
+        task_failure_critical=t.task_failure_critical_count,
     )
