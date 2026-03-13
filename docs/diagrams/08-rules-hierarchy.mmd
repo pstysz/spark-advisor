@@ -80,11 +80,16 @@ classDiagram
             +gc_warning_percent: float
             +gc_critical_percent: float
             +target_partition_size_bytes: int
-            +min_cpu_utilization_percent: float
+            +min_slot_utilization_percent: float
+            +min_slot_utilization_critical_percent: float
             +task_failure_warning_count: int
+            +task_failure_critical_count: int
             +small_file_threshold_bytes: int
+            +small_file_critical_bytes: int
             +broadcast_join_threshold_bytes: int
-            +memory_overhead_percent: float
+            +memory_overhead_gc_threshold_percent: float
+            +memory_overhead_mem_utilization_percent: float
+            +memory_utilization_critical_percent: float
         }
     }
 

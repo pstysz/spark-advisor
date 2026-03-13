@@ -1,6 +1,6 @@
 # MCP Server Setup
 
-spark-advisor exposes 5 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), allowing Claude Desktop, Cursor, and other MCP clients to analyze Spark jobs directly.
+spark-advisor exposes 7 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), allowing Claude Desktop, Cursor, and other MCP clients to analyze Spark jobs directly.
 
 ## Tools
 
@@ -11,6 +11,8 @@ spark-advisor exposes 5 tools via the [Model Context Protocol](https://modelcont
 | `get_job_config` | Show all `spark.*` configuration properties of a job |
 | `suggest_config` | Run rules engine and suggest concrete config changes |
 | `explain_metric` | Explain a Spark metric (gc_time_percent, data_skew_ratio, etc.) |
+| `get_stage_details` | Detailed metrics for a specific stage (task count, duration quantiles, GC, shuffle, spill) |
+| `compare_jobs` | Side-by-side comparison of two Spark jobs (before vs after optimization) |
 
 ## Installation
 
@@ -95,4 +97,4 @@ Test that the server starts correctly:
 echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | uv run python -m spark_advisor_mcp
 ```
 
-You should see a JSON response listing the 5 available tools.
+You should see a JSON response listing the 7 available tools.

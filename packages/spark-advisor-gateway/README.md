@@ -42,7 +42,7 @@ spark-advisor-gateway
 |----------|---------|-------------|
 | `SA_GATEWAY_NATS__URL` | `nats://localhost:4222` | NATS broker URL |
 | `SA_GATEWAY_SERVER__PORT` | `8080` | REST API port |
-| `SA_GATEWAY_MAX_STORED_TASKS` | `1000` | Max tasks in memory |
+| `SA_GATEWAY_DATABASE_URL` | `sqlite+aiosqlite:///data/spark_advisor.db` | SQLite database URL for task persistence |
 
 ## Links
 

@@ -9,7 +9,7 @@
     <a href="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml"><img src="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
     <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
-    <img src="https://img.shields.io/badge/tests-291%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-424%20passing-brightgreen" alt="Tests">
   </p>
   <p>
     <img src="https://img.shields.io/badge/Spark-E25A1C?logo=apachespark&logoColor=white" alt="Apache Spark">
@@ -121,9 +121,9 @@ uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json
 | Disk spill         | diskBytesSpilled > 0                                     | CRITICAL if >1GB, WARNING if >0.1GB |
 | GC pressure        | GC time > 20% of task time                               | CRITICAL if >40%, WARNING if >20%   |
 | Shuffle partitions | partition size far from 128MB target                     | WARNING                             |
-| Executor idle      | slot utilization < 40%                                   | WARNING                             |
-| Task failures      | failed_task_count > 0                                    | WARNING                             |
-| Small files        | avg input bytes/task < 10MB                              | WARNING                             |
+| Executor idle      | slot utilization < 40%                                   | CRITICAL if <20%, WARNING if <40%   |
+| Task failures      | failed_task_count > 0                                    | CRITICAL if >=10, WARNING if >0     |
+| Small files        | avg input bytes/task < 10MB                              | CRITICAL if <1MB, WARNING if <10MB  |
 | Broadcast join     | threshold disabled with shuffle stages                   | WARNING if disabled, INFO if < 10MB |
 | Serializer choice  | Java serializer with shuffle stages                      | INFO                                |
 | Dynamic allocation | enabled without bounds, or disabled with low utilization | WARNING                             |
@@ -185,14 +185,14 @@ spark-advisor scan -hs http://yarn:18080 --limit 20
 
 ```bash
 spark-advisor version
-# spark-advisor v0.1.3
+# spark-advisor v0.1.6
 ```
 
 ## MCP Server
 
-spark-advisor exposes 5 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) for Claude Desktop, Cursor, and other MCP clients.
+spark-advisor exposes 7 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) for Claude Desktop, Cursor, and other MCP clients.
 
-**Tools:** `analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`
+**Tools:** `analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`, `get_stage_details`, `compare_jobs`
 
 ### Claude Desktop config
 
@@ -373,7 +373,7 @@ graph TB
 
 ```bash
 make check       # Lint + mypy + all tests (CI-ready)
-make test        # Run 291 tests across 7 packages
+make test        # Run 424 tests across 7 packages
 make lint        # Ruff + mypy (strict)
 make format      # Auto-format code
 make demo-local  # Run rules-only analysis on sample event log
@@ -402,12 +402,14 @@ make down        # Stop microservices
 | **Ruff**              | Linter + formatter                                    |
 | **mypy**              | Type checker (strict mode)                            |
 | **pytest**            | Testing with coverage and fixtures                    |
+| **SQLAlchemy**        | Async ORM for task persistence (SQLite + WAL mode)    |
+| **aiosqlite**         | Async SQLite driver for SQLAlchemy                    |
 | **Helm**              | Kubernetes deployment (umbrella chart + 3 subcharts)  |
 | **Docker**            | Multi-stage builds with uv, published to ghcr.io      |
 
 ### Testing
 
-291 tests across 7 packages: models (10), rules (42), cli (48), analyzer (85), hs-connector (59), gateway (30), mcp (17).
+424 tests across 7 packages: models (10), rules (45), cli (78), analyzer (85), hs-connector (68), gateway (63), mcp (75).
 
 ```bash
 uv run pytest -v               # all packages

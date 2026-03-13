@@ -5,7 +5,7 @@ graph BT
     GATEWAY["spark-advisor-gateway<br/><i>REST API, TaskManager, NATS orchestration</i>"]
     CONNECTOR["spark-advisor-hs-connector<br/><i>HS client, poller, on-demand fetch</i>"]
     CLI["spark-advisor-cli<br/><i>Typer CLI, Rich output, event log parser</i>"]
-    MCP["spark-advisor-mcp<br/><i>MCP server, 5 tools, stdio transport</i>"]
+    MCP["spark-advisor-mcp<br/><i>MCP server, 7 tools, stdio transport</i>"]
 
     RULES -->|"depends on"| MODELS
     ANALYZER -->|"depends on"| MODELS
