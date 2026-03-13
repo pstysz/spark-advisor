@@ -35,6 +35,9 @@ services:
     environment:
       SA_CONNECTOR_NATS__URL: "nats://nats:4222"
       SA_CONNECTOR_HISTORY_SERVER_URL: "${SPARK_HISTORY_SERVER_URL:-http://spark-history:18080}"
+      SA_CONNECTOR_DATABASE_URL: "sqlite+aiosqlite:////data/hs_connector.db"
+    volumes:
+      - hs-connector-data:/data
 
   gateway:
     build:
@@ -47,6 +50,11 @@ services:
         condition: service_healthy
     environment:
       SA_GATEWAY_NATS__URL: "nats://nats:4222"
+      SA_GATEWAY_DATABASE_URL: "sqlite+aiosqlite:////data/spark_advisor.db"
+    volumes:
+      - gateway-data:/data
 
 volumes:
   nats-data:
+  gateway-data:
+  hs-connector-data:

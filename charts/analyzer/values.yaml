@@ -9,8 +9,8 @@ config:
   logLevel: "INFO"
   nats:
     url: "nats://localhost:4222"
-    requestSubject: "analyze.request"
-    resultSubject: "analyze.result"
+    analyzeRequestSubject: "analyze.request"
+    analyzeResultSubject: "analyze.result"
   ai:
     enabled: true
     model: "claude-sonnet-4-6"
@@ -26,14 +26,18 @@ config:
     gcTargetPercent: 10.0
     targetPartitionSizeBytes: "134217728"
     partitionRatioMin: 0.5
-    partitionRatioMax: 2.0
+    partitionRatioMax: 3.0
     minSlotUtilizationPercent: 40.0
+    minSlotUtilizationCriticalPercent: 20.0
     taskFailureWarningCount: 1
+    taskFailureCriticalCount: 10
     schedulerDelayMs: 100
     smallFileThresholdBytes: "10485760"
+    smallFileCriticalBytes: "1048576"
     broadcastJoinDefaultBytes: "10485760"
     memoryOverheadGcThresholdPercent: 20.0
     memoryOverheadMemUtilizationPercent: 80.0
+    memoryUtilizationCriticalPercent: 95.0
 
 anthropicApiKey:
   existingSecret: ""

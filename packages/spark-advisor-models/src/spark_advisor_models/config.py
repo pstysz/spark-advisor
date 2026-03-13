@@ -16,7 +16,7 @@ class Thresholds(BaseModel):
 
     target_partition_size_bytes: int = 128 * 1024 * 1024
     partition_ratio_min: float = 0.5
-    partition_ratio_max: float = 2.0
+    partition_ratio_max: float = 3.0
 
     min_slot_utilization_percent: float = 40.0
 
@@ -28,6 +28,11 @@ class Thresholds(BaseModel):
     broadcast_join_default_bytes: int = 10 * 1024 * 1024
     memory_overhead_gc_threshold_percent: float = 20.0
     memory_overhead_mem_utilization_percent: float = 80.0
+    task_failure_critical_count: int = 10
+    min_slot_utilization_critical_percent: float = 20.0
+    small_file_critical_bytes: int = 1 * 1024 * 1024
+
+    memory_utilization_critical_percent: float = 95.0
 
 
 class AiSettings(BaseModel):

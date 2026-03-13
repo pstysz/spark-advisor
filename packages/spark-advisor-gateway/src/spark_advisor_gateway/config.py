@@ -3,6 +3,12 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 from pydantic_settings import SettingsConfigDict
 
+from spark_advisor_models.defaults import (
+    NATS_ANALYZE_AGENT_REQUEST_SUBJECT,
+    NATS_ANALYZE_REQUEST_SUBJECT,
+    NATS_FETCH_JOB_SUBJECT,
+    NATS_LIST_APPLICATIONS_SUBJECT,
+)
 from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
 
 
@@ -14,10 +20,10 @@ class StateKey(StrEnum):
 
 
 class GatewayNatsSettings(NatsSettings):
-    fetch_subject: str = "fetch.job"
-    analyze_subject: str = "analyze.request"
-    analyze_agent_subject: str = "analyze.agent.request"
-    list_apps_subject: str = "list.applications"
+    fetch_job_subject: str = NATS_FETCH_JOB_SUBJECT
+    analyze_request_subject: str = NATS_ANALYZE_REQUEST_SUBJECT
+    analyze_agent_request_subject: str = NATS_ANALYZE_AGENT_REQUEST_SUBJECT
+    list_applications_subject: str = NATS_LIST_APPLICATIONS_SUBJECT
     fetch_timeout: float = 30.0
     analyze_timeout: float = 120.0
     analyze_agent_timeout: float = 300.0
@@ -38,4 +44,6 @@ class GatewaySettings(BaseServiceSettings):
 
     server: ServerSettings = ServerSettings()
     nats: GatewayNatsSettings = GatewayNatsSettings()
-    max_stored_tasks: int = 1000
+    database_url: str = "sqlite+aiosqlite:///data/spark_advisor.db"
+    task_stream_timeout: float = 120.0
+    task_poll_interval: float = 0.5

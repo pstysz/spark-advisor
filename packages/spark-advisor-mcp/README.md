@@ -10,7 +10,7 @@ pip install spark-advisor-mcp
 
 ## What it does
 
-Provides 5 MCP tools via FastMCP (stdio transport) for AI-assisted Spark job analysis:
+Provides 7 MCP tools via FastMCP (stdio transport) for AI-assisted Spark job analysis:
 
 | Tool | Description |
 |------|-------------|
@@ -19,6 +19,8 @@ Provides 5 MCP tools via FastMCP (stdio transport) for AI-assisted Spark job ana
 | `get_job_config` | Retrieve Spark configuration for a specific job |
 | `suggest_config` | Generate optimized spark-defaults.conf |
 | `explain_metric` | Explain a specific Spark metric or configuration parameter |
+| `get_stage_details` | Detailed metrics for a specific stage |
+| `compare_jobs` | Side-by-side comparison of two Spark jobs |
 
 ## Setup with Claude Desktop
 

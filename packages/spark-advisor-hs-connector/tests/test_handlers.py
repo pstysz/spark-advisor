@@ -5,9 +5,9 @@ import pytest
 from faststream.nats import TestNatsBroker
 
 from spark_advisor_hs_connector.app import app, broker
-from spark_advisor_hs_connector.history_server_client import HistoryServerClient
-from spark_advisor_hs_connector.model.output import ApplicationSummary, Attempt
-from spark_advisor_models.model import JobAnalysis
+from spark_advisor_hs_connector.history_server.client import HistoryServerClient
+from spark_advisor_models.defaults import NATS_FETCH_JOB_SUBJECT, NATS_LIST_APPLICATIONS_SUBJECT
+from spark_advisor_models.model import ApplicationSummary, Attempt, JobAnalysis
 
 ENVIRONMENT = {
     "sparkProperties": [["spark.executor.memory", "4g"]],
@@ -63,7 +63,7 @@ async def test_fetch_job_returns_job_analysis() -> None:
         app.context.set_global("hs_client", hs_client)
         result = await br.request(
             {"app_id": "app-001"},
-            subject="fetch.job",
+            subject=NATS_FETCH_JOB_SUBJECT,
             timeout=10.0,
         )
         parsed = JobAnalysis.model_validate_json(result.body)
@@ -89,7 +89,7 @@ async def test_list_applications_returns_list() -> None:
         app.context.set_global("hs_client", hs_client)
         result = await br.request(
             {"limit": 10},
-            subject="list.applications",
+            subject=NATS_LIST_APPLICATIONS_SUBJECT,
             timeout=10.0,
         )
         parsed = orjson.loads(result.body)
@@ -108,7 +108,7 @@ async def test_list_applications_returns_error_on_failure() -> None:
         app.context.set_global("hs_client", hs_client)
         result = await br.request(
             {},
-            subject="list.applications",
+            subject=NATS_LIST_APPLICATIONS_SUBJECT,
             timeout=10.0,
         )
         parsed = orjson.loads(result.body)

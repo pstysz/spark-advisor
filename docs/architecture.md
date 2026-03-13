@@ -35,9 +35,9 @@ Three services communicate via NATS. A standalone CLI operates without any infra
 
 | Principle                  | How it applies                                                                                                                                                                                            |
 |----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **SOLID**                  | Single responsibility per package. Rules don't know about AI. Gateway doesn't know about rules. Dependency inversion via `TaskStore` Protocol in gateway and `Rule` ABC in rules.                         |
+| **SOLID**                  | Single responsibility per package. Rules don't know about AI. Gateway doesn't know about rules. Dependency inversion via `Rule` ABC in rules.                                                             |
 | **DRY**                    | `BaseServiceSettings` in models — inherited by all services. `fetch_job_from_hs()` shared between handler and poller. `NatsSettings` base DTO extended per service. Test factories centralized in models. |
-| **KISS**                   | Plain JSON on NATS (no Avro/Protobuf). FastStream handles Pydantic serde automatically. In-memory task store. No DLQ, no circuit breaker, no rate limiter — graceful degradation instead.                 |
+| **KISS**                   | Plain JSON on NATS (no Avro/Protobuf). FastStream handles Pydantic serde automatically. SQLite task store. No DLQ, no circuit breaker, no rate limiter — graceful degradation instead.                     |
 | **Separation of Concerns** | Each service owns its domain logic and private models. Shared `models` package contains ONLY contracts and configuration DTOs — zero infrastructure.                                                      |
 | **12-Factor App**          | Config from environment (`SA_ANALYZER_*`, `SA_CONNECTOR_*`, `SA_GATEWAY_*`). Stateless services. Explicit dependencies in `pyproject.toml`. Fast startup/shutdown via FastStream lifespan.                |
 
@@ -52,10 +52,10 @@ Each package owns its domain and can be independently deployed, scaled, and test
 | **models**       | Library | Pydantic contracts (`JobAnalysis`, `AnalysisResult`, `RuleResult`, `SparkConfig`), config DTOs (`Thresholds`, `AiSettings`), `BaseServiceSettings`, `NatsSettings`, utility functions | Any infrastructure, business logic, I/O |
 | **rules**        | Library | `Rule` ABC, 11 concrete rules, `StaticAnalysisService`, `default_rules` and `rules_for_threshold` factories                                                                           | AI logic, HTTP clients, messaging       |
 | **analyzer**     | Service | `AdviceOrchestrator`, `LlmAnalysisService`, `AnthropicClient`, prompts, tool schema                                                                                                   | REST API, HS client, event log parsing  |
-| **gateway**      | Service | REST API, `TaskManager`, `TaskStore`, `TaskExecutor`                                                                                                                                  | Analysis logic, HS client, Claude API   |
+| **gateway**      | Service | REST API, `TaskManager`, `TaskStore` (SQLAlchemy + SQLite), `TaskExecutor`                                                                                                            | Analysis logic, HS client, Claude API   |
 | **hs-connector** | Service | `HistoryServerClient`, mapper, `HistoryServerPoller`, `PollingState`, `ApplicationSummary` model                                                                                      | Analysis logic, Claude API, REST API    |
 | **cli**          | App     | Event log parser, Rich console output, `analyze` (file + HS + optional AI), `scan` (list HS apps), `version`                                                                          | NATS messaging, REST API serving        |
-| **mcp**          | App     | MCP server (stdio), 5 tools (`analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`), markdown formatting for MCP responses                    | NATS messaging, REST API serving        |
+| **mcp**          | App     | MCP server (stdio), 7 tools (`analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`, `get_stage_details`, `compare_jobs`), markdown formatting for MCP responses | NATS messaging, REST API serving        |
 
 ---
 
@@ -120,13 +120,14 @@ spark-advisor/
 │   └── spark-advisor-mcp/                   # APP (MCP Server, stdio)
 │       └── src/spark_advisor_mcp/
 │           ├── __main__.py                  # python -m spark_advisor_mcp
-│           ├── server.py                    # FastMCP + 5 tool definitions
-│           └── formatting.py                # Markdown formatters for MCP responses
+│           ├── server.py                    # FastMCP + 7 tool definitions
+│           ├── formatting.py                # Markdown formatters for MCP responses
+│           └── metric_explanations.py       # Metric definitions + threshold-based assessment
 │
 ├── sample_event_logs/
 └── docs/
     ├── architecture.md                      # this file
-    ├── implementation-plan.md
+    ├── mcp-setup.md                         # MCP server setup guide
     └── diagrams/                            # Mermaid diagrams (*.mmd)
 ```
 
@@ -206,9 +207,9 @@ Deterministic rules engine. Pure business logic operating on models. Used in two
 | `SpillToDiskRule`            | diskBytesSpilled > 0                                     | CRITICAL if >1GB, WARNING if >0.1GB         |
 | `GCPressureRule`             | GC time > 20% of task time                               | CRITICAL if >40%, WARNING if >20%           |
 | `ShufflePartitionsRule`      | Actual partitions far from optimal (128MB/partition)     | WARNING                                     |
-| `ExecutorIdleRule`           | slot utilization < 40%                                   | WARNING (skipped when CPU data unavailable) |
-| `TaskFailureRule`            | failed_task_count > 0                                    | WARNING                                     |
-| `SmallFileRule`              | avg input bytes per task < 10MB                          | WARNING                                     |
+| `ExecutorIdleRule`           | slot utilization < 40%                                   | CRITICAL if <20%, WARNING if <40% (skipped when CPU data unavailable) |
+| `TaskFailureRule`            | failed_task_count > 0                                    | CRITICAL if >=10, WARNING if >0             |
+| `SmallFileRule`              | avg input bytes per task < 10MB                          | CRITICAL if <1MB, WARNING if <10MB          |
 | `BroadcastJoinThresholdRule` | threshold disabled (-1) with shuffle stages              | WARNING if disabled, INFO if < 10MB         |
 | `SerializerChoiceRule`       | Java serializer with shuffle stages                      | INFO                                        |
 | `DynamicAllocationRule`      | enabled without bounds, or disabled with low utilization | WARNING                                     |
@@ -264,7 +265,7 @@ API Gateway — the only externally-exposed service. REST API + async task orche
 - `api/schemas.py` — `AnalyzeRequest`, `TaskResponse`, `ApplicationResponse` (API-specific DTOs)
 - `api/health.py` — `GET /health/live`, `GET /health/ready` (NATS check)
 - `task/models.py` — `TaskStatus` enum, `AnalysisTask` dataclass
-- `task/store.py` — `TaskStore` Protocol + `InMemoryTaskStore`
+- `task/store.py` — `TaskStore` (SQLAlchemy async + SQLite with WAL mode)
 - `task/manager.py` — `TaskManager` (create, update, query tasks)
 - `task/executor.py` — `TaskExecutor` (NATS request-reply orchestration)
 
@@ -275,11 +276,11 @@ API Gateway — the only externally-exposed service. REST API + async task orche
 - `SA_GATEWAY_NATS__FETCH_TIMEOUT` — HS fetch timeout (default: 30s)
 - `SA_GATEWAY_NATS__ANALYZE_TIMEOUT` — analysis timeout (default: 120s)
 - `SA_GATEWAY_NATS__ANALYZE_AGENT_TIMEOUT` — agent mode timeout (default: 300s)
-- `SA_GATEWAY_MAX_STORED_TASKS` — max tasks in memory (default: 1000)
+- `SA_GATEWAY_DATABASE_URL` — SQLite database URL (default: `sqlite+aiosqlite:///data/spark_advisor.db`)
 
 **Key design decisions:**
 - Uses `nats-py` (not FastStream) — gateway needs request-reply with explicit timeout control, not subscriber pattern
-- `TaskStore` is a `Protocol` — easily replaceable with Redis implementation in the future
+- `TaskStore` uses SQLAlchemy async + SQLite with WAL mode for persistent task storage across restarts
 - `TaskExecutor.submit()` fires an `asyncio.create_task()` — non-blocking for the HTTP handler
 - `AnalyzeRequest.mode` uses shared `AnalysisMode` StrEnum — routes to `analyze.request` (standard) or `analyze.agent.request` (agent) with appropriate timeout
 
@@ -346,18 +347,21 @@ Standalone CLI for Spark job analysis. Supports event log files and History Serv
 MCP server exposing spark-advisor as tools for Claude Desktop, Cursor, and other MCP clients. Uses stdio transport (JSON-RPC over stdin/stdout).
 
 **Owns:**
-- `server.py` — `FastMCP("spark-advisor")` instance + 5 tool definitions (`@mcp.tool()`)
+- `server.py` — `FastMCP("spark-advisor")` instance + 7 tool definitions (`@mcp.tool()`)
 - `formatting.py` — Markdown formatters for tool responses (not Rich — MCP returns plain text)
+- `metric_explanations.py` — Metric definitions + threshold-based assessment
 
-**5 MCP tools:**
+**7 MCP tools:**
 
 | Tool                | Parameters                                      | Reuses                                          |
 |---------------------|-------------------------------------------------|-------------------------------------------------|
-| `analyze_spark_job` | `source`, `history_server?`, `no_ai?`, `agent?` | `parse_event_log()`, `AdviceOrchestrator.run()` |
+| `analyze_spark_job` | `source`, `history_server?`, `mode?`             | `parse_event_log()`, `AdviceOrchestrator.run()` |
 | `scan_recent_jobs`  | `history_server`, `limit?`                      | `HistoryServerClient.list_applications()`       |
 | `get_job_config`    | `source`, `history_server?`                     | `_load_job()` → `job.config`                    |
 | `suggest_config`    | `source`, `history_server?`                     | Rules engine → `RuleResult.recommended_value`   |
-| `explain_metric`    | `metric_name`, `value?`                         | Hardcoded `METRIC_EXPLANATIONS` knowledge base  |
+| `explain_metric`    | `metric_name`, `value?`                         | `METRIC_EXPLANATIONS` knowledge base            |
+| `get_stage_details` | `source`, `stage_id`, `history_server?`         | `_load_job()` → stage metrics formatting        |
+| `compare_jobs`      | `source_a`, `source_b`, `history_server?`       | `_load_job()` → side-by-side comparison         |
 
 **Key design decisions:**
 - Uses `mcp` SDK (`FastMCP`) — tools are plain Python functions decorated with `@mcp.tool()`
@@ -566,6 +570,8 @@ No DLQ (dead letter queue), no circuit breaker, no rate limiter. These are inten
 | **Ruff**              | Linter + formatter                                                | all                                |
 | **mypy**              | Type checker (strict mode)                                        | all                                |
 | **pytest**            | Testing                                                           | all                                |
+| **SQLAlchemy**        | Async ORM for task persistence (SQLite + WAL)                     | gateway                            |
+| **aiosqlite**         | Async SQLite driver for SQLAlchemy                                | gateway                            |
 | **respx**             | HTTP mocking for httpx                                            | hs-connector (tests)               |
 
 ---
@@ -622,7 +628,7 @@ All defaults live in `values.yaml` (single source of truth). Deployments use `en
 
 ### NATS URL auto-resolution
 
-When deployed via the umbrella chart, subcharts leave `config.nats.url` empty. The ConfigMap template resolves it to `nats://RELEASE-NAME-nats:4222` using the Helm release name.
+When deployed via the umbrella chart, the umbrella `values.yaml` sets `config.nats.url` for all subcharts (e.g. `nats://spark-advisor-nats:4222`). ConfigMap templates use values directly — no `| default` fallbacks.
 
 ### Secrets
 
@@ -692,7 +698,7 @@ release-please bumps all versions in a single PR via `# x-release-please-version
 | Pitfall                                               | Mitigation                                                                                                                                                                        |
 |-------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **NATS message size limit** (1MB default)             | `JobAnalysis` for a job with 100+ stages could approach this. Monitor payload sizes. NATS supports configuring `max_payload`.                                                     |
-| **In-memory TaskStore lost on gateway restart**       | Acceptable for MVP. Future: Redis-backed `TaskStore` (Protocol already defined).                                                                                                  |
+| **SQLite file locking under high concurrency**        | WAL mode enabled for better concurrent read/write. Single-writer limitation acceptable for current throughput.                                                                     |
 | **PollingState lost on hs-connector restart**         | Connector re-fetches recent jobs. Analyzer handles duplicates idempotently (same input → same output).                                                                            |
 | **Synchronous Claude API in async worker**            | Wrapped in `asyncio.to_thread()`. Under high load, consider thread pool sizing or async anthropic client.                                                                         |
 | **No message persistence**                            | NATS core (not JetStream) — messages are fire-and-forget. If analyzer is down when hs-connector publishes, message is lost. Acceptable: next poll cycle will re-discover the job. |
@@ -721,14 +727,12 @@ These concepts existed in the previous Kafka-based architecture and have been in
 
 ## Future Extensions
 
-| Extension            | Description                                                                                | Impact                                            |
-|----------------------|--------------------------------------------------------------------------------------------|---------------------------------------------------|
-| **Redis TaskStore**  | Replace `InMemoryTaskStore` with Redis for persistence across gateway restarts             | gateway only — swap via `TaskStore` Protocol      |
-| **k8s-source**       | Watch Kubernetes events for completed Spark jobs, publish to NATS                          | New service, depends only on models               |
-| **MCP Server**       | ✅ Implemented — `spark-advisor-mcp` package with 5 tools. See [mcp-setup.md](mcp-setup.md) | mcp package                                       |
-| **OpenTelemetry**    | Distributed tracing across services via NATS                                               | All services — add OTel middleware                |
-| **Additional rules** | New domain-specific rules as real-world use cases are discovered                           | rules package only                                |
-| **NATS JetStream**   | Persistent messaging with at-least-once delivery for batch flow                            | Replace NATS core subjects with JetStream streams |
+| Extension            | Description                                                                              | Impact                                            |
+|----------------------|------------------------------------------------------------------------------------------|---------------------------------------------------|
+| **k8s-source**       | Watch Kubernetes events for completed Spark jobs, publish to NATS                        | New service, depends only on models               |
+| **OpenTelemetry**    | Distributed tracing across services via NATS                                             | All services — add OTel middleware                |
+| **Additional rules** | New domain-specific rules as real-world use cases are discovered                         | rules package only                                |
+| **NATS JetStream**   | Persistent messaging with at-least-once delivery for batch flow                          | Replace NATS core subjects with JetStream streams |
 
 ---
 

@@ -5,10 +5,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from spark_advisor_hs_connector.hs_fetcher import deduplicate_stages, resolve_base_path
-from spark_advisor_hs_connector.model.output import ApplicationSummary, Attempt
-from spark_advisor_hs_connector.poller import HistoryServerPoller
-from spark_advisor_hs_connector.polling_state import PollingState
+from spark_advisor_hs_connector.history_server.poller import HistoryServerPoller
+from spark_advisor_hs_connector.job_analysis_builder import deduplicate_stages, resolve_base_path
+from spark_advisor_hs_connector.store import PollingStore
+from spark_advisor_models.defaults import NATS_ANALYZE_REQUEST_SUBJECT
+from spark_advisor_models.model import ApplicationSummary, Attempt
+
+_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 
 def _make_app_summary(app_id: str) -> ApplicationSummary:
@@ -85,6 +88,12 @@ def _configure_hs_client(mock: MagicMock, app_ids: list[str]) -> None:
     mock.get_executors.return_value = EXECUTORS
 
 
+async def _make_state() -> PollingStore:
+    state = PollingStore(_DB_URL)
+    await state.init()
+    return state
+
+
 class TestHistoryServerPoller:
     @pytest.mark.asyncio
     async def test_poll_publishes_new_apps(self) -> None:
@@ -92,24 +101,24 @@ class TestHistoryServerPoller:
         _configure_hs_client(hs_client, ["app-001", "app-002"])
 
         nats_broker = AsyncMock()
-        state = PollingState()
+        state = await _make_state()
 
         poller = HistoryServerPoller(
             hs_client=hs_client,
             broker=nats_broker,
-            publish_subject="analyze.request",
-            polling_state=state,
+            publish_subject=NATS_ANALYZE_REQUEST_SUBJECT,
+            store=state,
             batch_size=10,
         )
         published = await poller.poll()
 
         assert published == 2
         assert nats_broker.publish.call_count == 2
-        assert state.is_processed("app-001")
-        assert state.is_processed("app-002")
+        assert await state.is_processed("app-001")
+        assert await state.is_processed("app-002")
 
         payload = nats_broker.publish.call_args_list[0]
-        assert payload[1]["subject"] == "analyze.request"
+        assert payload[1]["subject"] == NATS_ANALYZE_REQUEST_SUBJECT
 
     @pytest.mark.asyncio
     async def test_poll_skips_already_processed(self) -> None:
@@ -117,14 +126,14 @@ class TestHistoryServerPoller:
         _configure_hs_client(hs_client, ["app-001", "app-002"])
 
         nats_broker = AsyncMock()
-        state = PollingState()
-        state.mark_processed("app-001")
+        state = await _make_state()
+        await state.mark_processed("app-001")
 
         poller = HistoryServerPoller(
             hs_client=hs_client,
             broker=nats_broker,
-            publish_subject="analyze.request",
-            polling_state=state,
+            publish_subject=NATS_ANALYZE_REQUEST_SUBJECT,
+            store=state,
         )
         published = await poller.poll()
 
@@ -137,13 +146,13 @@ class TestHistoryServerPoller:
         hs_client.list_applications.return_value = []
 
         nats_broker = AsyncMock()
-        state = PollingState()
+        state = await _make_state()
 
         poller = HistoryServerPoller(
             hs_client=hs_client,
             broker=nats_broker,
-            publish_subject="analyze.request",
-            polling_state=state,
+            publish_subject=NATS_ANALYZE_REQUEST_SUBJECT,
+            store=state,
         )
         published = await poller.poll()
 
@@ -164,19 +173,19 @@ class TestHistoryServerPoller:
         hs_client.get_executors.return_value = EXECUTORS
 
         nats_broker = AsyncMock()
-        state = PollingState()
+        state = await _make_state()
 
         poller = HistoryServerPoller(
             hs_client=hs_client,
             broker=nats_broker,
-            publish_subject="analyze.request",
-            polling_state=state,
+            publish_subject=NATS_ANALYZE_REQUEST_SUBJECT,
+            store=state,
         )
         published = await poller.poll()
 
         assert published == 1
-        assert not state.is_processed("app-fail")
-        assert state.is_processed("app-ok")
+        assert not await state.is_processed("app-fail")
+        assert await state.is_processed("app-ok")
 
     def test_resolve_base_path_with_attempt_id(self) -> None:
         app_info: dict[str, Any] = {
