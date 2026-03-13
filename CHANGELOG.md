@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.6...spark-advisor-v0.1.7) (2026-03-13)
+
+
+### Features
+
+* switch from in memory tasks store to sqlite + sqlalchemy ([6463350](https://github.com/pstysz/spark-advisor/commit/64633503f9acd5344ecb24bf8345ee076161e254))
+
 ## [0.1.6](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.5...spark-advisor-v0.1.6) (2026-03-06)
 
 
