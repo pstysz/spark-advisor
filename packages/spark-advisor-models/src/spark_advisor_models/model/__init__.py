@@ -1,3 +1,4 @@
+from spark_advisor_models.model.history_server import ApplicationSummary, Attempt
 from spark_advisor_models.model.input import AnalysisToolInput, RecommendationInput
 from spark_advisor_models.model.metrics import (
     ExecutorMetrics,
@@ -12,7 +13,9 @@ from spark_advisor_models.model.metrics import (
 )
 from spark_advisor_models.model.output import (
     AdvisorReport,
+    AnalysisMode,
     AnalysisResult,
+    OutputFormat,
     Recommendation,
     RuleResult,
     Severity,
@@ -21,11 +24,15 @@ from spark_advisor_models.model.spark_config import SparkConfig
 
 __all__ = [
     "AdvisorReport",
+    "AnalysisMode",
     "AnalysisResult",
     "AnalysisToolInput",
+    "ApplicationSummary",
+    "Attempt",
     "ExecutorMetrics",
     "IOQuantiles",
     "JobAnalysis",
+    "OutputFormat",
     "Quantiles",
     "Recommendation",
     "RecommendationInput",

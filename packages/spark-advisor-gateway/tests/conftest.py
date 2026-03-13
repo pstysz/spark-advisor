@@ -15,7 +15,7 @@ from spark_advisor_gateway.api.routes import create_router
 from spark_advisor_gateway.config import GatewaySettings, StateKey
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
-from spark_advisor_gateway.task.store import InMemoryTaskStore
+from spark_advisor_gateway.task.store import TaskStore
 
 
 @pytest.fixture
@@ -24,8 +24,15 @@ def settings() -> GatewaySettings:
 
 
 @pytest.fixture
-def task_manager() -> TaskManager:
-    return TaskManager(InMemoryTaskStore())
+async def task_store() -> TaskStore:
+    store = TaskStore("sqlite+aiosqlite:///:memory:")
+    await store.init()
+    return store
+
+
+@pytest.fixture
+async def task_manager(task_store: TaskStore) -> TaskManager:
+    return TaskManager(task_store)
 
 
 @pytest.fixture

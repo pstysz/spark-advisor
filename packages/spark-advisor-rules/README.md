@@ -18,9 +18,9 @@ pip install spark-advisor-rules
 | **SpillToDiskRule** | Disk spill indicating insufficient memory |
 | **GCPressureRule** | GC time > 20% of task time |
 | **ShufflePartitionsRule** | Partition count far from optimal (128MB target) |
-| **ExecutorIdleRule** | Slot utilization < 40% |
-| **TaskFailureRule** | Failed tasks (OOM, fetch failures) |
-| **SmallFileRule** | Avg input bytes per task < 10MB |
+| **ExecutorIdleRule** | Slot utilization < 40% (CRITICAL if <20%) |
+| **TaskFailureRule** | Failed tasks (CRITICAL if >=10, WARNING if >0) |
+| **SmallFileRule** | Avg input bytes per task < 10MB (CRITICAL if <1MB) |
 | **BroadcastJoinThresholdRule** | Broadcast join disabled or too low |
 | **SerializerChoiceRule** | Java serializer used with shuffle stages |
 | **DynamicAllocationRule** | Missing min/max bounds or disabled |

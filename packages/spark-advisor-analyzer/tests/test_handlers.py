@@ -3,6 +3,7 @@ from faststream.nats import TestNatsBroker
 
 from spark_advisor_analyzer.app import app, broker
 from spark_advisor_analyzer.orchestrator import AdviceOrchestrator
+from spark_advisor_models.defaults import NATS_ANALYZE_REQUEST_SUBJECT
 from spark_advisor_models.model import AnalysisResult
 from spark_advisor_models.testing import make_job
 from spark_advisor_rules import StaticAnalysisService
@@ -17,7 +18,7 @@ async def test_analyze_request_returns_result() -> None:
         app.context.set_global("orchestrator", orchestrator)
         result = await br.request(
             job.model_dump(mode="json"),
-            subject="analyze.request",
+            subject=NATS_ANALYZE_REQUEST_SUBJECT,
             timeout=10.0,
         )
         parsed = AnalysisResult.model_validate_json(result.body)

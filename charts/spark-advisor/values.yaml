@@ -1,21 +1,21 @@
 analyzer:
   config:
     nats:
-      url: ""
+      url: "nats://spark-advisor-nats:4222"
     ai:
       enabled: true
 
 gateway:
   config:
     nats:
-      url: ""
+      url: "nats://spark-advisor-nats:4222"
   ingress:
     enabled: false
 
 hs-connector:
   config:
     nats:
-      url: ""
+      url: "nats://spark-advisor-nats:4222"
     historyServerUrl: "http://spark-history:18080"
 
 nats:

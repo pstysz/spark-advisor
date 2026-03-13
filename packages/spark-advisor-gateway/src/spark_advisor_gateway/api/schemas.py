@@ -6,15 +6,15 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
-from spark_advisor_models.model.output import AnalysisMode
+from spark_advisor_models.model import AnalysisMode
 
 if TYPE_CHECKING:
-    from spark_advisor_hs_connector.model.output import ApplicationSummary
+    from spark_advisor_models.model import ApplicationSummary
 
 
 class AnalyzeRequest(BaseModel):
     app_id: str
-    mode: AnalysisMode = AnalysisMode.STANDARD
+    mode: AnalysisMode = AnalysisMode.AI
 
 
 class ApplicationResponse(BaseModel):
@@ -64,3 +64,20 @@ class TaskResponse(BaseModel):
             error=task.error,
             result=task.result.model_dump(mode="json") if task.result else None,
         )
+
+
+class PaginatedTaskResponse(BaseModel):
+    items: list[TaskResponse]
+    total: int
+    limit: int | None
+    offset: int
+
+
+class AnalyzeResponse(BaseModel):
+    task_id: str
+    status: TaskStatus
+
+
+class TaskStatsResponse(BaseModel):
+    counts: dict[TaskStatus, int]
+    total: int

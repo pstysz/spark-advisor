@@ -81,7 +81,7 @@ class TestAnalyzeHistoryServer:
     def test_produces_result(self) -> None:
         _mock_all_hs_endpoints()
 
-        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--no-ai"])
+        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--mode", "static"])
 
         assert result.exit_code == 0
         assert "Spark Job Analysis" in result.output
@@ -91,7 +91,7 @@ class TestAnalyzeHistoryServer:
     def test_json_format(self) -> None:
         _mock_all_hs_endpoints()
 
-        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--no-ai", "-f", "json"])
+        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--mode", "static", "-f", "json"])
 
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -103,7 +103,7 @@ class TestAnalyzeHistoryServer:
     def test_verbose_shows_stage_breakdown(self) -> None:
         _mock_all_hs_endpoints()
 
-        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--no-ai", "--verbose"])
+        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--mode", "static", "--verbose"])
 
         assert result.exit_code == 0
         assert "Stage Breakdown" in result.output
@@ -112,7 +112,7 @@ class TestAnalyzeHistoryServer:
     def test_404_shows_error(self) -> None:
         respx.get(f"{HS_BASE}{APP_PATH}").respond(status_code=404)
 
-        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--no-ai"])
+        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--mode", "static"])
 
         assert result.exit_code == 1
         assert "Error" in result.output
@@ -121,7 +121,7 @@ class TestAnalyzeHistoryServer:
     def test_connection_error(self) -> None:
         respx.get(f"{HS_BASE}{APP_PATH}").mock(side_effect=httpx.ConnectError("Connection refused"))
 
-        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--no-ai"])
+        result = runner.invoke(app, ["analyze", APP_ID, "-hs", HS_URL, "--mode", "static"])
 
         assert result.exit_code == 1
         assert "Error" in result.output
@@ -130,6 +130,6 @@ class TestAnalyzeHistoryServer:
     def test_source_not_treated_as_file_path(self) -> None:
         _mock_all_hs_endpoints()
 
-        result = runner.invoke(app, ["analyze", "nonexistent-app-id", "-hs", HS_URL, "--no-ai"])
+        result = runner.invoke(app, ["analyze", "nonexistent-app-id", "-hs", HS_URL, "--mode", "static"])
 
         assert result.exit_code == 0 or "Error fetching" in result.output

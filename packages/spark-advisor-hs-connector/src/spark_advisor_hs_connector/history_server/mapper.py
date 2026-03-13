@@ -16,12 +16,12 @@ from spark_advisor_models.util import quantiles_5
 
 
 def map_job_analysis(
-    app_id: str,
-    app_info: dict[str, Any],
-    environment: dict[str, Any],
-    stages_data: list[dict[str, Any]],
-    task_summaries: dict[int, dict[str, Any]],
-    executors_data: list[dict[str, Any]],
+        app_id: str,
+        app_info: dict[str, Any],
+        environment: dict[str, Any],
+        stages_data: list[dict[str, Any]],
+        task_summaries: dict[int, dict[str, Any]],
+        executors_data: list[dict[str, Any]],
 ) -> JobAnalysis:
     attempts = app_info.get("attempts", [])
     latest = attempts[-1] if attempts else {}
@@ -52,8 +52,8 @@ def _map_environment(env: dict[str, Any]) -> SparkConfig:
 
 
 def _map_stages(
-    stages_data: list[dict[str, Any]],
-    task_summaries: dict[int, dict[str, Any]],
+        stages_data: list[dict[str, Any]],
+        task_summaries: dict[int, dict[str, Any]],
 ) -> list[StageMetrics]:
     stages: list[StageMetrics] = []
     for stage_data in stages_data:

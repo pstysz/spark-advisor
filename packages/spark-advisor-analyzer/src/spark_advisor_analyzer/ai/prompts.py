@@ -1,5 +1,6 @@
 from spark_advisor_analyzer.ai.tool_config import IMPORTANT_KEYS, SYSTEM_PROMPT_TEMPLATE
 from spark_advisor_models.config import Thresholds
+from spark_advisor_models.defaults import DEFAULT_THRESHOLDS
 from spark_advisor_models.model import JobAnalysis, RuleResult, StageMetrics
 from spark_advisor_models.util import format_bytes
 
@@ -9,7 +10,7 @@ def build_user_message(
     rule_results: list[RuleResult],
     thresholds: Thresholds | None = None,
 ) -> str:
-    t = thresholds or Thresholds()
+    t = thresholds or DEFAULT_THRESHOLDS
     lines: list[str] = ["Analyze this Spark job and suggest optimizations.\n", "## Configuration"]
 
     for key in IMPORTANT_KEYS:
@@ -152,7 +153,7 @@ def _append_rule_results(lines: list[str], rule_results: list[RuleResult]) -> No
 
 
 def build_system_prompt(thresholds: Thresholds | None = None) -> str:
-    t = thresholds or Thresholds()
+    t = thresholds or DEFAULT_THRESHOLDS
     return SYSTEM_PROMPT_TEMPLATE.format(
         target_partition_mb=t.target_partition_size_bytes // (1024 * 1024),
         skew_warning=t.skew_warning_ratio,
@@ -160,7 +161,10 @@ def build_system_prompt(thresholds: Thresholds | None = None) -> str:
         gc_warning=t.gc_warning_percent,
         gc_critical=t.gc_critical_percent,
         min_slot=t.min_slot_utilization_percent,
+        min_slot_critical=t.min_slot_utilization_critical_percent,
         scheduler_delay_ms=t.scheduler_delay_ms,
         spill_warning_gb=t.spill_warning_gb,
         spill_critical_gb=t.spill_critical_gb,
+        task_failure_warning=t.task_failure_warning_count,
+        task_failure_critical=t.task_failure_critical_count,
     )

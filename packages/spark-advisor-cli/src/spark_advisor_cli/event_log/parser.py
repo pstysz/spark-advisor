@@ -156,16 +156,18 @@ class _ParserState:
         self.stage_tasks: dict[int, _StageAccumulator] = defaultdict(_StageAccumulator)
         self.executor_count: int = 0
 
+    def _resolve_end_time(self) -> int:
+        if self.end_time > self.start_time:
+            return self.end_time
+        if self.stage_info:
+            return max(
+                (info.get("completion_time", 0) for info in self.stage_info.values()),
+                default=self.start_time,
+            )
+        return self.start_time
+
     def build(self) -> JobAnalysis:
-        end_time = self.end_time
-        if end_time <= self.start_time:
-            if self.stage_info:
-                end_time = max(
-                    (info.get("completion_time", 0) for info in self.stage_info.values()),
-                    default=self.start_time,
-                )
-            else:
-                end_time = self.start_time
+        end_time = self._resolve_end_time()
 
         stages = []
         for stage_id, info in sorted(self.stage_info.items()):

@@ -1,8 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from spark_advisor_hs_connector.history_server_client import HistoryServerClient
-from spark_advisor_hs_connector.history_server_mapper import map_job_analysis
+from spark_advisor_hs_connector.history_server.client import HistoryServerClient
+from spark_advisor_hs_connector.history_server.mapper import map_job_analysis
 from spark_advisor_models.model import JobAnalysis
 
 
@@ -61,5 +61,4 @@ def fetch_task_summaries(
     max_workers = min(8, len(stages_data))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         results = executor.map(_fetch_one, stages_data)
-
-    return dict(results)
+        return dict(results)

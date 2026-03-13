@@ -126,13 +126,21 @@ class TestTaskFailureRule:
         job = make_job(stages=[stage])
         assert TaskFailureRule().evaluate(job) == []
 
-    def test_detects_failures(self):
+    def test_detects_failures_warning(self):
         stage = make_stage(failed_task_count=3)
         job = make_job(stages=[stage])
         results = TaskFailureRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
         assert "3 of 100" in results[0].message
+
+    def test_detects_failures_critical(self):
+        stage = make_stage(failed_task_count=15)
+        job = make_job(stages=[stage])
+        results = TaskFailureRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.CRITICAL
+        assert "15 of 100" in results[0].message
 
 
 class TestExecutorIdleRule:
@@ -149,34 +157,49 @@ class TestExecutorIdleRule:
         )
         assert ExecutorIdleRule().evaluate(job) == []
 
-    def test_low_utilization_triggers_warning(self):
+    def test_low_utilization_triggers_critical(self):
         # 10 executors x 4 cores x 300_000ms = 12_000_000 total slot time
-        # 1_000_000 task time = 8.3% utilization → below 40% threshold
+        # 1_000_000 task time = 8.3% utilization → below 20% critical threshold
         job = make_job(
             executors=make_executors(total_task_time_ms=1_000_000),
             config={"spark.executor.cores": "4"},
         )
         results = ExecutorIdleRule().evaluate(job)
         assert len(results) == 1
-        assert results[0].severity == Severity.WARNING
+        assert results[0].severity == Severity.CRITICAL
         assert "8%" in results[0].message
 
-    def test_zero_task_time_skips(self):
+    def test_moderate_low_utilization_triggers_warning(self):
+        # 10 executors x 4 cores x 300_000ms = 12_000_000 total slot time
+        # 3_600_000 task time = 30% utilization → below 40% but above 20%
+        job = make_job(
+            executors=make_executors(total_task_time_ms=3_600_000),
+            config={"spark.executor.cores": "4"},
+        )
+        results = ExecutorIdleRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+
+    def test_zero_task_time_reports_zero_utilization(self):
         job = make_job(
             executors=make_executors(total_task_time_ms=0),
         )
-        assert ExecutorIdleRule().evaluate(job) == []
+        results = ExecutorIdleRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.CRITICAL
+        assert "0%" in results[0].message
 
     def test_default_cores_one(self):
         # No spark.executor.cores set → defaults to 1
         # 10 executors x 1 core x 300_000ms = 3_000_000 total slot time
-        # 500_000 task time = 16.7% → below 40%
+        # 500_000 task time = 16.7% → below 20% critical threshold
         job = make_job(
             executors=make_executors(total_task_time_ms=500_000),
             config={"spark.executor.memory": "4g"},
         )
         results = ExecutorIdleRule().evaluate(job)
         assert len(results) == 1
+        assert results[0].severity == Severity.CRITICAL
 
 
 class TestRunRules:
@@ -214,13 +237,22 @@ class TestSmallFileRule:
         job = make_job(stages=[stage])
         assert SmallFileRule().evaluate(job) == []
 
-    def test_detects_small_files(self):
-        stage = make_stage(input_bytes=50 * 1024 * 1024, task_count=100)
+    def test_detects_small_files_warning(self):
+        # 50MB / 100 tasks = 0.5MB per task → below 10MB threshold but above 1MB
+        stage = make_stage(input_bytes=500 * 1024 * 1024, task_count=100)
         job = make_job(stages=[stage])
         results = SmallFileRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
         assert results[0].rule_id == "small_files"
+
+    def test_detects_tiny_files_critical(self):
+        # 50MB / 100 tasks = 0.5MB per task → below 1MB critical threshold
+        stage = make_stage(input_bytes=50 * 1024 * 1024, task_count=100)
+        job = make_job(stages=[stage])
+        results = SmallFileRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.CRITICAL
 
     def test_skips_zero_input(self):
         stage = make_stage(input_bytes=0, task_count=100)

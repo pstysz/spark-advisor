@@ -2,6 +2,7 @@ from abc import ABC
 from typing import ClassVar
 
 from spark_advisor_models.config import Thresholds
+from spark_advisor_models.defaults import DEFAULT_THRESHOLDS
 from spark_advisor_models.model import JobAnalysis, RuleResult, Severity, StageMetrics
 
 
@@ -9,7 +10,7 @@ class Rule(ABC):
     rule_id: ClassVar[str]
 
     def __init__(self, thresholds: Thresholds | None = None) -> None:
-        self._thresholds = thresholds or Thresholds()
+        self._thresholds = thresholds or DEFAULT_THRESHOLDS
 
     def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
         results: list[RuleResult] = []
@@ -191,12 +192,17 @@ class ExecutorIdleRule(Rule):
         if utilization is None or utilization > self._thresholds.min_slot_utilization_percent:
             return []
 
+        severity = (
+            Severity.CRITICAL
+            if utilization < self._thresholds.min_slot_utilization_critical_percent
+            else Severity.WARNING
+        )
         idle_pct = 100 - utilization
         cores = job.config.executor_cores
 
         return [
             self._result(
-                Severity.WARNING,
+                severity,
                 "Executor over-provisioning",
                 f"Slot utilization is only {utilization:.0f}% — {idle_pct:.0f}% idle",
                 current_value=f"{job.executors.executor_count} executors x {cores} cores, {utilization:.0f}% utilized",
@@ -217,8 +223,10 @@ class TaskFailureRule(Rule):
         if failed < self._thresholds.task_failure_warning_count:
             return None
 
+        severity = Severity.CRITICAL if failed >= self._thresholds.task_failure_critical_count else Severity.WARNING
+
         return self._result(
-            Severity.WARNING,
+            severity,
             f"Task failures in Stage {stage.stage_id}",
             f"{failed} of {stage.tasks.task_count} tasks failed",
             stage_id=stage.stage_id,
@@ -227,6 +235,9 @@ class TaskFailureRule(Rule):
         )
 
 
+# Small average input per task means either too many small source files or over-partitioned reads.
+# Thousands of tiny tasks create excessive scheduler overhead (launch cost dominates compute).
+# CRITICAL below 1 MB/task (extreme overhead), WARNING below 10 MB/task.
 class SmallFileRule(Rule):
     rule_id: ClassVar[str] = "small_files"
 
@@ -236,9 +247,10 @@ class SmallFileRule(Rule):
         avg_input = stage.input_bytes / stage.tasks.task_count
         if avg_input >= self._thresholds.small_file_threshold_bytes:
             return None
+        severity = Severity.CRITICAL if avg_input < self._thresholds.small_file_critical_bytes else Severity.WARNING
         avg_mb = avg_input / (1024 * 1024)
         return self._result(
-            Severity.WARNING,
+            severity,
             f"Small input partitions in Stage {stage.stage_id}",
             f"Average input per task is {avg_mb:.1f} MB across {stage.tasks.task_count} tasks",
             stage_id=stage.stage_id,
@@ -248,6 +260,10 @@ class SmallFileRule(Rule):
         )
 
 
+# Checks spark.sql.autoBroadcastJoinThreshold — when a small table is below this size,
+# Spark broadcasts it to all executors instead of shuffling both sides of the join.
+# Disabled (-1) with shuffle stages is a WARNING because shuffle joins on small tables
+# waste network I/O. A low threshold (< 10 MB) with shuffle stages is an INFO hint.
 class BroadcastJoinThresholdRule(Rule):
     rule_id: ClassVar[str] = "broadcast_join"
 
@@ -290,6 +306,10 @@ class BroadcastJoinThresholdRule(Rule):
         return []
 
 
+# Checks if the job uses the default Java serializer with shuffle-heavy stages.
+# KryoSerializer is typically 10x faster and produces more compact output, significantly
+# reducing shuffle data size and network transfer time. Only triggers when shuffle is present
+# because non-shuffle jobs don't benefit from serializer changes.
 class SerializerChoiceRule(Rule):
     rule_id: ClassVar[str] = "serializer_choice"
 
@@ -314,6 +334,11 @@ class SerializerChoiceRule(Rule):
         ]
 
 
+# Validates dynamic allocation configuration. Two scenarios:
+# 1) Dynamic allocation ON but without min/maxExecutors bounds — unbounded scaling can
+#    over-provision in shared clusters, wasting resources and starving other jobs.
+# 2) Dynamic allocation OFF with low slot utilization — suggests enabling it so Spark
+#    can auto-scale executors to match actual workload instead of paying for idle slots.
 class DynamicAllocationRule(Rule):
     rule_id: ClassVar[str] = "dynamic_allocation"
 
@@ -335,7 +360,7 @@ class DynamicAllocationRule(Rule):
                         "Dynamic allocation without bounds",
                         f"Dynamic allocation enabled but {', '.join(missing)} not set",
                         current_value="spark.dynamicAllocation.enabled = true",
-                        recommended_value=f"Set {', '.join(f'spark.dynamicAllocation.{m}' for m in missing)}",
+                        recommended_value=", ".join(f"spark.dynamicAllocation.{m} = <value>" for m in missing),
                         estimated_impact="Unbounded dynamic allocation can over-provision resources",
                     )
                 )
@@ -359,6 +384,11 @@ class DynamicAllocationRule(Rule):
         return results
 
 
+# Detects when executor memory overhead (off-heap) is likely too low. Triggers when BOTH
+# conditions are true: GC pressure above threshold AND memory utilization above threshold.
+# High GC + high memory means the JVM heap is nearly full and struggling — increasing
+# spark.executor.memoryOverhead gives more room for off-heap data (broadcast vars, shuffle
+# buffers, internal Spark structures) and reduces container OOM kills on YARN/K8s.
 class ExecutorMemoryOverheadRule(Rule):
     rule_id: ClassVar[str] = "executor_memory_overhead"
 

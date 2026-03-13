@@ -4,13 +4,13 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from spark_advisor_hs_connector.hs_fetcher import fetch_job_analysis
+from spark_advisor_hs_connector.job_analysis_builder import fetch_job_analysis
 
 if TYPE_CHECKING:
     from faststream.nats import NatsBroker
 
-    from spark_advisor_hs_connector.history_server_client import HistoryServerClient
-    from spark_advisor_hs_connector.polling_state import PollingState
+    from spark_advisor_hs_connector.history_server.client import HistoryServerClient
+    from spark_advisor_hs_connector.store import PollingStore
 
 logger = logging.getLogger(__name__)
 
@@ -21,19 +21,19 @@ class HistoryServerPoller:
         hs_client: HistoryServerClient,
         broker: NatsBroker,
         publish_subject: str,
-        polling_state: PollingState,
+        store: PollingStore,
         batch_size: int = 50,
     ) -> None:
         self._hs_client = hs_client
         self._broker = broker
         self._publish_subject = publish_subject
-        self._polling_state = polling_state
+        self.store = store
         self._batch_size = batch_size
 
     async def poll(self) -> int:
         apps = await asyncio.to_thread(self._hs_client.list_applications, limit=self._batch_size)
         all_ids = [app.id for app in apps]
-        new_ids = self._polling_state.filter_new(all_ids)
+        new_ids = await self.store.filter_new_and_mark(all_ids)
 
         if not new_ids:
             logger.debug("No new applications found")
@@ -43,10 +43,10 @@ class HistoryServerPoller:
         for app_id in new_ids:
             try:
                 await self._fetch_and_publish(app_id)
-                self._polling_state.mark_processed(app_id)
                 published += 1
             except Exception:
                 logger.exception("Failed to fetch/publish app %s, will retry next cycle", app_id)
+                await self.store.remove(app_id)
 
         logger.info("Poll complete: %d/%d new apps published", published, len(new_ids))
         return published

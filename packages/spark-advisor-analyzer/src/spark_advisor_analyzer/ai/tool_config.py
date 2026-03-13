@@ -94,8 +94,14 @@ Skew detection:
 WARNING if > {skew_warning}x, CRITICAL if > {skew_critical}x. Skewed stages have one task \
 processing disproportionate data while others finish fast.
 
+Task failures:
+- Any failed task is a red flag — usually OOM, fetch failure, or network timeout. \
+>={task_failure_warning} failures = WARNING, >={task_failure_critical} = CRITICAL. \
+High failure counts often correlate with skew or insufficient memory.
+
 Executor efficiency:
-- Slot utilization = total_task_time / (total_cores * job_duration). <{min_slot}% = over-provisioned.
+- Slot utilization = total_task_time / (total_cores * job_duration). <{min_slot}% = WARNING, \
+<{min_slot_critical}% = CRITICAL (severely over-provisioned).
 - Memory utilization = peak_memory / allocated_memory across all executors.
 
 KEY CONFIGS TO CONSIDER:
