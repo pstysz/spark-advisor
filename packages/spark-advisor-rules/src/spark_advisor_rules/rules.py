@@ -235,6 +235,9 @@ class TaskFailureRule(Rule):
         )
 
 
+# Small average input per task means either too many small source files or over-partitioned reads.
+# Thousands of tiny tasks create excessive scheduler overhead (launch cost dominates compute).
+# CRITICAL below 1 MB/task (extreme overhead), WARNING below 10 MB/task.
 class SmallFileRule(Rule):
     rule_id: ClassVar[str] = "small_files"
 
@@ -257,6 +260,10 @@ class SmallFileRule(Rule):
         )
 
 
+# Checks spark.sql.autoBroadcastJoinThreshold — when a small table is below this size,
+# Spark broadcasts it to all executors instead of shuffling both sides of the join.
+# Disabled (-1) with shuffle stages is a WARNING because shuffle joins on small tables
+# waste network I/O. A low threshold (< 10 MB) with shuffle stages is an INFO hint.
 class BroadcastJoinThresholdRule(Rule):
     rule_id: ClassVar[str] = "broadcast_join"
 
@@ -299,6 +306,10 @@ class BroadcastJoinThresholdRule(Rule):
         return []
 
 
+# Checks if the job uses the default Java serializer with shuffle-heavy stages.
+# KryoSerializer is typically 10x faster and produces more compact output, significantly
+# reducing shuffle data size and network transfer time. Only triggers when shuffle is present
+# because non-shuffle jobs don't benefit from serializer changes.
 class SerializerChoiceRule(Rule):
     rule_id: ClassVar[str] = "serializer_choice"
 
@@ -323,6 +334,11 @@ class SerializerChoiceRule(Rule):
         ]
 
 
+# Validates dynamic allocation configuration. Two scenarios:
+# 1) Dynamic allocation ON but without min/maxExecutors bounds — unbounded scaling can
+#    over-provision in shared clusters, wasting resources and starving other jobs.
+# 2) Dynamic allocation OFF with low slot utilization — suggests enabling it so Spark
+#    can auto-scale executors to match actual workload instead of paying for idle slots.
 class DynamicAllocationRule(Rule):
     rule_id: ClassVar[str] = "dynamic_allocation"
 
@@ -368,6 +384,11 @@ class DynamicAllocationRule(Rule):
         return results
 
 
+# Detects when executor memory overhead (off-heap) is likely too low. Triggers when BOTH
+# conditions are true: GC pressure above threshold AND memory utilization above threshold.
+# High GC + high memory means the JVM heap is nearly full and struggling — increasing
+# spark.executor.memoryOverhead gives more room for off-heap data (broadcast vars, shuffle
+# buffers, internal Spark structures) and reduces container OOM kills on YARN/K8s.
 class ExecutorMemoryOverheadRule(Rule):
     rule_id: ClassVar[str] = "executor_memory_overhead"
 
