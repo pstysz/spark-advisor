@@ -8,7 +8,7 @@ data:
   SA_GATEWAY_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
   SA_GATEWAY_SERVER__HOST: {{ .Values.config.server.host | quote }}
   SA_GATEWAY_SERVER__PORT: {{ .Values.config.server.port | quote }}
-  SA_GATEWAY_NATS__URL: {{ .Values.config.nats.url | default (printf "nats://%s-nats:4222" .Release.Name) | quote }}
+  SA_GATEWAY_NATS__URL: {{ .Values.config.nats.url | quote }}
   SA_GATEWAY_NATS__FETCH_JOB_SUBJECT: {{ .Values.config.nats.fetchJobSubject | quote }}
   SA_GATEWAY_NATS__ANALYZE_REQUEST_SUBJECT: {{ .Values.config.nats.analyzeRequestSubject | quote }}
   SA_GATEWAY_NATS__ANALYZE_AGENT_REQUEST_SUBJECT: {{ .Values.config.nats.analyzeAgentRequestSubject | quote }}

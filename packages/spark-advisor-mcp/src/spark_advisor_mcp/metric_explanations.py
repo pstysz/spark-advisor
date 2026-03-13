@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from spark_advisor_models.util.bytes import format_bytes
 
-METRIC_EXPLANATIONS: dict[str, str] = {
+if TYPE_CHECKING:
+    from spark_advisor_models.config import Thresholds
+
+METRIC_DESCRIPTIONS: dict[str, str] = {
     "gc_time_percent": (
         "Percentage of total task execution time spent on JVM garbage collection. "
-        "Values above 20% indicate memory pressure — the JVM is spending too much time "
+        "Values above the warning threshold indicate memory pressure — the JVM is spending too much time "
         "reclaiming memory instead of doing useful work. Solution: increase `spark.executor.memory` "
         "or reduce data per partition by increasing `spark.sql.shuffle.partitions`."
     ),
@@ -17,7 +22,7 @@ METRIC_EXPLANATIONS: dict[str, str] = {
     ),
     "data_skew_ratio": (
         "Ratio of maximum task duration to median task duration within a stage (max/median). "
-        "A ratio > 5x indicates data skew — one partition has disproportionately more data. "
+        "A high ratio indicates data skew — one partition has disproportionately more data. "
         "This causes stragglers that delay the entire stage. "
         "Solution: enable AQE skew join (`spark.sql.adaptive.skewJoin.enabled=true`) or salt join keys."
     ),
@@ -38,7 +43,7 @@ METRIC_EXPLANATIONS: dict[str, str] = {
     "memory_utilization_percent": (
         "Ratio of peak memory used to total allocated memory across all executors. "
         "Low utilization (< 40%) means over-provisioned memory. "
-        "High utilization (> 80%) combined with GC pressure suggests memory increase needed."
+        "High utilization combined with GC pressure suggests memory increase needed."
     ),
     "task_count": (
         "Number of tasks in a stage, determined by the number of partitions. "
@@ -54,21 +59,66 @@ METRIC_EXPLANATIONS: dict[str, str] = {
         "Total wall-clock duration of the Spark application in milliseconds. "
         "This includes all stages, scheduling overhead, and idle time between stages."
     ),
+    "slot_utilization_percent": (
+        "Percentage of available executor slots (cores x time) that were actively running tasks. "
+        "Low utilization means the cluster is over-provisioned — paying for compute that sits idle. "
+        "Consider reducing executor count, enabling dynamic allocation, or increasing parallelism."
+    ),
 }
 
+_GB = 1024 * 1024 * 1024
 
-def format_metric_explanation(metric_name: str, value: float) -> str:
-    explanation = METRIC_EXPLANATIONS.get(metric_name)
-    if not explanation:
-        known = ", ".join(f"`{k}`" for k in sorted(METRIC_EXPLANATIONS))
-        return (
-            f"Unknown metric: `{metric_name}`. "
-            f"Known metrics: {known}"
-        )
+
+def _get_thresholds(metric_name: str, thresholds: Thresholds) -> tuple[float | None, float | None]:
+    mapping: dict[str, tuple[float | None, float | None]] = {
+        "gc_time_percent": (thresholds.gc_warning_percent, thresholds.gc_critical_percent),
+        "spill_to_disk_bytes": (thresholds.spill_warning_gb * _GB, thresholds.spill_critical_gb * _GB),
+        "data_skew_ratio": (thresholds.skew_warning_ratio, thresholds.skew_critical_ratio),
+        "memory_utilization_percent": (
+            thresholds.memory_overhead_mem_utilization_percent,
+            thresholds.memory_utilization_critical_percent,
+        ),
+    }
+    return mapping.get(metric_name, (None, None))
+
+
+def _assess_value(
+    metric_name: str,
+    value: float,
+    thresholds: Thresholds,
+) -> str:
+    warning, critical = _get_thresholds(metric_name, thresholds)
+
+    if critical is not None and value >= critical:
+        return f"**Critical** — value exceeds the critical threshold ({critical:g})"
+    if warning is not None and value >= warning:
+        return f"**Warning** — value exceeds the warning threshold ({warning:g})"
+    if warning is not None or critical is not None:
+        return "**Healthy** — value is within normal range"
+    return ""
+
+
+def format_metric_explanation(metric_name: str, value: float, thresholds: Thresholds) -> str:
+    description = METRIC_DESCRIPTIONS.get(metric_name)
+    if not description:
+        known = ", ".join(f"`{k}`" for k in sorted(METRIC_DESCRIPTIONS))
+        return f"Unknown metric: `{metric_name}`. Known metrics: {known}"
 
     formatted_value = format_bytes(int(value)) if "bytes" in metric_name else f"{value:,.2f}"
-    return (
-        f"## Metric: `{metric_name}`\n\n"
-        f"**Value:** {formatted_value}\n\n"
-        f"{explanation}"
-    )
+
+    lines = [
+        f"## Metric: `{metric_name}`",
+        "",
+        f"**Value:** {formatted_value}",
+        "",
+        description,
+    ]
+
+    assessment = _assess_value(metric_name, value, thresholds)
+    if assessment:
+        lines.append("")
+        lines.append("### Assessment")
+        lines.append("")
+        lines.append(assessment)
+
+    return "\n".join(lines)
