@@ -607,3 +607,110 @@ async def test_task_config_without_ai_report(client: AsyncClient, task_manager: 
     data = response.json()
     assert len(data["entries"]) >= 1
     assert all(e["source"] == "rule" for e in data["entries"])
+
+
+@pytest.mark.asyncio
+async def test_stats_summary_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/stats/summary")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 0
+    assert data["completed"] == 0
+    assert data["failed"] == 0
+    assert data["avg_duration_seconds"] is None
+    assert data["ai_usage_percent"] is None
+
+
+@pytest.mark.asyncio
+async def test_stats_summary_with_data(client: AsyncClient, task_manager: TaskManager) -> None:
+    await _create_completed_task(task_manager, "app-s1", rule_results=[_make_rule_result()])
+    await _create_completed_task(task_manager, "app-s2", rule_results=[])
+    task_f = await task_manager.create("app-s3")
+    await task_manager.mark_running(task_f.task_id)
+    await task_manager.mark_failed(task_f.task_id, "timeout")
+
+    response = await client.get("/api/v1/stats/summary")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 3
+    assert data["completed"] == 2
+    assert data["failed"] == 1
+    assert data["avg_duration_seconds"] is not None
+    assert data["ai_usage_percent"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_stats_summary_ai_usage(client: AsyncClient, task_manager: TaskManager) -> None:
+    ai_report = AdvisorReport(
+        app_id="app-ai",
+        summary="AI analysis",
+        severity=Severity.INFO,
+        rule_results=[],
+        recommendations=[],
+    )
+    await _create_completed_task(task_manager, "app-ai1", ai_report=ai_report)
+    await _create_completed_task(task_manager, "app-ai2")
+
+    response = await client.get("/api/v1/stats/summary")
+    data = response.json()
+    assert data["ai_usage_percent"] == 50.0
+
+
+@pytest.mark.asyncio
+async def test_stats_rules_counts_occurrences(client: AsyncClient, task_manager: TaskManager) -> None:
+    r1 = _make_rule_result(rule_id="shuffle_partitions")
+    r2 = _make_rule_result(rule_id="gc_pressure", severity=Severity.CRITICAL)
+    await _create_completed_task(task_manager, "app-rf1", rule_results=[r1, r2])
+    await _create_completed_task(task_manager, "app-rf2", rule_results=[r1])
+
+    response = await client.get("/api/v1/stats/rules")
+    assert response.status_code == 200
+    data = response.json()
+    items = {i["rule_id"]: i for i in data["items"]}
+    assert items["shuffle_partitions"]["count"] == 2
+    assert items["gc_pressure"]["count"] == 1
+    assert data["days"] == 30
+
+
+@pytest.mark.asyncio
+async def test_stats_rules_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/stats/rules")
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_stats_daily_volume(client: AsyncClient, task_manager: TaskManager) -> None:
+    await _create_completed_task(task_manager, "app-dv1")
+    await _create_completed_task(task_manager, "app-dv2")
+
+    response = await client.get("/api/v1/stats/daily-volume")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) >= 1
+    total_count = sum(i["count"] for i in data["items"])
+    assert total_count >= 2
+
+
+@pytest.mark.asyncio
+async def test_stats_daily_volume_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/stats/daily-volume")
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_stats_top_issues(client: AsyncClient, task_manager: TaskManager) -> None:
+    r1 = _make_rule_result(rule_id="shuffle_partitions")
+    r2 = _make_rule_result(rule_id="gc_pressure", severity=Severity.CRITICAL)
+    await _create_completed_task(task_manager, "app-ti1", rule_results=[r1, r2])
+    await _create_completed_task(task_manager, "app-ti2", rule_results=[r1])
+
+    response = await client.get("/api/v1/stats/top-issues?limit=1")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["rule_id"] == "shuffle_partitions"
+    assert data["items"][0]["count"] == 2
+    assert data["items"][0]["example_app_id"] in ("app-ti1", "app-ti2")
+    assert data["limit"] == 1
