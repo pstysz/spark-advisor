@@ -6,7 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import orjson
 import pytest
 
-from spark_advisor_models.model import AnalysisMode, AnalysisResult
+from spark_advisor_models.model import (
+    AdvisorReport,
+    AnalysisMode,
+    AnalysisResult,
+    Recommendation,
+    RuleResult,
+    Severity,
+)
 from spark_advisor_models.testing import make_job
 
 if TYPE_CHECKING:
@@ -437,3 +444,166 @@ async def test_list_tasks_limit_exceeds_max_returns_422(client: AsyncClient) -> 
 async def test_list_tasks_limit_zero_returns_422(client: AsyncClient) -> None:
     response = await client.get("/api/v1/tasks?limit=0")
     assert response.status_code == 422
+
+
+def _make_rule_result(**overrides: object) -> RuleResult:
+    defaults: dict[str, object] = {
+        "rule_id": "shuffle_partitions",
+        "severity": Severity.WARNING,
+        "title": "Shuffle partitions too low",
+        "message": "Consider increasing shuffle partitions",
+        "current_value": "200",
+        "recommended_value": "800",
+        "estimated_impact": "~40% reduction in shuffle time",
+    }
+    defaults.update(overrides)
+    return RuleResult(**defaults)  # type: ignore[arg-type]
+
+
+async def _create_completed_task(
+    task_manager: TaskManager,
+    app_id: str = "app-hist",
+    rule_results: list[RuleResult] | None = None,
+    ai_report: AdvisorReport | None = None,
+) -> str:
+    task = await task_manager.create(app_id)
+    await task_manager.mark_running(task.task_id)
+    job = make_job(app_id=app_id)
+    result = AnalysisResult(
+        app_id=app_id,
+        job=job,
+        rule_results=rule_results or [],
+        ai_report=ai_report,
+    )
+    await task_manager.mark_completed(task.task_id, result)
+    return task.task_id
+
+
+@pytest.mark.asyncio
+async def test_app_history_returns_analyses(client: AsyncClient, task_manager: TaskManager) -> None:
+    await _create_completed_task(task_manager, "app-h1")
+    await _create_completed_task(task_manager, "app-h1")
+    await _create_completed_task(task_manager, "app-other")
+
+    response = await client.get("/api/v1/apps/app-h1/history")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
+    assert len(data["items"]) == 2
+    assert all(item["app_id"] == "app-h1" for item in data["items"])
+
+
+@pytest.mark.asyncio
+async def test_app_history_empty_for_unknown(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/apps/unknown-app/history")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 0
+    assert len(data["items"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_app_history_pagination(client: AsyncClient, task_manager: TaskManager) -> None:
+    for _ in range(5):
+        await _create_completed_task(task_manager, "app-pag")
+
+    response = await client.get("/api/v1/apps/app-pag/history?limit=2&offset=1")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 5
+    assert len(data["items"]) == 2
+    assert data["limit"] == 2
+    assert data["offset"] == 1
+
+
+@pytest.mark.asyncio
+async def test_task_rules_returns_violations(client: AsyncClient, task_manager: TaskManager) -> None:
+    rules = [_make_rule_result(), _make_rule_result(rule_id="gc_pressure", severity=Severity.CRITICAL)]
+    task_id = await _create_completed_task(task_manager, rule_results=rules)
+
+    response = await client.get(f"/api/v1/tasks/{task_id}/rules")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["rule_id"] == "shuffle_partitions"
+    assert data[1]["rule_id"] == "gc_pressure"
+    assert data[1]["severity"] == "CRITICAL"
+
+
+@pytest.mark.asyncio
+async def test_task_rules_pending_returns_409(client: AsyncClient, task_manager: TaskManager) -> None:
+    task = await task_manager.create("app-p")
+    response = await client.get(f"/api/v1/tasks/{task.task_id}/rules")
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_task_rules_running_returns_409(client: AsyncClient, task_manager: TaskManager) -> None:
+    task = await task_manager.create("app-r")
+    await task_manager.mark_running(task.task_id)
+    response = await client.get(f"/api/v1/tasks/{task.task_id}/rules")
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_task_rules_not_found(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/tasks/nonexistent/rules")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_task_rules_empty_when_no_violations(client: AsyncClient, task_manager: TaskManager) -> None:
+    task_id = await _create_completed_task(task_manager, rule_results=[])
+    response = await client.get(f"/api/v1/tasks/{task_id}/rules")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_task_config_returns_comparison(client: AsyncClient, task_manager: TaskManager) -> None:
+    rules = [_make_rule_result(recommended_value="800")]
+    ai_report = AdvisorReport(
+        app_id="app-cfg",
+        summary="Test",
+        severity=Severity.WARNING,
+        rule_results=[],
+        recommendations=[
+            Recommendation(parameter="spark.sql.shuffle.partitions", current_value="200", recommended_value="1000"),
+        ],
+        suggested_config={"spark.executor.memory": "8g"},
+    )
+    task_id = await _create_completed_task(task_manager, app_id="app-cfg", rule_results=rules, ai_report=ai_report)
+
+    response = await client.get(f"/api/v1/tasks/{task_id}/config")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["app_id"] == "app-cfg"
+    entries = {e["parameter"]: e for e in data["entries"]}
+    assert "spark.executor.memory" in entries
+    assert entries["spark.executor.memory"]["source"] == "ai"
+    assert entries["spark.sql.shuffle.partitions"]["source"] == "ai"
+
+
+@pytest.mark.asyncio
+async def test_task_config_not_completed_returns_409(client: AsyncClient, task_manager: TaskManager) -> None:
+    task = await task_manager.create("app-nc")
+    response = await client.get(f"/api/v1/tasks/{task.task_id}/config")
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_task_config_not_found(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/tasks/nonexistent/config")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_task_config_without_ai_report(client: AsyncClient, task_manager: TaskManager) -> None:
+    rules = [_make_rule_result(recommended_value="800")]
+    task_id = await _create_completed_task(task_manager, rule_results=rules)
+
+    response = await client.get(f"/api/v1/tasks/{task_id}/config")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["entries"]) >= 1
+    assert all(e["source"] == "rule" for e in data["entries"])

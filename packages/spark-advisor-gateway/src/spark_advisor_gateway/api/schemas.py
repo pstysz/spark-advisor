@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
-from spark_advisor_models.model import AnalysisMode
+from spark_advisor_models.model import AnalysisMode, Severity
 
 if TYPE_CHECKING:
     from spark_advisor_models.model import ApplicationSummary
@@ -89,3 +89,26 @@ class AnalyzeResponse(BaseModel):
 class TaskStatsResponse(BaseModel):
     counts: dict[TaskStatus, int]
     total: int
+
+
+class RuleViolationResponse(BaseModel):
+    rule_id: str
+    severity: Severity
+    title: str
+    message: str
+    stage_id: int | None = None
+    current_value: str = ""
+    recommended_value: str = ""
+    estimated_impact: str = ""
+
+
+class ConfigComparisonEntry(BaseModel):
+    parameter: str
+    current_value: str
+    recommended_value: str
+    source: str
+
+
+class ConfigComparisonResponse(BaseModel):
+    app_id: str
+    entries: list[ConfigComparisonEntry]
