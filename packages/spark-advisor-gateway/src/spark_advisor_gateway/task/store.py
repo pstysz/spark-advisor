@@ -108,6 +108,37 @@ class TaskStore:
             result = await session.execute(select(TaskRow.status, func.count().label("cnt")).group_by(TaskRow.status))
             return {TaskStatus(row.status): row.cnt for row in result}
 
+    async def list_completed_since(self, since: datetime) -> list[AnalysisTask]:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TaskRow)
+                .where(TaskRow.status == TaskStatus.COMPLETED.value)
+                .where(TaskRow.completed_at >= _strip_tz(since))
+                .order_by(TaskRow.completed_at.desc())
+            )
+            return [_to_task(row) for row in result.scalars()]
+
+    async def count_daily_since(self, since: datetime) -> list[tuple[str, int]]:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                text(
+                    "SELECT date(created_at) AS day, count(*) AS cnt "
+                    "FROM tasks WHERE created_at >= :since "
+                    "GROUP BY day ORDER BY day"
+                ),
+                {"since": _strip_tz(since)},
+            )
+            return [(row.day, row.cnt) for row in result]
+
+    async def count_since(self, since: datetime) -> dict[TaskStatus, int]:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TaskRow.status, func.count().label("cnt"))
+                .where(TaskRow.created_at >= _strip_tz(since))
+                .group_by(TaskRow.status)
+            )
+            return {TaskStatus(row.status): row.cnt for row in result}
+
 
 def _to_row(task: AnalysisTask) -> TaskRow:
     return TaskRow(
