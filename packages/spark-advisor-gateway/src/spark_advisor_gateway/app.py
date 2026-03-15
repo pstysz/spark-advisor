@@ -16,6 +16,8 @@ from spark_advisor_gateway.config import GatewaySettings, StateKey
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.store import TaskStore
+from spark_advisor_gateway.ws.manager import ConnectionManager
+from spark_advisor_gateway.ws.routes import router as ws_router
 from spark_advisor_models.model import JobAnalysis
 
 if TYPE_CHECKING:
@@ -53,7 +55,8 @@ def create_app(settings: GatewaySettings) -> FastAPI:
         store = TaskStore(settings.database_url)
         await store.init()
 
-        task_manager = TaskManager(store)
+        ws_manager = ConnectionManager(settings.ws_heartbeat_interval)
+        task_manager = TaskManager(store, on_status_change=ws_manager.broadcast)
         task_executor = TaskExecutor(nc, task_manager, settings)
 
         sub = await nc.subscribe(
@@ -62,13 +65,17 @@ def create_app(settings: GatewaySettings) -> FastAPI:
         )
         logger.info("Subscribed to %s", settings.nats.analysis_submit_subject)
 
+        await ws_manager.start()
+
         setattr(_app.state, StateKey.NC, nc)
         setattr(_app.state, StateKey.SETTINGS, settings)
         setattr(_app.state, StateKey.TASK_MANAGER, task_manager)
         setattr(_app.state, StateKey.TASK_EXECUTOR, task_executor)
+        setattr(_app.state, StateKey.CONNECTION_MANAGER, ws_manager)
 
         yield
 
+        await ws_manager.stop()
         await sub.unsubscribe()
         await nc.drain()
         await store.close()
@@ -78,6 +85,7 @@ def create_app(settings: GatewaySettings) -> FastAPI:
 
     app.include_router(create_health_router())
     app.include_router(create_router())
+    app.include_router(ws_router)
 
     return app
 
