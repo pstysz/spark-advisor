@@ -112,3 +112,47 @@ class ConfigComparisonEntry(BaseModel):
 class ConfigComparisonResponse(BaseModel):
     app_id: str
     entries: list[ConfigComparisonEntry]
+
+
+class StatsSummaryResponse(BaseModel):
+    total: int
+    completed: int
+    failed: int
+    avg_duration_seconds: float | None = None
+    ai_usage_percent: float | None = None
+
+
+class RuleFrequencyEntry(BaseModel):
+    rule_id: str
+    title: str
+    count: int
+    severity: Severity
+
+
+class RuleFrequencyResponse(BaseModel):
+    items: list[RuleFrequencyEntry]
+    days: int
+
+
+class DailyVolumeEntry(BaseModel):
+    date: str
+    count: int
+
+
+class DailyVolumeResponse(BaseModel):
+    items: list[DailyVolumeEntry]
+    days: int
+
+
+class TopIssueEntry(BaseModel):
+    rule_id: str
+    title: str
+    count: int
+    severity: Severity
+    example_app_id: str
+
+
+class TopIssuesResponse(BaseModel):
+    items: list[TopIssueEntry]
+    limit: int
+    days: int

@@ -14,11 +14,18 @@ from spark_advisor_gateway.api.schemas import (
     ApplicationResponse,
     ConfigComparisonEntry,
     ConfigComparisonResponse,
+    DailyVolumeEntry,
+    DailyVolumeResponse,
     PaginatedApplicationResponse,
     PaginatedTaskResponse,
+    RuleFrequencyEntry,
+    RuleFrequencyResponse,
     RuleViolationResponse,
+    StatsSummaryResponse,
     TaskResponse,
     TaskStatsResponse,
+    TopIssueEntry,
+    TopIssuesResponse,
 )
 from spark_advisor_gateway.config import GatewaySettings, StateKey
 from spark_advisor_gateway.task.models import TaskStatus
@@ -223,5 +230,45 @@ def create_router() -> APIRouter:
                         source="ai",
                     )
         return ConfigComparisonResponse(app_id=task.app_id, entries=list(entries.values()))
+
+    @router.get("/stats/summary")
+    async def stats_summary(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365),
+    ) -> StatsSummaryResponse:
+        data = await manager.get_stats_summary(days)
+        return StatsSummaryResponse(**data)
+    @router.get("/stats/rules")
+    async def stats_rules(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365),
+    ) -> RuleFrequencyResponse:
+        items = await manager.get_rule_frequency(days)
+        return RuleFrequencyResponse(
+            items=[RuleFrequencyEntry(**item) for item in items],            days=days,
+        )
+
+    @router.get("/stats/daily-volume")
+    async def stats_daily_volume(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365),
+    ) -> DailyVolumeResponse:
+        rows = await manager.get_daily_volume(days)
+        return DailyVolumeResponse(
+            items=[DailyVolumeEntry(date=date, count=count) for date, count in rows],
+            days=days,
+        )
+
+    @router.get("/stats/top-issues")
+    async def stats_top_issues(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365),
+            limit: int = Query(default=10, ge=1, le=100),
+    ) -> TopIssuesResponse:
+        items = await manager.get_top_issues(days, limit)
+        return TopIssuesResponse(
+            items=[TopIssueEntry(**item) for item in items],            days=days,
+            limit=limit,
+        )
 
     return router
