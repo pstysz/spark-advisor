@@ -15,7 +15,7 @@ Combines deterministic rules engine with optional Claude AI analysis to provide 
 - **Rules engine** — 11 expert rules detecting data skew, GC pressure, disk spill, and more
 - **AI analysis** — Claude API integration for prioritized recommendations with causal chains
 - **Agent mode** — multi-turn Claude tool_use loop for autonomous job exploration
-- **NATS worker** — FastStream subscriber for `analyze.request` and `analyze.agent.request`
+- **NATS worker** — FastStream subscriber for `analysis.run` and `analysis.run.agent`
 
 ## Deployment
 

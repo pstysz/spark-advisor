@@ -5,7 +5,7 @@ import logging
 from typing import TYPE_CHECKING, Annotated, Any
 
 import orjson
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from spark_advisor_gateway.api.schemas import (
@@ -86,14 +86,22 @@ def create_router() -> APIRouter:
         apps = await executor.list_applications(limit)
         return [ApplicationResponse.from_summary(app) for app in apps]
 
-    @router.post("/analyze", status_code=202)
+    @router.post("/analyze")
     async def analyze(
             body: AnalyzeRequest,
             manager: ManagerDep,
             executor: ExecutorDep,
+            response: Response,
     ) -> AnalyzeResponse:
-        task = await manager.create(body.app_id)
+        result = await manager.create_if_not_active(body.app_id, rerun=body.rerun)
+        if result is None:
+            raise HTTPException(status_code=409, detail="Task is still running, cannot rerun")
+        task, created = result
+        if not created:
+            response.status_code = 409
+            return AnalyzeResponse(task_id=task.task_id, status=task.status)
         executor.submit(task.task_id, body.app_id, body.mode)
+        response.status_code = 202
         return AnalyzeResponse(task_id=task.task_id, status=task.status)
 
     @router.get("/tasks/stats")

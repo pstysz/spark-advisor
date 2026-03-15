@@ -6,7 +6,7 @@ from faststream.nats import TestNatsBroker
 
 from spark_advisor_hs_connector.app import app, broker
 from spark_advisor_hs_connector.history_server.client import HistoryServerClient
-from spark_advisor_models.defaults import NATS_FETCH_JOB_SUBJECT, NATS_LIST_APPLICATIONS_SUBJECT
+from spark_advisor_models.defaults import NATS_APPLICATIONS_LIST_SUBJECT, NATS_FETCH_JOB_SUBJECT
 from spark_advisor_models.model import ApplicationSummary, Attempt, JobAnalysis
 
 ENVIRONMENT = {
@@ -89,7 +89,7 @@ async def test_list_applications_returns_list() -> None:
         app.context.set_global("hs_client", hs_client)
         result = await br.request(
             {"limit": 10},
-            subject=NATS_LIST_APPLICATIONS_SUBJECT,
+            subject=NATS_APPLICATIONS_LIST_SUBJECT,
             timeout=10.0,
         )
         parsed = orjson.loads(result.body)
@@ -108,7 +108,7 @@ async def test_list_applications_returns_error_on_failure() -> None:
         app.context.set_global("hs_client", hs_client)
         result = await br.request(
             {},
-            subject=NATS_LIST_APPLICATIONS_SUBJECT,
+            subject=NATS_APPLICATIONS_LIST_SUBJECT,
             timeout=10.0,
         )
         parsed = orjson.loads(result.body)

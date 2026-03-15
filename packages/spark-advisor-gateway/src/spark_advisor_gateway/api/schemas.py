@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
 from spark_advisor_models.model import AnalysisMode
@@ -13,8 +13,9 @@ if TYPE_CHECKING:
 
 
 class AnalyzeRequest(BaseModel):
-    app_id: str
+    app_id: str = Field(..., min_length=1)
     mode: AnalysisMode = AnalysisMode.AI
+    rerun: bool = False
 
 
 class ApplicationResponse(BaseModel):

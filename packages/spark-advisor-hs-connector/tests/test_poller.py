@@ -8,7 +8,7 @@ import pytest
 from spark_advisor_hs_connector.history_server.poller import HistoryServerPoller
 from spark_advisor_hs_connector.job_analysis_builder import deduplicate_stages, resolve_base_path
 from spark_advisor_hs_connector.store import PollingStore
-from spark_advisor_models.defaults import NATS_ANALYZE_REQUEST_SUBJECT
+from spark_advisor_models.defaults import NATS_ANALYSIS_SUBMIT_SUBJECT
 from spark_advisor_models.model import ApplicationSummary, Attempt
 
 _DB_URL = "sqlite+aiosqlite:///:memory:"
@@ -106,7 +106,7 @@ class TestHistoryServerPoller:
         poller = HistoryServerPoller(
             hs_client=hs_client,
             broker=nats_broker,
-            publish_subject=NATS_ANALYZE_REQUEST_SUBJECT,
+            publish_subject=NATS_ANALYSIS_SUBMIT_SUBJECT,
             store=state,
             batch_size=10,
         )
@@ -118,7 +118,7 @@ class TestHistoryServerPoller:
         assert await state.is_processed("app-002")
 
         payload = nats_broker.publish.call_args_list[0]
-        assert payload[1]["subject"] == NATS_ANALYZE_REQUEST_SUBJECT
+        assert payload[1]["subject"] == NATS_ANALYSIS_SUBMIT_SUBJECT
 
     @pytest.mark.asyncio
     async def test_poll_skips_already_processed(self) -> None:
@@ -132,7 +132,7 @@ class TestHistoryServerPoller:
         poller = HistoryServerPoller(
             hs_client=hs_client,
             broker=nats_broker,
-            publish_subject=NATS_ANALYZE_REQUEST_SUBJECT,
+            publish_subject=NATS_ANALYSIS_SUBMIT_SUBJECT,
             store=state,
         )
         published = await poller.poll()
@@ -151,7 +151,7 @@ class TestHistoryServerPoller:
         poller = HistoryServerPoller(
             hs_client=hs_client,
             broker=nats_broker,
-            publish_subject=NATS_ANALYZE_REQUEST_SUBJECT,
+            publish_subject=NATS_ANALYSIS_SUBMIT_SUBJECT,
             store=state,
         )
         published = await poller.poll()
@@ -178,7 +178,7 @@ class TestHistoryServerPoller:
         poller = HistoryServerPoller(
             hs_client=hs_client,
             broker=nats_broker,
-            publish_subject=NATS_ANALYZE_REQUEST_SUBJECT,
+            publish_subject=NATS_ANALYSIS_SUBMIT_SUBJECT,
             store=state,
         )
         published = await poller.poll()

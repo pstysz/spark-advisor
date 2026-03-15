@@ -12,7 +12,7 @@ pip install spark-advisor-hs-connector
 
 Connects to Apache Spark History Server REST API to fetch job metrics, stage details, executor info, and configuration. Operates in two modes:
 
-- **On-demand** — NATS subscriber for `fetch.job` requests (returns `JobAnalysis`)
+- **On-demand** — NATS subscriber for `job.fetch` requests (returns `JobAnalysis`)
 - **Background polling** — periodically scans History Server for new applications and publishes them to NATS
 
 ## History Server endpoints used

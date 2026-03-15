@@ -156,3 +156,86 @@ class TestTaskManagerCountByStatus:
         manager = await _make_manager()
         counts = await manager.count_by_status()
         assert counts == {}
+
+
+class TestCreateIfNotActive:
+    @pytest.mark.asyncio
+    async def test_creates_when_no_existing(self) -> None:
+        manager = await _make_manager()
+        result = await manager.create_if_not_active("app-new")
+        assert result is not None
+        task, created = result
+        assert created is True
+        assert task.app_id == "app-new"
+        assert task.status == TaskStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_returns_existing_pending_task(self) -> None:
+        manager = await _make_manager()
+        await manager.create("app-dup")
+        result = await manager.create_if_not_active("app-dup")
+        assert result is not None
+        task, created = result
+        assert created is False
+        assert task.status == TaskStatus.PENDING
+
+    @pytest.mark.asyncio
+    async def test_returns_existing_running_task(self) -> None:
+        manager = await _make_manager()
+        t = await manager.create("app-run")
+        await manager.mark_running(t.task_id)
+        result = await manager.create_if_not_active("app-run")
+        assert result is not None
+        task, created = result
+        assert created is False
+        assert task.status == TaskStatus.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_creates_new_after_completed(self) -> None:
+        manager = await _make_manager()
+        t = await manager.create("app-done")
+        job = make_job(app_id="app-done")
+        await manager.mark_completed(t.task_id, AnalysisResult(app_id="app-done", job=job, rule_results=[]))
+        result = await manager.create_if_not_active("app-done")
+        assert result is not None
+        task, created = result
+        assert created is True
+        assert task.task_id != t.task_id
+
+    @pytest.mark.asyncio
+    async def test_creates_new_after_failed(self) -> None:
+        manager = await _make_manager()
+        t = await manager.create("app-fail")
+        await manager.mark_failed(t.task_id, "error")
+        result = await manager.create_if_not_active("app-fail")
+        assert result is not None
+        task, created = result
+        assert created is True
+        assert task.task_id != t.task_id
+
+    @pytest.mark.asyncio
+    async def test_rerun_completed_creates_new(self) -> None:
+        manager = await _make_manager()
+        t = await manager.create("app-rerun")
+        job = make_job(app_id="app-rerun")
+        await manager.mark_completed(t.task_id, AnalysisResult(app_id="app-rerun", job=job, rule_results=[]))
+        result = await manager.create_if_not_active("app-rerun", rerun=True)
+        assert result is not None
+        task, created = result
+        assert created is True
+        assert task.task_id != t.task_id
+
+    @pytest.mark.asyncio
+    async def test_rerun_running_returns_none(self) -> None:
+        manager = await _make_manager()
+        t = await manager.create("app-busy")
+        await manager.mark_running(t.task_id)
+        result = await manager.create_if_not_active("app-busy", rerun=True)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_rerun_pending_returns_none(self) -> None:
+        manager = await _make_manager()
+        await manager.create("app-pend")
+        result = await manager.create_if_not_active("app-pend", rerun=True)
+        assert result is None

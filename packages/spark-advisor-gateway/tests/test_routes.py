@@ -288,3 +288,65 @@ async def test_stream_task_transitions(client: AsyncClient, task_manager: TaskMa
     assert events[0]["event"] == "status"
     data = orjson.loads(events[0]["data"])
     assert data["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_analyze_duplicate_pending_returns_409(client: AsyncClient) -> None:
+    await client.post("/api/v1/analyze", json={"app_id": "app-dup"})
+    response = await client.post("/api/v1/analyze", json={"app_id": "app-dup"})
+    assert response.status_code == 409
+    data = response.json()
+    assert data["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_analyze_duplicate_running_returns_409(client: AsyncClient, task_manager: TaskManager) -> None:
+    r1 = await client.post("/api/v1/analyze", json={"app_id": "app-run"})
+    task_id = r1.json()["task_id"]
+    await task_manager.mark_running(task_id)
+
+    response = await client.post("/api/v1/analyze", json={"app_id": "app-run"})
+    assert response.status_code == 409
+    assert response.json()["status"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_analyze_after_completed_creates_new(
+    client: AsyncClient, task_manager: TaskManager, task_executor: TaskExecutor
+) -> None:
+    with patch.object(task_executor, "submit"):
+        r1 = await client.post("/api/v1/analyze", json={"app_id": "app-done"})
+    task_id = r1.json()["task_id"]
+    job = make_job(app_id="app-done")
+    result = AnalysisResult(app_id="app-done", job=job, rule_results=[])
+    await task_manager.mark_completed(task_id, result)
+
+    response = await client.post("/api/v1/analyze", json={"app_id": "app-done"})
+    assert response.status_code == 202
+    assert response.json()["task_id"] != task_id
+
+
+@pytest.mark.asyncio
+async def test_analyze_rerun_completed_creates_new(
+    client: AsyncClient, task_manager: TaskManager, task_executor: TaskExecutor
+) -> None:
+    with patch.object(task_executor, "submit"):
+        r1 = await client.post("/api/v1/analyze", json={"app_id": "app-rerun"})
+    task_id = r1.json()["task_id"]
+    job = make_job(app_id="app-rerun")
+    result = AnalysisResult(app_id="app-rerun", job=job, rule_results=[])
+    await task_manager.mark_completed(task_id, result)
+
+    response = await client.post("/api/v1/analyze", json={"app_id": "app-rerun", "rerun": True})
+    assert response.status_code == 202
+    assert response.json()["task_id"] != task_id
+
+
+@pytest.mark.asyncio
+async def test_analyze_rerun_running_returns_409(client: AsyncClient, task_manager: TaskManager) -> None:
+    r1 = await client.post("/api/v1/analyze", json={"app_id": "app-busy"})
+    task_id = r1.json()["task_id"]
+    await task_manager.mark_running(task_id)
+
+    response = await client.post("/api/v1/analyze", json={"app_id": "app-busy", "rerun": True})
+    assert response.status_code == 409
