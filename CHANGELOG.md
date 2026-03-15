@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.7...spark-advisor-v0.1.8) (2026-03-15)
+
+
+### Features
+
+* added rerun tasks deduplication and hs poller with gateway integration ([b23c18b](https://github.com/pstysz/spark-advisor/commit/b23c18b3a074631644b81164d00d1f995694b8fc))
+
 ## [0.1.7](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.6...spark-advisor-v0.1.7) (2026-03-13)
 
 
