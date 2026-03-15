@@ -350,3 +350,48 @@ async def test_analyze_rerun_running_returns_409(client: AsyncClient, task_manag
 
     response = await client.post("/api/v1/analyze", json={"app_id": "app-busy", "rerun": True})
     assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("app_id", ["app-123", "application_1234567890123_0001", "my_app-v2"])
+async def test_analyze_valid_app_id_formats(client: AsyncClient, app_id: str) -> None:
+    response = await client.post("/api/v1/analyze", json={"app_id": app_id})
+    assert response.status_code == 202
+
+
+@pytest.mark.asyncio
+async def test_analyze_app_id_too_long_returns_422(client: AsyncClient) -> None:
+    response = await client.post("/api/v1/analyze", json={"app_id": "a" * 129})
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("app_id", ["../etc/passwd", "app/../secret", "app/../../root"])
+async def test_analyze_app_id_traversal_returns_422(client: AsyncClient, app_id: str) -> None:
+    response = await client.post("/api/v1/analyze", json={"app_id": app_id})
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("app_id", ["app id", "app@host", "app;rm -rf", "app&cmd", "app<script>"])
+async def test_analyze_app_id_special_chars_returns_422(client: AsyncClient, app_id: str) -> None:
+    response = await client.post("/api/v1/analyze", json={"app_id": app_id})
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_negative_offset_returns_422(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/tasks?offset=-1")
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_limit_exceeds_max_returns_422(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/tasks?limit=501")
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_limit_zero_returns_422(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/tasks?limit=0")
+    assert response.status_code == 422
