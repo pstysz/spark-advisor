@@ -9,8 +9,8 @@ config:
   logLevel: "INFO"
   nats:
     url: "nats://localhost:4222"
-    analyzeRequestSubject: "analyze.request"
-    fetchJobSubject: "fetch.job"
+    analysisSubmitSubject: "analysis.submit"
+    jobFetchSubject: "job.fetch"
   historyServerUrl: "http://localhost:18080"
   historyServerTimeout: 30.0
   pollIntervalSeconds: 60

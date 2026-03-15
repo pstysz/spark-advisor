@@ -4,11 +4,13 @@ from pydantic import BaseModel, ConfigDict
 from pydantic_settings import SettingsConfigDict
 
 from spark_advisor_models.defaults import (
-    NATS_ANALYZE_AGENT_REQUEST_SUBJECT,
-    NATS_ANALYZE_REQUEST_SUBJECT,
+    NATS_ANALYSIS_RUN_AGENT_SUBJECT,
+    NATS_ANALYSIS_RUN_SUBJECT,
+    NATS_ANALYSIS_SUBMIT_SUBJECT,
+    NATS_APPLICATIONS_LIST_SUBJECT,
     NATS_FETCH_JOB_SUBJECT,
-    NATS_LIST_APPLICATIONS_SUBJECT,
 )
+from spark_advisor_models.model import AnalysisMode
 from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
 
 
@@ -20,14 +22,16 @@ class StateKey(StrEnum):
 
 
 class GatewayNatsSettings(NatsSettings):
-    fetch_job_subject: str = NATS_FETCH_JOB_SUBJECT
-    analyze_request_subject: str = NATS_ANALYZE_REQUEST_SUBJECT
-    analyze_agent_request_subject: str = NATS_ANALYZE_AGENT_REQUEST_SUBJECT
-    list_applications_subject: str = NATS_LIST_APPLICATIONS_SUBJECT
+    job_fetch_subject: str = NATS_FETCH_JOB_SUBJECT
+    analysis_run_subject: str = NATS_ANALYSIS_RUN_SUBJECT
+    analysis_run_agent_subject: str = NATS_ANALYSIS_RUN_AGENT_SUBJECT
+    apps_list_subject: str = NATS_APPLICATIONS_LIST_SUBJECT
     fetch_timeout: float = 30.0
     analyze_timeout: float = 120.0
     analyze_agent_timeout: float = 300.0
     list_apps_timeout: float = 10.0
+    analysis_submit_subject: str = NATS_ANALYSIS_SUBMIT_SUBJECT
+    polling_analysis_mode: AnalysisMode = AnalysisMode.AI
 
 
 class ServerSettings(BaseModel):

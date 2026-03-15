@@ -4,8 +4,9 @@ DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_THRESHOLDS = Thresholds()
 DEFAULT_AI_SETTINGS = AiSettings()
 
-NATS_FETCH_JOB_SUBJECT = "fetch.job"
-NATS_ANALYZE_REQUEST_SUBJECT = "analyze.request"
-NATS_ANALYZE_AGENT_REQUEST_SUBJECT = "analyze.agent.request"
-NATS_ANALYZE_RESULT_SUBJECT = "analyze.result"
-NATS_LIST_APPLICATIONS_SUBJECT = "list.applications"
+NATS_FETCH_JOB_SUBJECT = "job.fetch"
+NATS_ANALYSIS_RUN_SUBJECT = "analysis.run"
+NATS_ANALYSIS_RUN_AGENT_SUBJECT = "analysis.run.agent"
+NATS_ANALYSIS_RESULT_SUBJECT = "analysis.result"
+NATS_APPLICATIONS_LIST_SUBJECT = "apps.list"
+NATS_ANALYSIS_SUBMIT_SUBJECT = "analysis.submit"

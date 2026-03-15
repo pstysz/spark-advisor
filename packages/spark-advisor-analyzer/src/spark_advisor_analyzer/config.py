@@ -6,8 +6,8 @@ from spark_advisor_models.config import AiSettings, Thresholds
 from spark_advisor_models.defaults import (
     DEFAULT_AI_SETTINGS,
     DEFAULT_THRESHOLDS,
-    NATS_ANALYZE_REQUEST_SUBJECT,
-    NATS_ANALYZE_RESULT_SUBJECT,
+    NATS_ANALYSIS_RESULT_SUBJECT,
+    NATS_ANALYSIS_RUN_SUBJECT,
 )
 from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
 
@@ -18,8 +18,8 @@ class ContextKey(StrEnum):
 
 
 class AnalyzerNatsSettings(NatsSettings):
-    analyze_request_subject: str = NATS_ANALYZE_REQUEST_SUBJECT
-    analyze_result_subject: str = NATS_ANALYZE_RESULT_SUBJECT
+    analysis_run_subject: str = NATS_ANALYSIS_RUN_SUBJECT
+    analysis_result_subject: str = NATS_ANALYSIS_RESULT_SUBJECT
 
 
 class AnalyzerSettings(BaseServiceSettings):

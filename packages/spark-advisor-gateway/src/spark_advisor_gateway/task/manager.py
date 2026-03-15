@@ -1,9 +1,14 @@
+import logging
 import uuid
 from datetime import UTC, datetime
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
 from spark_advisor_gateway.task.store import TaskStore
 from spark_advisor_models.model import AnalysisResult
+
+logger = logging.getLogger(__name__)
+
+_TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.FAILED})
 
 
 class TaskManager:
@@ -14,6 +19,32 @@ class TaskManager:
         task = AnalysisTask(task_id=str(uuid.uuid4()), app_id=app_id, created_at=datetime.now(UTC))
         await self._store.create(task)
         return task
+
+    async def create_if_not_active(
+        self, app_id: str, *, rerun: bool = False,
+    ) -> tuple[AnalysisTask, bool] | None:
+        """Try to create a task for app_id with deduplication.
+
+        Returns:
+            (task, True)  — new task created, proceed with analysis
+            (task, False) — existing active task found, skip (dedup)
+            None          — rerun requested but task still active, cannot proceed
+        """
+        existing = await self._store.find_latest_by_app_id(app_id)
+        if existing is None:
+            return await self.create(app_id), True
+
+        if not rerun:
+            if existing.status not in _TERMINAL_STATUSES:
+                logger.info("Skipping %s — active task %s (%s)", app_id, existing.task_id, existing.status)
+                return existing, False
+            return await self.create(app_id), True
+
+        if existing.status not in _TERMINAL_STATUSES:
+            logger.info("Cannot rerun %s — task %s still %s", app_id, existing.task_id, existing.status)
+            return None
+
+        return await self.create(app_id), True
 
     async def get(self, task_id: str) -> AnalysisTask | None:
         return await self._store.get(task_id)

@@ -5,22 +5,22 @@
 spark-advisor is a distributed system for automated Apache Spark job performance analysis. It collects job metrics from Spark History Server (or local event log files), runs a deterministic rules engine, optionally invokes Claude AI for recommendations, and delivers structured results via REST API or CLI.
 
 ```
-                       ┌─────────────────────────────────────────────┐
-                       │            spark-advisor services           │
-                       │                                             │
- Spark History    REST │  ┌──────────┐  NATS    ┌──────────┐         │
- Server ──────────────►│  │ HS       │────────► │ Analyzer │──► Claude API
-                       │  │Connector │  analyze │ (rules   │         │
-                       │  └──────────┘ .request │  + AI)   │         │
-                       │       │                └────┬─────┘         │
-                       │       │ fetch.job           │ analyze       │
-                       │       │ (reply)             │ .result       │
-                       │       │                     ▼               │
-  User ──────────────► │  ┌──────────┐          ┌──────────┐         │
-  (HTTP)─────────────► │  │ Gateway  │◄─────────│   NATS   │         │
-                       │  │ (FastAPI)│          └──────────┘         │
-                       │  └──────────┘                               │
-                       └─────────────────────────────────────────────┘
+              ┌─────────────────────────────────────────────────────────┐
+              │                 spark-advisor services                  │
+              │                                                         │
+              │  ┌─────────────┐  analysis.submit  ┌────────────────┐   │
+ Spark HS ───►│  │HS Connector │ ────────────────► │    Gateway     │   │
+              │  │             │ ◄─── job.fetch ── │   (FastAPI)    │◄───── User (HTTP)
+              │  └─────────────┘   (req-reply)     └───────┬────────┘   │
+              │                                            │            │
+              │                              analysis.run  │            │
+              │                               (req-reply)  │            │
+              │                                            ▼            │
+              │                                      ┌──────────┐       │
+              │                                      │ Analyzer │──► Claude API
+              │                                      │(rules+AI)│       │
+              │                                      └──────────┘       │
+              └─────────────────────────────────────────────────────────┘
 
  Event Log File ─── parse ──► CLI (standalone, no infrastructure)
 ```
@@ -84,7 +84,7 @@ spark-advisor/
 │   │   └── src/spark_advisor_analyzer/
 │   │       ├── app.py                       # FastStream app + @on_startup (orchestrator init)
 │   │       ├── config.py                    # AnalyzerSettings
-│   │       ├── handlers.py                  # @broker.subscriber("analyze.request", "analyze.agent.request")
+│   │       ├── handlers.py                  # @broker.subscriber("analysis.run", "analysis.run.agent")
 │   │       ├── orchestrator.py              # AdviceOrchestrator (rules + AI + agent)
 │   │       ├── ai/                          # client, service, prompts, tool_config
 │   │       └── agent/                       # orchestrator, tools, handlers, context, prompts
@@ -102,7 +102,7 @@ spark-advisor/
 │   │   └── src/spark_advisor_hs_connector/
 │   │       ├── app.py                       # FastStream app + asyncio polling loop
 │   │       ├── config.py                    # ConnectorSettings
-│   │       ├── handlers.py                  # @subscriber("fetch.job"), @subscriber("list.applications")
+│   │       ├── handlers.py                  # @subscriber("job.fetch"), @subscriber("apps.list")
 │   │       ├── hs_fetcher.py               # Shared fetch logic (DRY)
 │   │       ├── history_server_client.py     # HistoryServerClient (httpx)
 │   │       ├── history_server_mapper.py     # HS REST → JobAnalysis
@@ -224,10 +224,10 @@ Deterministic rules engine. Pure business logic operating on models. Used in two
 
 ### spark-advisor-analyzer (Service)
 
-AI-powered analysis worker. The only service that talks to Claude API. Subscribes to NATS `analyze.request`, runs rules + AI, replies with `AnalysisResult`.
+AI-powered analysis worker. The only service that talks to Claude API. Subscribes to NATS `analysis.run`, runs rules + AI, replies with `AnalysisResult`.
 
 **Owns:**
-- `handlers.py` — FastStream NATS handlers (`@broker.subscriber("analyze.request")`, `@broker.subscriber("analyze.agent.request")`)
+- `handlers.py` — FastStream NATS handlers (`@broker.subscriber("analysis.run")`, `@broker.subscriber("analysis.run.agent")`)
 - `orchestrator.py` — `AdviceOrchestrator` (coordinates rules + optional AI + optional agent)
 - `ai/client.py` — `AnthropicClient` (thin wrapper over `anthropic.Anthropic`)
 - `ai/service.py` — `LlmAnalysisService` (Claude API call + response validation)
@@ -249,7 +249,7 @@ AI-powered analysis worker. The only service that talks to Claude API. Subscribe
 
 **Key design decisions:**
 - `asyncio.to_thread()` wraps synchronous `orchestrator.run()` because `AnthropicClient` uses synchronous httpx
-- Handler has both `@subscriber` and `@publisher` decorators: reply goes to caller (on-demand) AND publishes to `analyze.result` (batch flow)
+- Handler has both `@subscriber` and `@publisher` decorators: reply goes to caller (on-demand) AND publishes to `analysis.result` (batch flow)
 - AI is optional — if `ANTHROPIC_API_KEY` is missing, analyzer logs warning and runs rules-only
 - Tool schema generated from Pydantic models (`model_json_schema()`) — single source of truth
 - Agent mode: `AgentOrchestrator` runs multi-turn loop where Claude calls 6 tools locally (no API calls). Tools operate on in-memory `JobAnalysis`. Loop terminates on `submit_final_report` or max iterations (force-submit fallback)
@@ -282,18 +282,18 @@ API Gateway — the only externally-exposed service. REST API + async task orche
 - Uses `nats-py` (not FastStream) — gateway needs request-reply with explicit timeout control, not subscriber pattern
 - `TaskStore` uses SQLAlchemy async + SQLite with WAL mode for persistent task storage across restarts
 - `TaskExecutor.submit()` fires an `asyncio.create_task()` — non-blocking for the HTTP handler
-- `AnalyzeRequest.mode` uses shared `AnalysisMode` StrEnum — routes to `analyze.request` (standard) or `analyze.agent.request` (agent) with appropriate timeout
+- `AnalyzeRequest.mode` uses shared `AnalysisMode` StrEnum — routes to `analysis.run` (standard) or `analysis.run.agent` (agent) with appropriate timeout
 
 > Diagram: [10-gateway-task-lifecycle.mmd](diagrams/10-gateway-task-lifecycle.mmd)
 
 ### spark-advisor-hs-connector (Service)
 
 The sole owner of Spark History Server integration. Two responsibilities:
-1. **On-demand fetch** — subscribes to NATS `fetch.job`, returns `JobAnalysis` for a single app
-2. **Batch polling** — asyncio background task periodically polls HS for new jobs, publishes to `analyze.request`
+1. **On-demand fetch** — subscribes to NATS `job.fetch`, returns `JobAnalysis` for a single app
+2. **Batch polling** — asyncio background task periodically polls HS for new jobs, publishes to `analysis.submit` (gateway creates task, then forwards to analyzer)
 
 **Owns:**
-- `handlers.py` — FastStream handlers for `fetch.job` (on-demand) and `list.applications`
+- `handlers.py` — FastStream handlers for `job.fetch` (on-demand) and `apps.list`
 - `hs_fetcher.py` — `fetch_job_analysis()` (shared logic between handler and poller — DRY)
 - `history_server_client.py` — `HistoryServerClient` (httpx REST client)
 - `history_server_mapper.py` — `map_job_analysis()` (HS REST responses → `JobAnalysis`)
@@ -318,7 +318,7 @@ The sole owner of Spark History Server integration. Two responsibilities:
 **Key design decisions:**
 - `ApplicationSummary` and `Attempt` are private models — they represent the HS REST API response format, not domain contracts
 - `fetch_job_analysis()` is a standalone function used by both handler and poller — single place for the 5-endpoint fetch logic
-- Poller publishes fire-and-forget to `analyze.request` (no reply expected — batch flow)
+- Poller publishes fire-and-forget to `analysis.submit` (gateway creates task, then forwards to analyzer — single persistence path)
 - `PollingState` is in-memory — acceptable because missing a poll cycle just means re-checking the same apps
 
 ### spark-advisor-cli (App)
@@ -381,12 +381,12 @@ MCP server exposing spark-advisor as tools for Claude Desktop, Cursor, and other
 ```
 User ─── POST /api/v1/analyze {"app_id":"app-123", "mode":"standard|agent"} ──► Gateway
                                                           │
-Gateway ─── NATS request("fetch.job") ──────────────────► HS Connector
+Gateway ─── NATS request("job.fetch") ──────────────────► HS Connector
 HS Connector ─── REST (5 endpoints) ───────────────────► Spark History Server
 HS Connector ─── reply(JobAnalysis) ───────────────────► Gateway
                                                           │
-Gateway ─── NATS request("analyze.request"             ─► Analyzer (standard, 120s)
-         or "analyze.agent.request") ──────────────────── Analyzer (agent, 300s)
+Gateway ─── NATS request("analysis.run"                ─► Analyzer (standard, 120s)
+         or "analysis.run.agent") ─────────────────────── Analyzer (agent, 300s)
 Analyzer ─── rules + Claude API ──────────────────────── (internal)
 Analyzer ─── reply(AnalysisResult) ────────────────────► Gateway
                                                           │
@@ -402,10 +402,11 @@ asyncio loop (every 60s) ──► HS Connector.poll()
 HS Connector ─── REST /applications ───────────────────► Spark History Server
 HS Connector ─── for each new job:
     ├── fetch_job_from_hs(app_id) ─────────────────────► Spark History Server
-    └── NATS publish("analyze.request", JobAnalysis) ──► Analyzer
+    └── NATS publish("analysis.submit", JobAnalysis) ──► Gateway
                                                           │
+Gateway ─── creates task ─── NATS request("analysis.run") ► Analyzer
 Analyzer ─── rules + Claude API ──────────────────────── (internal)
-Analyzer ─── NATS publish("analyze.result") ───────────► Gateway (subscriber)
+Analyzer ─── reply(AnalysisResult) ───────────────────► Gateway
                                                           │
 Gateway ─── stores result (available via GET /tasks) ──► Clients
 ```
@@ -452,13 +453,14 @@ spark-advisor analyze app-123 --history-server http://yarn:18080
 
 ## NATS Subjects
 
-| Subject                 | Pattern              | Publisher                             | Subscriber   | Payload                                                     |
-|-------------------------|----------------------|---------------------------------------|--------------|-------------------------------------------------------------|
-| `fetch.job`             | request-reply        | Gateway                               | HS Connector | Request: `{"app_id": "..."}` / Reply: `JobAnalysis`         |
-| `list.applications`     | request-reply        | Gateway                               | HS Connector | Request: `{"limit": N}` / Reply: `list[ApplicationSummary]` |
-| `analyze.request`       | request-reply or pub | Gateway (request), HS Connector (pub) | Analyzer     | `JobAnalysis`                                               |
-| `analyze.agent.request` | request-reply        | Gateway                               | Analyzer     | `JobAnalysis` (triggers agent mode — multi-turn tool_use)   |
-| `analyze.result`        | pub-sub              | Analyzer                              | Gateway      | `AnalysisResult`                                            |
+| Subject              | Pattern        | Publisher    | Subscriber   | Payload                                                     |
+|----------------------|----------------|--------------|--------------|-------------------------------------------------------------|
+| `job.fetch`          | request-reply  | Gateway      | HS Connector | Request: `{"app_id": "..."}` / Reply: `JobAnalysis`         |
+| `apps.list`          | request-reply  | Gateway      | HS Connector | Request: `{"limit": N}` / Reply: `list[ApplicationSummary]` |
+| `analysis.submit`    | pub-sub        | HS Connector | Gateway      | `JobAnalysis` (gateway creates task, forwards to analyzer)  |
+| `analysis.run`       | request-reply  | Gateway      | Analyzer     | `JobAnalysis`                                               |
+| `analysis.run.agent` | request-reply  | Gateway      | Analyzer     | `JobAnalysis` (triggers agent mode — multi-turn tool_use)   |
+| `analysis.result`    | pub-sub        | Analyzer     | Gateway      | `AnalysisResult`                                            |
 
 **Message format:** Plain JSON. FastStream handles Pydantic model serialization/deserialization automatically. No envelope wrapper — models are serialized directly.
 
@@ -496,9 +498,9 @@ Defined in `spark_advisor_models.settings`. Provides:
 
 ```
 NatsSettings (base: url only)
-    ├── AnalyzerNatsSettings (+ request_subject, result_subject)
-    ├── ConnectorNatsSettings (+ fetch_subject, analyze_subject)
-    └── GatewayNatsSettings (+ fetch_subject, analyze_subject, result_subject, timeouts)
+    ├── AnalyzerNatsSettings (+ run_subject, result_subject)
+    ├── ConnectorNatsSettings (+ fetch_subject, submit_subject)
+    └── GatewayNatsSettings (+ fetch_subject, run_subject, result_subject, submit_subject, timeouts)
 ```
 
 ### Kubernetes ConfigMap example

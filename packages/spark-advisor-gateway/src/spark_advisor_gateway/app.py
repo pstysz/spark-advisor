@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 import nats
+import nats.aio.msg
+import orjson
 import uvicorn
 from fastapi import FastAPI
 
@@ -14,11 +16,32 @@ from spark_advisor_gateway.config import GatewaySettings, StateKey
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.store import TaskStore
+from spark_advisor_models.model import JobAnalysis
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
+
+
+async def handle_polling_message(
+    msg: nats.aio.msg.Msg,
+    task_manager: TaskManager,
+    task_executor: TaskExecutor,
+    settings: GatewaySettings,
+) -> None:
+    try:
+        job = JobAnalysis.model_validate(orjson.loads(msg.data))
+        result = await task_manager.create_if_not_active(job.app_id, rerun=False)
+        if result is None:
+            return
+        task, created = result
+        if not created:
+            return
+        task_executor.submit_with_job(task.task_id, job, settings.nats.polling_analysis_mode)
+        logger.info("Created task %s for polled app %s", task.task_id, job.app_id)
+    except Exception:
+        logger.exception("Failed to handle polling message")
 
 
 def create_app(settings: GatewaySettings) -> FastAPI:
@@ -33,6 +56,12 @@ def create_app(settings: GatewaySettings) -> FastAPI:
         task_manager = TaskManager(store)
         task_executor = TaskExecutor(nc, task_manager, settings)
 
+        sub = await nc.subscribe(
+            settings.nats.analysis_submit_subject,
+            cb=lambda msg: handle_polling_message(msg, task_manager, task_executor, settings),
+        )
+        logger.info("Subscribed to %s", settings.nats.analysis_submit_subject)
+
         setattr(_app.state, StateKey.NC, nc)
         setattr(_app.state, StateKey.SETTINGS, settings)
         setattr(_app.state, StateKey.TASK_MANAGER, task_manager)
@@ -40,6 +69,7 @@ def create_app(settings: GatewaySettings) -> FastAPI:
 
         yield
 
+        await sub.unsubscribe()
         await nc.drain()
         await store.close()
         logger.info("Disconnected from NATS")
