@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-hs-connector"
-version = "0.1.8" # x-release-please-version
+version = "0.1.9" # x-release-please-version
 description = "Spark History Server connector - polls and publishes jobs to NATS"
 readme = "README.md"
 license = "Apache-2.0"
@@ -20,7 +20,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "spark-advisor-models==0.1.8",  # x-release-please-version
+    "spark-advisor-models==0.1.9",  # x-release-please-version
     "httpx>=0.28",
     "faststream[nats]>=0.6",
     "sqlalchemy[asyncio]>=2.0",

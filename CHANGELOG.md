@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.8...spark-advisor-v0.1.9) (2026-03-15)
+
+
+### Features
+
+* endpoints for frontend ([b844df8](https://github.com/pstysz/spark-advisor/commit/b844df8dc52ee4363ca8751a8677459b2fc3001e))
+
 ## [0.1.8](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.7...spark-advisor-v0.1.8) (2026-03-15)
 
 
