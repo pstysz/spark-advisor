@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spark Advisor — Task Detail</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Task Detail Header */
+    .task-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .task-header-left {
+      flex: 1;
+    }
+
+    .task-app-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .task-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .task-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .task-meta-item svg {
+      width: 14px;
+      height: 14px;
+      color: var(--text-muted);
+    }
+
+    .task-meta-sep {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .task-header-right {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+
+    .tab {
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+    }
+
+    .tab:hover {
+      color: var(--text-secondary);
+    }
+
+    .tab.active {
+      color: var(--accent-orange);
+      border-bottom-color: var(--accent-orange);
+    }
+
+    .tab-count {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 9999px;
+      background: var(--bg-hover);
+      color: var(--text-muted);
+    }
+
+    .tab.active .tab-count {
+      background: var(--accent-orange-dim);
+      color: var(--accent-orange);
+    }
+
+    /* Tab content */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Overview tab */
+    .overview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .overview-summary {
+      grid-column: 1 / -1;
+    }
+
+    .summary-text {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .info-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .info-value {
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+
+    .info-value.mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+
+    /* Rules tab */
+    .rules-summary {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .rules-summary-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .rule-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .rule-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      border-left: 4px solid;
+      overflow: hidden;
+    }
+
+    .rule-card.critical { border-left-color: var(--severity-critical); }
+    .rule-card.warning { border-left-color: var(--severity-warning); }
+    .rule-card.info { border-left-color: var(--severity-info); }
+
+    .rule-card-header {
+      padding: 14px 18px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .rule-card-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .rule-card-body {
+      padding: 8px 18px 14px;
+    }
+
+    .rule-message {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .rule-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .rule-detail-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .rule-detail-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .rule-detail-value {
+      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary);
+    }
+
+    .rule-detail-value.recommended {
+      color: var(--status-completed);
+    }
+
+    /* AI Report tab */
+    .ai-section {
+      margin-bottom: 28px;
+    }
+
+    .ai-section-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ai-section-title svg {
+      width: 16px;
+      height: 16px;
+      color: var(--accent-purple);
+    }
+
+    .ai-summary-text {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .causal-chain {
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      padding: 16px 20px;
+      background: var(--bg-card);
+      border-left: 3px solid var(--accent-purple);
+      border-radius: 0 10px 10px 0;
+    }
+
+    .recommendation-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .rec-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+    }
+
+    .rec-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .rec-priority {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent-orange-dim);
+      color: var(--accent-orange);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .rec-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .rec-config {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--bg-primary);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+
+    .rec-param {
+      color: var(--text-muted);
+    }
+
+    .rec-current {
+      color: var(--severity-critical);
+      text-decoration: line-through;
+      opacity: 0.7;
+    }
+
+    .rec-arrow {
+      color: var(--text-muted);
+    }
+
+    .rec-recommended {
+      color: var(--status-completed);
+      font-weight: 500;
+    }
+
+    .rec-explanation {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+
+    .rec-footer {
+      display: flex;
+      gap: 20px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .rec-footer strong {
+      color: var(--text-secondary);
+    }
+
+    /* Config Diff tab */
+    .config-summary {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .config-summary strong {
+      color: var(--accent-orange);
+    }
+
+    table .current-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+
+    table .recommended-val {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--status-completed);
+      font-weight: 500;
+    }
+
+    table .param-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+
+    .badge-source-rule {
+      background: var(--accent-blue-dim);
+      color: var(--accent-blue);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .badge-source-ai {
+      background: rgba(168, 85, 247, 0.15);
+      color: var(--accent-purple);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      <h1>Spark Advisor</h1>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="active">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
+        Tasks
+      </a>
+      <a href="applications.html">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+        Applications
+      </a>
+      <a href="analyze.html">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        Analyze
+      </a>
+      <a href="stats.html">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        Statistics
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      spark-advisor v0.1.8
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <div class="page-header">
+      <div class="breadcrumb">
+        <a href="index.html">Tasks</a>
+        <span class="sep">/</span>
+        <span>Task Detail</span>
+      </div>
+      <div class="task-header-right">
+        <button class="btn-ghost">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+          Re-analyze
+        </button>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Task Header -->
+      <div class="task-header">
+        <div class="task-header-left">
+          <div class="task-app-id">application_1710500000000_0042</div>
+          <div class="task-meta-row">
+            <span class="badge badge-completed"><span class="badge-dot"></span>Completed</span>
+            <span class="task-meta-sep"></span>
+            <span class="badge badge-mode">Agent</span>
+            <span class="task-meta-sep"></span>
+            <span class="task-meta-item">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              4m 12s
+            </span>
+            <span class="task-meta-sep"></span>
+            <span class="task-meta-item">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+              2 minutes ago
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('overview')">Overview</button>
+        <button class="tab" onclick="switchTab('rules')">Rules <span class="tab-count">5</span></button>
+        <button class="tab" onclick="switchTab('ai-report')">AI Report</button>
+        <button class="tab" onclick="switchTab('config')">Config Diff <span class="tab-count">8</span></button>
+      </div>
+
+      <!-- Overview Tab -->
+      <div id="tab-overview" class="tab-content active">
+        <div class="overview-grid">
+          <div class="overview-summary">
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">AI Summary</span>
+                <span class="badge badge-critical">CRITICAL</span>
+              </div>
+              <div class="card-body">
+                <p class="summary-text">This Spark application suffers from severe data skew in shuffle stages, causing 94% of Stage 4 wall time to be spent waiting for a single straggler task. Combined with excessive disk spill (12.4 GB across 3 stages) and high GC pressure (28% of executor time), the job is significantly underperforming. The root cause is an uneven key distribution in the join operation, amplified by undersized executor memory (2g) and default shuffle partitions (200).</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><span class="card-title">Task Info</span></div>
+            <div class="card-body">
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">Task ID</span>
+                  <span class="info-value mono">a1b2c3d4-e5f6-7890</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Mode</span>
+                  <span class="info-value"><span class="badge badge-mode">Agent</span></span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Started</span>
+                  <span class="info-value">Mar 15, 14:18:32</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Completed</span>
+                  <span class="info-value">Mar 15, 14:22:44</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><span class="card-title">Application Info</span></div>
+            <div class="card-body">
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">App Name</span>
+                  <span class="info-value">daily_etl_pipeline</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Spark Version</span>
+                  <span class="info-value">3.5.2</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Duration</span>
+                  <span class="info-value">42m 18s</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Executors</span>
+                  <span class="info-value">8 (32 cores)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rules Tab -->
+      <div id="tab-rules" class="tab-content">
+        <div class="rules-summary">
+          <span class="rules-summary-item" style="color: var(--severity-critical);">
+            <span class="badge badge-critical" style="font-size: 11px; padding: 2px 8px;">3 Critical</span>
+          </span>
+          <span class="rules-summary-item" style="color: var(--severity-warning);">
+            <span class="badge badge-warning" style="font-size: 11px; padding: 2px 8px;">1 Warning</span>
+          </span>
+          <span class="rules-summary-item" style="color: var(--severity-info);">
+            <span class="badge badge-info" style="font-size: 11px; padding: 2px 8px;">1 Info</span>
+          </span>
+        </div>
+
+        <div class="rule-cards">
+          <div class="rule-card critical">
+            <div class="rule-card-header">
+              <span class="badge badge-critical">CRITICAL</span>
+              <span class="rule-card-title">Data Skew Detected in Stage 4</span>
+            </div>
+            <div class="rule-card-body">
+              <p class="rule-message">Max task duration (245,000ms) is 18.2x the median task duration (13,462ms). A single partition is processing significantly more data than others, creating a bottleneck.</p>
+              <div class="rule-details">
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Stage</span>
+                  <span class="rule-detail-value">Stage 4</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Current</span>
+                  <span class="rule-detail-value">skew ratio 18.2x</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Recommended</span>
+                  <span class="rule-detail-value recommended">Enable AQE skew join</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Impact</span>
+                  <span class="rule-detail-value recommended">~94% stage duration reduction</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rule-card critical">
+            <div class="rule-card-header">
+              <span class="badge badge-critical">CRITICAL</span>
+              <span class="rule-card-title">Excessive Disk Spill</span>
+            </div>
+            <div class="rule-card-body">
+              <p class="rule-message">Total spill to disk: 12.4 GB across 3 stages. Spill indicates executor memory is insufficient to hold shuffle data in memory, causing expensive disk I/O.</p>
+              <div class="rule-details">
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Current</span>
+                  <span class="rule-detail-value">12.4 GB disk spill</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Recommended</span>
+                  <span class="rule-detail-value recommended">spark.executor.memory=4g</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Impact</span>
+                  <span class="rule-detail-value recommended">Eliminate disk spill</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rule-card critical">
+            <div class="rule-card-header">
+              <span class="badge badge-critical">CRITICAL</span>
+              <span class="rule-card-title">High GC Pressure</span>
+            </div>
+            <div class="rule-card-body">
+              <p class="rule-message">GC time is 28.3% of total task execution time across all stages. JVM is spending excessive time in garbage collection, indicating memory pressure.</p>
+              <div class="rule-details">
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Current</span>
+                  <span class="rule-detail-value">28.3% GC time</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Threshold</span>
+                  <span class="rule-detail-value">20%</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Recommended</span>
+                  <span class="rule-detail-value recommended">Increase executor memory</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rule-card warning">
+            <div class="rule-card-header">
+              <span class="badge badge-warning">WARNING</span>
+              <span class="rule-card-title">Suboptimal Shuffle Partitions</span>
+            </div>
+            <div class="rule-card-body">
+              <p class="rule-message">Using default 200 shuffle partitions. Based on shuffle data volume (18.6 GB), the optimal partition count is approximately 148 partitions (targeting 128MB per partition).</p>
+              <div class="rule-details">
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Current</span>
+                  <span class="rule-detail-value">200 partitions</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Recommended</span>
+                  <span class="rule-detail-value recommended">148 partitions</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Impact</span>
+                  <span class="rule-detail-value recommended">Better parallelism</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rule-card info">
+            <div class="rule-card-header">
+              <span class="badge badge-info">INFO</span>
+              <span class="rule-card-title">Consider KryoSerializer</span>
+            </div>
+            <div class="rule-card-body">
+              <p class="rule-message">Using default Java serializer. KryoSerializer is typically 10x faster and more compact for shuffle data serialization.</p>
+              <div class="rule-details">
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Current</span>
+                  <span class="rule-detail-value">JavaSerializer</span>
+                </div>
+                <div class="rule-detail-item">
+                  <span class="rule-detail-label">Recommended</span>
+                  <span class="rule-detail-value recommended">KryoSerializer</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Report Tab -->
+      <div id="tab-ai-report" class="tab-content">
+        <div class="ai-section">
+          <div class="ai-section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6V2H8"/><path d="m8 18-4 4V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2Z"/><path d="M2 12h2"/><path d="M9 11v2"/><path d="M15 11v2"/><path d="M20 12h2"/></svg>
+            Summary
+          </div>
+          <div class="ai-summary-text">
+            The daily_etl_pipeline application has three interconnected performance problems forming a vicious cycle: data skew in Stage 4 forces one executor to handle 18x more data, which overwhelms its 2GB memory allocation, causing massive disk spill (12.4 GB) and triggering aggressive garbage collection (28% of runtime). Fixing the skew alone would likely resolve the spill and GC issues, but increasing executor memory provides a safety margin.
+          </div>
+        </div>
+
+        <div class="ai-section">
+          <div class="ai-section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="M12 16V8"/></svg>
+            Causal Chain
+          </div>
+          <div class="causal-chain">
+            Uneven key distribution in join (Stage 4) → Single partition receives 18x more data → Executor memory (2g) insufficient for skewed partition → Spill to disk (12.4 GB) → JVM GC pressure rises to 28% → Stage 4 wall time dominated by straggler task (245s vs 13s median) → Overall job duration inflated by ~35 minutes
+          </div>
+        </div>
+
+        <div class="ai-section">
+          <div class="ai-section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v10"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m5 17-3 3 3 3"/><path d="m9 17 3 3-3 3"/></svg>
+            Recommendations
+          </div>
+          <div class="recommendation-cards">
+            <div class="rec-card">
+              <div class="rec-card-header">
+                <span class="rec-priority">1</span>
+                <span class="rec-title">Enable Adaptive Query Execution (AQE)</span>
+              </div>
+              <div class="rec-config">
+                <span class="rec-param">spark.sql.adaptive.enabled</span>
+                <span class="rec-current">false</span>
+                <span class="rec-arrow">→</span>
+                <span class="rec-recommended">true</span>
+              </div>
+              <p class="rec-explanation">AQE will automatically detect and handle the data skew in Stage 4 by splitting the skewed partition into smaller sub-partitions. This addresses the root cause of the performance bottleneck.</p>
+              <div class="rec-footer">
+                <span>Impact: <strong>~70% total job duration reduction</strong></span>
+                <span>Risk: <strong style="color: var(--status-completed);">Low</strong></span>
+              </div>
+            </div>
+
+            <div class="rec-card">
+              <div class="rec-card-header">
+                <span class="rec-priority">2</span>
+                <span class="rec-title">Increase Executor Memory</span>
+              </div>
+              <div class="rec-config">
+                <span class="rec-param">spark.executor.memory</span>
+                <span class="rec-current">2g</span>
+                <span class="rec-arrow">→</span>
+                <span class="rec-recommended">4g</span>
+              </div>
+              <p class="rec-explanation">Doubling executor memory will eliminate disk spill and reduce GC pressure. Even with AQE handling skew, additional memory provides headroom for data volume growth.</p>
+              <div class="rec-footer">
+                <span>Impact: <strong>Eliminate 12.4 GB disk spill</strong></span>
+                <span>Risk: <strong style="color: var(--severity-warning);">Medium</strong> — doubles memory cost</span>
+              </div>
+            </div>
+
+            <div class="rec-card">
+              <div class="rec-card-header">
+                <span class="rec-priority">3</span>
+                <span class="rec-title">Optimize Shuffle Partitions</span>
+              </div>
+              <div class="rec-config">
+                <span class="rec-param">spark.sql.shuffle.partitions</span>
+                <span class="rec-current">200</span>
+                <span class="rec-arrow">→</span>
+                <span class="rec-recommended">148</span>
+              </div>
+              <p class="rec-explanation">With AQE enabled, you can also set spark.sql.adaptive.coalescePartitions.enabled=true to let Spark auto-tune this. Manual value of 148 targets 128MB per partition based on 18.6 GB shuffle volume.</p>
+              <div class="rec-footer">
+                <span>Impact: <strong>Better task-level parallelism</strong></span>
+                <span>Risk: <strong style="color: var(--status-completed);">Low</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Config Diff Tab -->
+      <div id="tab-config" class="tab-content">
+        <p class="config-summary"><strong>8</strong> configuration changes recommended from rules and AI analysis.</p>
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Current</th>
+                  <th>Recommended</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="param-name">spark.sql.adaptive.enabled</td>
+                  <td class="current-val">false</td>
+                  <td class="recommended-val">true</td>
+                  <td><span class="badge-source-rule">rule</span> <span class="badge-source-ai">ai</span></td>
+                </tr>
+                <tr>
+                  <td class="param-name">spark.sql.adaptive.skewJoin.enabled</td>
+                  <td class="current-val">false</td>
+                  <td class="recommended-val">true</td>
+                  <td><span class="badge-source-ai">ai</span></td>
+                </tr>
+                <tr>
+                  <td class="param-name">spark.executor.memory</td>
+                  <td class="current-val">2g</td>
+                  <td class="recommended-val">4g</td>
+                  <td><span class="badge-source-rule">rule</span> <span class="badge-source-ai">ai</span></td>
+                </tr>
+                <tr>
+                  <td class="param-name">spark.sql.shuffle.partitions</td>
+                  <td class="current-val">200</td>
+                  <td class="recommended-val">148</td>
+                  <td><span class="badge-source-rule">rule</span></td>
+                </tr>
+                <tr>
+                  <td class="param-name">spark.serializer</td>
+                  <td class="current-val">JavaSerializer</td>
+                  <td class="recommended-val">KryoSerializer</td>
+                  <td><span class="badge-source-rule">rule</span></td>
+                </tr>
+                <tr>
+                  <td class="param-name">spark.sql.adaptive.coalescePartitions.enabled</td>
+                  <td class="current-val">(not set)</td>
+                  <td class="recommended-val">true</td>
+                  <td><span class="badge-source-ai">ai</span></td>
+                </tr>
+                <tr>
+                  <td class="param-name">spark.executor.memoryOverhead</td>
+                  <td class="current-val">384m</td>
+                  <td class="recommended-val">1g</td>
+                  <td><span class="badge-source-ai">ai</span></td>
+                </tr>
+                <tr>
+                  <td class="param-name">spark.sql.autoBroadcastJoinThreshold</td>
+                  <td class="current-val">10485760</td>
+                  <td class="recommended-val">52428800</td>
+                  <td><span class="badge-source-ai">ai</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+function switchTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  event.target.closest('.tab').classList.add('active');
+  document.getElementById('tab-' + tabName).classList.add('active');
+}
+</script>
+</body>
+</html>
