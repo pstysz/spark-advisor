@@ -12,6 +12,7 @@ from spark_advisor_gateway.api.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
     ApplicationResponse,
+    PaginatedApplicationResponse,
     PaginatedTaskResponse,
     TaskResponse,
     TaskStatsResponse,
@@ -82,9 +83,16 @@ def create_router() -> APIRouter:
     async def list_applications(
             executor: ExecutorDep,
             limit: int = Query(default=20, ge=1, le=500),
-    ) -> list[ApplicationResponse]:
-        apps = await executor.list_applications(limit)
-        return [ApplicationResponse.from_summary(app) for app in apps]
+            offset: int = Query(default=0, ge=0),
+    ) -> PaginatedApplicationResponse:
+        all_apps = await executor.list_applications(offset + limit)
+        page = all_apps[offset:offset + limit]
+        return PaginatedApplicationResponse(
+            items=[ApplicationResponse.from_summary(app) for app in page],
+            total=len(all_apps),
+            limit=limit,
+            offset=offset,
+        )
 
     @router.post("/analyze")
     async def analyze(

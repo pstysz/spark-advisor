@@ -74,6 +74,13 @@ class PaginatedTaskResponse(BaseModel):
     offset: int
 
 
+class PaginatedApplicationResponse(BaseModel):
+    items: list[ApplicationResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 class AnalyzeResponse(BaseModel):
     task_id: str
     status: TaskStatus
