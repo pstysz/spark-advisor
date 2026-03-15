@@ -258,16 +258,36 @@ AI-powered analysis worker. The only service that talks to Claude API. Subscribe
 
 ### spark-advisor-gateway (Service)
 
-API Gateway — the only externally-exposed service. REST API + async task orchestration via NATS. Does NOT contain analysis logic or HS client.
+API Gateway — the only externally-exposed service. 13 REST endpoints + WebSocket + async task orchestration via NATS. Does NOT contain analysis logic or HS client.
 
 **Owns:**
-- `api/routes.py` — `POST /api/v1/analyze`, `GET /api/v1/tasks/{id}`, `GET /api/v1/tasks`, `GET /api/v1/applications`
-- `api/schemas.py` — `AnalyzeRequest`, `TaskResponse`, `ApplicationResponse` (API-specific DTOs)
+- `api/routes.py` — 13 REST endpoints (analyze, tasks, apps, history, rules, config, stats)
+- `api/schemas.py` — 18 Pydantic response/request models with OpenAPI examples and tags
 - `api/health.py` — `GET /health/live`, `GET /health/ready` (NATS check)
+- `ws/manager.py` — `ConnectionManager` (WebSocket broadcast, heartbeat, stale cleanup)
+- `ws/routes.py` — `WS /api/v1/ws/tasks` (real-time task status updates)
 - `task/models.py` — `TaskStatus` enum, `AnalysisTask` dataclass
-- `task/store.py` — `TaskStore` (SQLAlchemy async + SQLite with WAL mode)
-- `task/manager.py` — `TaskManager` (create, update, query tasks)
-- `task/executor.py` — `TaskExecutor` (NATS request-reply orchestration)
+- `task/store.py` — `TaskStore` (SQLAlchemy async + SQLite WAL, stats queries)
+- `task/manager.py` — `TaskManager` (CRUD, deduplication, stats aggregation, WebSocket callback)
+- `task/executor.py` — `TaskExecutor` (NATS request-reply + polling job execution)
+
+**REST API (tagged, OpenAPI documented):**
+
+| Method | Path | Tag | Description |
+|--------|------|-----|-------------|
+| `POST` | `/api/v1/analyze` | analysis | Submit analysis (202 new, 409 duplicate) |
+| `GET` | `/api/v1/tasks` | tasks | List with filtering + pagination |
+| `GET` | `/api/v1/tasks/stats` | tasks | Count by status |
+| `GET` | `/api/v1/tasks/{id}` | tasks | Task details + result |
+| `GET` | `/api/v1/tasks/{id}/rules` | tasks | Rule violations (409 if not completed) |
+| `GET` | `/api/v1/tasks/{id}/config` | tasks | Config comparison: rule + AI merged |
+| `GET` | `/api/v1/applications` | applications | HS apps (paginated) |
+| `GET` | `/api/v1/apps/{app_id}/history` | applications | Analysis history per app |
+| `GET` | `/api/v1/stats/summary` | statistics | Totals, avg_duration, ai_usage% |
+| `GET` | `/api/v1/stats/rules` | statistics | Rule frequency |
+| `GET` | `/api/v1/stats/daily-volume` | statistics | Daily analysis count |
+| `GET` | `/api/v1/stats/top-issues` | statistics | Most common issues |
+| `WS` | `/api/v1/ws/tasks` | websocket | Real-time status broadcasts |
 
 **Config env vars:**
 - `SA_GATEWAY_NATS__URL` — NATS server URL
@@ -277,12 +297,16 @@ API Gateway — the only externally-exposed service. REST API + async task orche
 - `SA_GATEWAY_NATS__ANALYZE_TIMEOUT` — analysis timeout (default: 120s)
 - `SA_GATEWAY_NATS__ANALYZE_AGENT_TIMEOUT` — agent mode timeout (default: 300s)
 - `SA_GATEWAY_DATABASE_URL` — SQLite database URL (default: `sqlite+aiosqlite:///data/spark_advisor.db`)
+- `SA_GATEWAY_WS_HEARTBEAT_INTERVAL` — WebSocket heartbeat (default: 30s)
 
 **Key design decisions:**
 - Uses `nats-py` (not FastStream) — gateway needs request-reply with explicit timeout control, not subscriber pattern
 - `TaskStore` uses SQLAlchemy async + SQLite with WAL mode for persistent task storage across restarts
 - `TaskExecutor.submit()` fires an `asyncio.create_task()` — non-blocking for the HTTP handler
 - `AnalyzeRequest.mode` uses shared `AnalysisMode` StrEnum — routes to `analysis.run` (standard) or `analysis.run.agent` (agent) with appropriate timeout
+- WebSocket replaces SSE — `ConnectionManager` broadcasts via `on_status_change` callback from `TaskManager` (avoids circular imports)
+- Stats endpoints aggregate from `result_json` blobs in Python — no denormalized tables, simple and sufficient for <10K tasks
+- `app_id` validated with `pattern=r"^[a-zA-Z0-9_\-]+$"` + `max_length=128` for anti-traversal
 
 > Diagram: [10-gateway-task-lifecycle.mmd](diagrams/10-gateway-task-lifecycle.mmd)
 

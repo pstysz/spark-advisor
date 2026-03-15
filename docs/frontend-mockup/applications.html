@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spark Advisor — Applications</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      <h1>Spark Advisor</h1>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
+        Tasks
+      </a>
+      <a href="applications.html" class="active">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+        Applications
+      </a>
+      <a href="analyze.html">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        Analyze
+      </a>
+      <a href="stats.html">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        Statistics
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      spark-advisor v0.1.8
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <div class="page-header">
+      <h2>Applications</h2>
+      <div class="breadcrumb">
+        <span>From History Server</span>
+      </div>
+    </div>
+
+    <div class="page-body">
+
+      <!-- Search -->
+      <div class="filters-bar">
+        <div class="filter-group" style="flex: 1;">
+          <label class="filter-label">Search</label>
+          <input type="text" class="filter-input" placeholder="Search by app ID or name..." style="width: 100%;">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Status</label>
+          <select class="filter-select">
+            <option value="">All</option>
+            <option value="completed">Completed</option>
+            <option value="running">Running</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Spark Version</label>
+          <select class="filter-select">
+            <option value="">All versions</option>
+            <option value="3.5.2">3.5.2</option>
+            <option value="3.5.0">3.5.0</option>
+            <option value="3.4.1">3.4.1</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Applications Table -->
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>App ID</th>
+                <th>Name</th>
+                <th>Spark</th>
+                <th>User</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Analyses</th>
+                <th>Started</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><a href="app-history.html" class="td-link font-mono" style="font-size: 13px;">app_1710500000000_0042</a></td>
+                <td>daily_etl_pipeline</td>
+                <td class="td-muted">3.5.2</td>
+                <td class="td-muted">data-eng</td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td class="td-muted">42m 18s</td>
+                <td><span class="analysis-count">3</span></td>
+                <td class="td-muted">Today, 14:22</td>
+              </tr>
+              <tr>
+                <td><a href="app-history.html" class="td-link font-mono" style="font-size: 13px;">app_1710500000000_0041</a></td>
+                <td>user_activity_aggregation</td>
+                <td class="td-muted">3.5.2</td>
+                <td class="td-muted">analytics</td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td class="td-muted">1h 12m</td>
+                <td><span class="analysis-count">2</span></td>
+                <td class="td-muted">Today, 12:05</td>
+              </tr>
+              <tr>
+                <td><a href="app-history.html" class="td-link font-mono" style="font-size: 13px;">app_1710500000000_0040</a></td>
+                <td>recommendation_engine_train</td>
+                <td class="td-muted">3.5.0</td>
+                <td class="td-muted">ml-team</td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td class="td-muted">3h 45m</td>
+                <td><span class="analysis-count">5</span></td>
+                <td class="td-muted">Today, 08:30</td>
+              </tr>
+              <tr>
+                <td><a href="app-history.html" class="td-link font-mono" style="font-size: 13px;">app_1710500000000_0039</a></td>
+                <td>clickstream_sessionizer</td>
+                <td class="td-muted">3.5.2</td>
+                <td class="td-muted">data-eng</td>
+                <td><span class="badge badge-running"><span class="badge-dot"></span>Running</span></td>
+                <td class="td-muted">28m 04s</td>
+                <td><span class="analysis-count">1</span></td>
+                <td class="td-muted">Today, 15:01</td>
+              </tr>
+              <tr>
+                <td><a href="app-history.html" class="td-link font-mono" style="font-size: 13px;">app_1710500000000_0038</a></td>
+                <td>revenue_report_daily</td>
+                <td class="td-muted">3.4.1</td>
+                <td class="td-muted">finance</td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td class="td-muted">15m 33s</td>
+                <td><span class="analysis-count">4</span></td>
+                <td class="td-muted">Yesterday, 23:00</td>
+              </tr>
+              <tr>
+                <td><a href="app-history.html" class="td-link font-mono" style="font-size: 13px;">app_1710500000000_0037</a></td>
+                <td>fraud_detection_streaming</td>
+                <td class="td-muted">3.5.2</td>
+                <td class="td-muted">security</td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td class="td-muted">2h 08m</td>
+                <td><span class="analysis-count">2</span></td>
+                <td class="td-muted">Yesterday, 20:15</td>
+              </tr>
+              <tr>
+                <td><a href="app-history.html" class="td-link font-mono" style="font-size: 13px;">app_1710500000000_0036</a></td>
+                <td>customer_churn_prediction</td>
+                <td class="td-muted">3.5.0</td>
+                <td class="td-muted">ml-team</td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td class="td-muted">58m 22s</td>
+                <td><span class="analysis-count">1</span></td>
+                <td class="td-muted">Yesterday, 14:40</td>
+              </tr>
+              <tr>
+                <td><a href="app-history.html" class="td-link font-mono" style="font-size: 13px;">app_1710500000000_0035</a></td>
+                <td>inventory_snapshot_hourly</td>
+                <td class="td-muted">3.4.1</td>
+                <td class="td-muted">ops</td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td class="td-muted">8m 55s</td>
+                <td><span class="analysis-count">6</span></td>
+                <td class="td-muted">Yesterday, 12:00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination">
+          <span class="pagination-info">Showing 1–8 of 24 applications</span>
+          <div class="pagination-controls">
+            <button class="btn-page" disabled>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <span class="pagination-pages">
+              <button class="btn-page active">1</button>
+              <button class="btn-page">2</button>
+              <button class="btn-page">3</button>
+            </span>
+            <button class="btn-page">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

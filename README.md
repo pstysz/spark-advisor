@@ -9,7 +9,7 @@
     <a href="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml"><img src="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
     <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
-    <img src="https://img.shields.io/badge/tests-424%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-495%20passing-brightgreen" alt="Tests">
   </p>
   <p>
     <img src="https://img.shields.io/badge/Spark-E25A1C?logo=apachespark&logoColor=white" alt="Apache Spark">
@@ -82,6 +82,7 @@ The rules engine runs for free and catches known patterns. The AI layer adds con
 - **AI advisor** with Claude API — prioritized recommendations with causal chains and concrete config values
 - **Agent mode** — multi-turn Claude analysis where AI autonomously explores job data using 6 tools
 - **MCP server** — use spark-advisor as tools in Claude Desktop, Cursor, or any MCP client
+- **Dashboard-ready REST API** — 13 endpoints with pagination, filtering, statistics, config comparison, WebSocket streaming
 - **3 microservices** — NATS-based distributed pipeline (gateway, analyzer, hs-connector)
 - **Streaming parser** — processes 100MB+ event log files line-by-line without loading into memory
 - **Rich CLI** — tables, colors, severity badges, suggested spark-defaults.conf
@@ -246,6 +247,24 @@ curl http://localhost:8080/api/v1/applications?limit=20
 curl -X POST http://localhost:8080/api/v1/analyze \
   -H 'Content-Type: application/json' \
   -d '{"app_id": "app-123", "mode": "agent"}'
+
+# List tasks with filtering
+curl "http://localhost:8080/api/v1/tasks?status=completed&limit=10"
+
+# Get rule violations for a task
+curl http://localhost:8080/api/v1/tasks/<task-id>/rules
+
+# Get config comparison
+curl http://localhost:8080/api/v1/tasks/<task-id>/config
+
+# Application analysis history
+curl http://localhost:8080/api/v1/apps/app-123/history
+
+# Dashboard statistics
+curl "http://localhost:8080/api/v1/stats/summary?days=30"
+
+# WebSocket (real-time task updates)
+wscat -c ws://localhost:8080/api/v1/ws/tasks
 ```
 
 ### Stop
@@ -373,7 +392,7 @@ graph TB
 
 ```bash
 make check       # Lint + mypy + all tests (CI-ready)
-make test        # Run 424 tests across 7 packages
+make test        # Run 495 tests across 7 packages
 make lint        # Ruff + mypy (strict)
 make format      # Auto-format code
 make demo-local  # Run rules-only analysis on sample event log
@@ -409,7 +428,7 @@ make down        # Stop microservices
 
 ### Testing
 
-424 tests across 7 packages: models (10), rules (45), cli (78), analyzer (85), hs-connector (68), gateway (63), mcp (75).
+495 tests across 7 packages: models (10), rules (45), cli (78), analyzer (86), hs-connector (68), gateway (132), mcp (75).
 
 ```bash
 uv run pytest -v               # all packages
@@ -431,6 +450,11 @@ cd packages/spark-advisor-rules && uv run pytest -v  # single package
 - [x] Helm charts for Kubernetes deployment (umbrella chart + 3 subcharts)
 - [x] Docker images published to ghcr.io on release
 - [x] PyPI release (`pip install spark-advisor`)
+- [x] Task persistence (SQLite + SQLAlchemy async)
+- [x] Task deduplication with rerun support
+- [x] Dashboard REST API (13 endpoints + WebSocket)
+- [x] Statistics aggregation (summary, rule frequency, daily volume, top issues)
+- [x] OpenAPI schema with examples and tagged endpoints
 - [ ] Terminal demo GIF
 
 ## License
