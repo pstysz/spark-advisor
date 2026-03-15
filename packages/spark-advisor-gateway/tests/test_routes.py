@@ -642,3 +642,30 @@ async def test_stats_top_issues(client: AsyncClient, task_manager: TaskManager) 
     assert data["items"][0]["count"] == 2
     assert data["items"][0]["example_app_id"] in ("app-ti1", "app-ti2")
     assert data["limit"] == 1
+
+
+@pytest.mark.asyncio
+async def test_openapi_schema_contains_examples(client: AsyncClient) -> None:
+    response = await client.get("/openapi.json")
+    assert response.status_code == 200
+    schema = response.json()
+    schemas = schema["components"]["schemas"]
+    assert "examples" in schemas["AnalyzeRequest"]["properties"]["app_id"]
+    assert "examples" in schemas["TaskResponse"]["properties"]["task_id"]
+    assert "examples" in schemas["RuleViolationResponse"]["properties"]["rule_id"]
+    assert "examples" in schemas["StatsSummaryResponse"]["properties"]["total"]
+    assert "examples" in schemas["ConfigComparisonEntry"]["properties"]["parameter"]
+
+
+@pytest.mark.asyncio
+async def test_openapi_routes_have_summaries_and_tags(client: AsyncClient) -> None:
+    response = await client.get("/openapi.json")
+    assert response.status_code == 200
+    paths = response.json()["paths"]
+    for path, methods in paths.items():
+        if path.startswith("/health"):
+            continue
+        for method, spec in methods.items():
+            if method in ("get", "post", "put", "delete", "patch"):
+                assert "summary" in spec, f"Missing summary on {method.upper()} {path}"
+                assert "tags" in spec, f"Missing tags on {method.upper()} {path}"

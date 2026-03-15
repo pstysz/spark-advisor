@@ -48,11 +48,15 @@ ExecutorDep = Annotated["TaskExecutor", Depends(_from_state(StateKey.TASK_EXECUT
 def create_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1")
 
-    @router.get("/applications")
+    @router.get(
+        "/applications",
+        summary="List Spark applications from History Server",
+        tags=["applications"],
+    )
     async def list_applications(
             executor: ExecutorDep,
-            limit: int = Query(default=20, ge=1, le=500),
-            offset: int = Query(default=0, ge=0),
+            limit: int = Query(default=20, ge=1, le=500, description="Maximum number of applications to return"),
+            offset: int = Query(default=0, ge=0, description="Number of applications to skip"),
     ) -> PaginatedApplicationResponse:
         all_apps = await executor.list_applications(offset + limit)
         page = all_apps[offset:offset + limit]
@@ -63,7 +67,12 @@ def create_router() -> APIRouter:
             offset=offset,
         )
 
-    @router.post("/analyze")
+    @router.post(
+        "/analyze",
+        summary="Submit analysis request",
+        description="Creates an async analysis task. Returns 202 for new tasks, 409 if a task is already active.",
+        tags=["analysis"],
+    )
     async def analyze(
             body: AnalyzeRequest,
             manager: ManagerDep,
@@ -81,24 +90,36 @@ def create_router() -> APIRouter:
         response.status_code = 202
         return AnalyzeResponse(task_id=task.task_id, status=task.status)
 
-    @router.get("/tasks/stats")
+    @router.get(
+        "/tasks/stats",
+        summary="Get task count by status",
+        tags=["tasks"],
+    )
     async def task_stats(manager: ManagerDep) -> TaskStatsResponse:
         counts = await manager.count_by_status()
         total = sum(counts.values())
         return TaskStatsResponse(counts=counts, total=total)
 
-    @router.get("/tasks/{task_id}")
+    @router.get(
+        "/tasks/{task_id}",
+        summary="Get task details",
+        tags=["tasks"],
+    )
     async def get_task(task_id: str, manager: ManagerDep) -> TaskResponse:
         task = await manager.get(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
         return TaskResponse.from_task(task)
 
-    @router.get("/tasks")
+    @router.get(
+        "/tasks",
+        summary="List tasks with filtering and pagination",
+        tags=["tasks"],
+    )
     async def list_tasks(
             manager: ManagerDep,
-            limit: int = Query(default=50, ge=1, le=500),
-            offset: int = Query(default=0, ge=0),
+            limit: int = Query(default=50, ge=1, le=500, description="Maximum number of tasks to return"),
+            offset: int = Query(default=0, ge=0, description="Number of tasks to skip"),
             status: TaskStatus | None = None,
             app_id: str | None = None,
     ) -> PaginatedTaskResponse:
@@ -110,12 +131,16 @@ def create_router() -> APIRouter:
             offset=offset,
         )
 
-    @router.get("/apps/{app_id}/history")
+    @router.get(
+        "/apps/{app_id}/history",
+        summary="Get analysis history for an application",
+        tags=["applications"],
+    )
     async def app_history(
             app_id: str,
             manager: ManagerDep,
-            limit: int = Query(default=50, ge=1, le=500),
-            offset: int = Query(default=0, ge=0),
+            limit: int = Query(default=50, ge=1, le=500, description="Maximum number of tasks to return"),
+            offset: int = Query(default=0, ge=0, description="Number of tasks to skip"),
     ) -> PaginatedTaskResponse:
         tasks, total = await manager.list_filtered(limit=limit, offset=offset, app_id=app_id)
         return PaginatedTaskResponse(
@@ -125,7 +150,12 @@ def create_router() -> APIRouter:
             offset=offset,
         )
 
-    @router.get("/tasks/{task_id}/rules")
+    @router.get(
+        "/tasks/{task_id}/rules",
+        summary="Get rule violations for a completed task",
+        description="Returns rule violations from the analysis result. Returns 409 if the task is not completed.",
+        tags=["tasks"],
+    )
     async def task_rules(task_id: str, manager: ManagerDep) -> list[RuleViolationResponse]:
         task = await manager.get(task_id)
         if not task:
@@ -146,7 +176,12 @@ def create_router() -> APIRouter:
             for r in task.result.rule_results
         ]
 
-    @router.get("/tasks/{task_id}/config")
+    @router.get(
+        "/tasks/{task_id}/config",
+        summary="Get configuration comparison for a completed task",
+        description="Merges rule-based and AI-based config recommendations. Returns 409 if the task is not completed.",
+        tags=["tasks"],
+    )
     async def task_config(task_id: str, manager: ManagerDep) -> ConfigComparisonResponse:
         task = await manager.get(task_id)
         if not task:
@@ -183,25 +218,39 @@ def create_router() -> APIRouter:
                     )
         return ConfigComparisonResponse(app_id=task.app_id, entries=list(entries.values()))
 
-    @router.get("/stats/summary")
+    @router.get(
+        "/stats/summary",
+        summary="Get analysis statistics summary",
+        description="Aggregates task counts, average duration, and AI usage over a time window.",
+        tags=["statistics"],
+    )
     async def stats_summary(
             manager: ManagerDep,
-            days: int = Query(default=30, ge=1, le=365),
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
     ) -> StatsSummaryResponse:
         return await manager.get_stats_summary(days)
 
-    @router.get("/stats/rules")
+    @router.get(
+        "/stats/rules",
+        summary="Get rule violation frequency",
+        description="Counts how often each rule was triggered across completed analyses.",
+        tags=["statistics"],
+    )
     async def stats_rules(
             manager: ManagerDep,
-            days: int = Query(default=30, ge=1, le=365),
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
     ) -> RuleFrequencyResponse:
         items = await manager.get_rule_frequency(days)
         return RuleFrequencyResponse(items=items, days=days)
 
-    @router.get("/stats/daily-volume")
+    @router.get(
+        "/stats/daily-volume",
+        summary="Get daily analysis volume",
+        tags=["statistics"],
+    )
     async def stats_daily_volume(
             manager: ManagerDep,
-            days: int = Query(default=30, ge=1, le=365),
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
     ) -> DailyVolumeResponse:
         rows = await manager.get_daily_volume(days)
         return DailyVolumeResponse(
@@ -209,11 +258,16 @@ def create_router() -> APIRouter:
             days=days,
         )
 
-    @router.get("/stats/top-issues")
+    @router.get(
+        "/stats/top-issues",
+        summary="Get most common issues",
+        description="Returns top N most frequently triggered rules with example app IDs.",
+        tags=["statistics"],
+    )
     async def stats_top_issues(
             manager: ManagerDep,
-            days: int = Query(default=30, ge=1, le=365),
-            limit: int = Query(default=10, ge=1, le=100),
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
+            limit: int = Query(default=10, ge=1, le=100, description="Maximum number of issues to return"),
     ) -> TopIssuesResponse:
         items = await manager.get_top_issues(days, limit)
         return TopIssuesResponse(items=items, days=days, limit=limit)
