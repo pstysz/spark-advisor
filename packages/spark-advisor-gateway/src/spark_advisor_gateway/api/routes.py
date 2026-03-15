@@ -5,7 +5,7 @@ import logging
 from typing import TYPE_CHECKING, Annotated, Any
 
 import orjson
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from spark_advisor_gateway.api.schemas import (
@@ -81,7 +81,7 @@ def create_router() -> APIRouter:
     @router.get("/applications")
     async def list_applications(
             executor: ExecutorDep,
-            limit: int = 20,
+            limit: int = Query(default=20, ge=1, le=500),
     ) -> list[ApplicationResponse]:
         apps = await executor.list_applications(limit)
         return [ApplicationResponse.from_summary(app) for app in apps]
@@ -127,8 +127,8 @@ def create_router() -> APIRouter:
     @router.get("/tasks")
     async def list_tasks(
             manager: ManagerDep,
-            limit: int = 50,
-            offset: int = 0,
+            limit: int = Query(default=50, ge=1, le=500),
+            offset: int = Query(default=0, ge=0),
             status: TaskStatus | None = None,
             app_id: str | None = None,
     ) -> PaginatedTaskResponse:
