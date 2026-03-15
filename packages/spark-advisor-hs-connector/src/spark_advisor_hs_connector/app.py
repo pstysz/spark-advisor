@@ -32,7 +32,7 @@ async def on_startup() -> None:
     poller = HistoryServerPoller(
         hs_client=hs_client,
         broker=broker,
-        publish_subject=settings.nats.analyze_request_subject,
+        publish_subject=settings.nats.analysis_submit_subject,
         store=polling_state,
         batch_size=settings.batch_size,
     )

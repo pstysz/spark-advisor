@@ -12,8 +12,8 @@ from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.models import TaskStatus
 from spark_advisor_gateway.task.store import TaskStore
 from spark_advisor_models.defaults import (
-    NATS_ANALYZE_AGENT_REQUEST_SUBJECT,
-    NATS_ANALYZE_REQUEST_SUBJECT,
+    NATS_ANALYSIS_RUN_AGENT_SUBJECT,
+    NATS_ANALYSIS_RUN_SUBJECT,
     NATS_FETCH_JOB_SUBJECT,
 )
 from spark_advisor_models.model import AnalysisMode, AnalysisResult
@@ -120,7 +120,7 @@ async def test_execute_sends_correct_subjects() -> None:
 
     calls = nc.request.call_args_list
     assert calls[0].args[0] == NATS_FETCH_JOB_SUBJECT
-    assert calls[1].args[0] == NATS_ANALYZE_REQUEST_SUBJECT
+    assert calls[1].args[0] == NATS_ANALYSIS_RUN_SUBJECT
 
 
 @pytest.mark.asyncio
@@ -142,7 +142,7 @@ async def test_execute_agent_mode_uses_agent_subject() -> None:
 
     calls = nc.request.call_args_list
     assert calls[0].args[0] == NATS_FETCH_JOB_SUBJECT
-    assert calls[1].args[0] == NATS_ANALYZE_AGENT_REQUEST_SUBJECT
+    assert calls[1].args[0] == NATS_ANALYSIS_RUN_AGENT_SUBJECT
 
 
 @pytest.mark.asyncio
@@ -184,5 +184,95 @@ async def test_execute_standard_mode_default() -> None:
     await asyncio.sleep(0.1)
 
     calls = nc.request.call_args_list
-    assert calls[1].args[0] == NATS_ANALYZE_REQUEST_SUBJECT
+    assert calls[1].args[0] == NATS_ANALYSIS_RUN_SUBJECT
     assert calls[1].kwargs["timeout"] == 120.0
+
+
+@pytest.mark.asyncio
+async def test_submit_with_job_success() -> None:
+    nc, manager, executor = await _setup()
+    job = make_job()
+    result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
+
+    nc.request = AsyncMock(return_value=_make_reply(result.model_dump_json().encode()))
+
+    task = await manager.create(job.app_id)
+    executor.submit_with_job(task.task_id, job)
+    await asyncio.sleep(0.1)
+
+    updated = await manager.get(task.task_id)
+    assert updated is not None
+    assert updated.status == TaskStatus.COMPLETED
+    assert updated.result is not None
+    assert updated.result.app_id == job.app_id
+
+    assert nc.request.call_count == 1
+    assert nc.request.call_args.args[0] == NATS_ANALYSIS_RUN_SUBJECT
+
+
+@pytest.mark.asyncio
+async def test_submit_with_job_skips_fetch() -> None:
+    nc, manager, executor = await _setup()
+    job = make_job()
+    result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
+
+    nc.request = AsyncMock(return_value=_make_reply(result.model_dump_json().encode()))
+
+    task = await manager.create(job.app_id)
+    executor.submit_with_job(task.task_id, job)
+    await asyncio.sleep(0.1)
+
+    calls = nc.request.call_args_list
+    assert len(calls) == 1
+    assert calls[0].args[0] != NATS_FETCH_JOB_SUBJECT
+
+
+@pytest.mark.asyncio
+async def test_submit_with_job_agent_mode() -> None:
+    nc, manager, executor = await _setup()
+    job = make_job()
+    result = AnalysisResult(app_id=job.app_id, job=job, rule_results=[], ai_report=None)
+
+    nc.request = AsyncMock(return_value=_make_reply(result.model_dump_json().encode()))
+
+    task = await manager.create(job.app_id)
+    executor.submit_with_job(task.task_id, job, mode=AnalysisMode.AGENT)
+    await asyncio.sleep(0.1)
+
+    calls = nc.request.call_args_list
+    assert calls[0].args[0] == NATS_ANALYSIS_RUN_AGENT_SUBJECT
+    assert calls[0].kwargs["timeout"] == 300.0
+
+
+@pytest.mark.asyncio
+async def test_submit_with_job_marks_failed_on_error() -> None:
+    nc, manager, executor = await _setup()
+    job = make_job()
+
+    nc.request = AsyncMock(side_effect=TimeoutError("NATS timeout"))
+
+    task = await manager.create(job.app_id)
+    executor.submit_with_job(task.task_id, job)
+    await asyncio.sleep(0.1)
+
+    updated = await manager.get(task.task_id)
+    assert updated is not None
+    assert updated.status == TaskStatus.FAILED
+    assert updated.error is not None
+
+
+@pytest.mark.asyncio
+async def test_submit_with_job_marks_failed_on_analysis_error() -> None:
+    nc, manager, executor = await _setup()
+    job = make_job()
+
+    nc.request = AsyncMock(return_value=_make_reply(orjson.dumps({"error": "Analysis failed"})))
+
+    task = await manager.create(job.app_id)
+    executor.submit_with_job(task.task_id, job)
+    await asyncio.sleep(0.1)
+
+    updated = await manager.get(task.task_id)
+    assert updated is not None
+    assert updated.status == TaskStatus.FAILED
+    assert "Analysis failed" in (updated.error or "")

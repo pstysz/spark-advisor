@@ -12,10 +12,12 @@ config:
     port: 8080
   nats:
     url: "nats://localhost:4222"
-    fetchJobSubject: "fetch.job"
-    analyzeRequestSubject: "analyze.request"
-    analyzeAgentRequestSubject: "analyze.agent.request"
-    listApplicationsSubject: "list.applications"
+    jobFetchSubject: "job.fetch"
+    analysisRunSubject: "analysis.run"
+    analysisRunAgentSubject: "analysis.run.agent"
+    appsListSubject: "apps.list"
+    analysisSubmitSubject: "analysis.submit"
+    pollingAnalysisMode: "ai"
     fetchTimeout: 30.0
     analyzeTimeout: 120.0
     analyzeAgentTimeout: 300.0

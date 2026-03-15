@@ -21,16 +21,16 @@ logger = logging.getLogger(__name__)
 async def on_startup() -> None:
     logging.basicConfig(level=settings.log_level)
 
-    client: AnthropicClient | None = None
+    ai_client: AnthropicClient | None = None
     if settings.ai.enabled and os.environ.get("ANTHROPIC_API_KEY"):
-        client = AnthropicClient(settings.ai.api_timeout)
-        client.open()
-        app.context.set_global(ContextKey.AI_CLIENT, client)
+        ai_client = AnthropicClient(settings.ai.api_timeout)
+        ai_client.open()
+        app.context.set_global(ContextKey.AI_CLIENT, ai_client)
     elif settings.ai.enabled:
         logger.warning("ANTHROPIC_API_KEY not set — AI analysis disabled")
 
     orchestrator = create_analysis_stack(
-        client=client,
+        ai_client=ai_client,
         ai_settings=settings.ai,
         thresholds=settings.thresholds,
     )
@@ -38,7 +38,7 @@ async def on_startup() -> None:
 
     logger.info(
         "Analyzer started: ai_enabled=%s model=%s",
-        settings.ai.enabled and client is not None,
+        settings.ai.enabled and ai_client is not None,
         settings.ai.model,
     )
 
