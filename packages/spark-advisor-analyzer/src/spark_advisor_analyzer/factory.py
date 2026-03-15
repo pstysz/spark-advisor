@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 def create_analysis_stack(
     *,
-    client: AnthropicClient | None,
+    ai_client: AnthropicClient | None,
     ai_settings: AiSettings | None = None,
     thresholds: Thresholds,
 ) -> AdviceOrchestrator:
@@ -31,11 +31,11 @@ def create_analysis_stack(
     llm_service: LlmAnalysisService | None = None
     agent_orch: AgentOrchestrator | None = None
 
-    if client is not None:
+    if ai_client is not None:
         if ai_settings is None:
             raise ValueError("ai_settings required when client is provided")
-        llm_service = LlmAnalysisService(client, ai_settings, thresholds)
-        agent_orch = AgentOrchestrator(client, static, ai_settings)
+        llm_service = LlmAnalysisService(ai_client, ai_settings, thresholds)
+        agent_orch = AgentOrchestrator(ai_client, static, ai_settings)
 
     return AdviceOrchestrator(static, llm_service, agent_orch)
 
@@ -62,7 +62,7 @@ def create_analysis_context(
 
     try:
         yield create_analysis_stack(
-            client=client,
+            ai_client=client,
             ai_settings=ai_settings,
             thresholds=resolved_thresholds,
         )

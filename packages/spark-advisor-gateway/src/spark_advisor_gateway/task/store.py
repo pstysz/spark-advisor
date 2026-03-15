@@ -92,6 +92,17 @@ class TaskStore:
             tasks = [_to_task(row) for row in result.scalars()]
             return tasks, total
 
+    async def find_latest_by_app_id(self, app_id: str) -> AnalysisTask | None:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TaskRow)
+                .where(TaskRow.app_id == app_id)
+                .order_by(TaskRow.created_at.desc(), TaskRow.task_id.desc())
+                .limit(1)
+            )
+            row = result.scalar_one_or_none()
+            return _to_task(row) if row else None
+
     async def count_by_status(self) -> dict[TaskStatus, int]:
         async with self._session_factory() as session:
             result = await session.execute(select(TaskRow.status, func.count().label("cnt")).group_by(TaskRow.status))
