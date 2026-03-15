@@ -12,8 +12,11 @@ from spark_advisor_gateway.api.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
     ApplicationResponse,
+    ConfigComparisonEntry,
+    ConfigComparisonResponse,
     PaginatedApplicationResponse,
     PaginatedTaskResponse,
+    RuleViolationResponse,
     TaskResponse,
     TaskStatsResponse,
 )
@@ -147,5 +150,78 @@ def create_router() -> APIRouter:
             limit=limit,
             offset=offset,
         )
+
+    @router.get("/apps/{app_id}/history")
+    async def app_history(
+            app_id: str,
+            manager: ManagerDep,
+            limit: int = Query(default=50, ge=1, le=500),
+            offset: int = Query(default=0, ge=0),
+    ) -> PaginatedTaskResponse:
+        tasks, total = await manager.list_filtered(limit=limit, offset=offset, app_id=app_id)
+        return PaginatedTaskResponse(
+            items=[TaskResponse.from_task(t) for t in tasks],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    @router.get("/tasks/{task_id}/rules")
+    async def task_rules(task_id: str, manager: ManagerDep) -> list[RuleViolationResponse]:
+        task = await manager.get(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.status != TaskStatus.COMPLETED or task.result is None:
+            raise HTTPException(status_code=409, detail="Task is not completed")
+        return [
+            RuleViolationResponse(
+                rule_id=r.rule_id,
+                severity=r.severity,
+                title=r.title,
+                message=r.message,
+                stage_id=r.stage_id,
+                current_value=r.current_value,
+                recommended_value=r.recommended_value,
+                estimated_impact=r.estimated_impact,
+            )
+            for r in task.result.rule_results
+        ]
+
+    @router.get("/tasks/{task_id}/config")
+    async def task_config(task_id: str, manager: ManagerDep) -> ConfigComparisonResponse:
+        task = await manager.get(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.status != TaskStatus.COMPLETED or task.result is None:
+            raise HTTPException(status_code=409, detail="Task is not completed")
+        entries: dict[str, ConfigComparisonEntry] = {}
+        for r in task.result.rule_results:
+            if r.recommended_value:
+                param = r.rule_id
+                if r.current_value:
+                    param = r.current_value.split("=")[0].strip() if "=" in r.current_value else r.rule_id
+                entries[param] = ConfigComparisonEntry(
+                    parameter=param,
+                    current_value=r.current_value,
+                    recommended_value=r.recommended_value,
+                    source="rule",
+                )
+        if task.result.ai_report:
+            for param, value in task.result.ai_report.suggested_config.items():
+                entries[param] = ConfigComparisonEntry(
+                    parameter=param,
+                    current_value=entries[param].current_value if param in entries else "",
+                    recommended_value=value,
+                    source="ai",
+                )
+            for rec in task.result.ai_report.recommendations:
+                if rec.parameter:
+                    entries[rec.parameter] = ConfigComparisonEntry(
+                        parameter=rec.parameter,
+                        current_value=rec.current_value,
+                        recommended_value=rec.recommended_value,
+                        source="ai",
+                    )
+        return ConfigComparisonResponse(app_id=task.app_id, entries=list(entries.values()))
 
     return router
