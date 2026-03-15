@@ -187,17 +187,21 @@ async def test_list_applications_returns_apps(client: AsyncClient, mock_nc: Asyn
     response = await client.get("/api/v1/applications")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
-    assert data[0]["id"] == "app-001"
-    assert data[0]["name"] == "SparkPi"
-    assert data[0]["duration_ms"] == 5000
-    assert data[0]["completed"] is True
-    assert data[0]["spark_version"] == "3.5.0"
-    assert data[0]["user"] == "hdfs"
-    assert data[0]["start_time"] == "2026-02-26T18:06:24.459GMT"
-    assert data[0]["end_time"] == "2026-02-26T18:07:58.746GMT"
-    assert data[1]["id"] == "app-002"
-    assert data[1]["duration_ms"] == 0
+    assert data["total"] == 2
+    assert data["limit"] == 20
+    assert data["offset"] == 0
+    items = data["items"]
+    assert len(items) == 2
+    assert items[0]["id"] == "app-001"
+    assert items[0]["name"] == "SparkPi"
+    assert items[0]["duration_ms"] == 5000
+    assert items[0]["completed"] is True
+    assert items[0]["spark_version"] == "3.5.0"
+    assert items[0]["user"] == "hdfs"
+    assert items[0]["start_time"] == "2026-02-26T18:06:24.459GMT"
+    assert items[0]["end_time"] == "2026-02-26T18:07:58.746GMT"
+    assert items[1]["id"] == "app-002"
+    assert items[1]["duration_ms"] == 0
 
 
 @pytest.mark.asyncio
@@ -208,6 +212,44 @@ async def test_list_applications_passes_limit(client: AsyncClient, mock_nc: Asyn
     call_args = mock_nc.request.call_args
     payload = orjson.loads(call_args[0][1])
     assert payload["limit"] == 5
+    data = response.json()
+    assert data["limit"] == 5
+    assert data["offset"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_applications_with_offset(client: AsyncClient, mock_nc: AsyncMock) -> None:
+    mock_nc.request.return_value = _nats_reply(
+        [
+            {"id": f"app-{i:03d}", "name": f"Job {i}", "attempts": []}
+            for i in range(5)
+        ]
+    )
+    response = await client.get("/api/v1/applications?limit=2&offset=2")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["offset"] == 2
+    assert data["limit"] == 2
+    assert data["total"] == 5
+    assert len(data["items"]) == 2
+    assert data["items"][0]["id"] == "app-002"
+    assert data["items"][1]["id"] == "app-003"
+    call_args = mock_nc.request.call_args
+    payload = orjson.loads(call_args[0][1])
+    assert payload["limit"] == 4
+
+
+@pytest.mark.asyncio
+async def test_list_applications_offset_beyond_total(client: AsyncClient, mock_nc: AsyncMock) -> None:
+    mock_nc.request.return_value = _nats_reply(
+        [{"id": "app-001", "name": "Job 1", "attempts": []}]
+    )
+    response = await client.get("/api/v1/applications?limit=10&offset=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert len(data["items"]) == 0
+    assert data["offset"] == 5
 
 
 @pytest.mark.asyncio
