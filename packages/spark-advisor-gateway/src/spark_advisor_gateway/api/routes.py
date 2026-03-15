@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Annotated, Any
 
-import orjson
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import StreamingResponse
 
 from spark_advisor_gateway.api.schemas import (
     AnalyzeRequest,
@@ -18,60 +15,23 @@ from spark_advisor_gateway.api.schemas import (
     DailyVolumeResponse,
     PaginatedApplicationResponse,
     PaginatedTaskResponse,
-    RuleFrequencyEntry,
     RuleFrequencyResponse,
     RuleViolationResponse,
     StatsSummaryResponse,
     TaskResponse,
     TaskStatsResponse,
-    TopIssueEntry,
     TopIssuesResponse,
 )
-from spark_advisor_gateway.config import GatewaySettings, StateKey
+from spark_advisor_gateway.config import StateKey
 from spark_advisor_gateway.task.models import TaskStatus
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import Callable
 
     from spark_advisor_gateway.task.executor import TaskExecutor
     from spark_advisor_gateway.task.manager import TaskManager
 
 logger = logging.getLogger(__name__)
-
-_TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.FAILED})
-
-
-def _sse_event(event: str, data: object) -> str:
-    return f"event: {event}\ndata: {orjson.dumps(data).decode()}\n\n"
-
-
-async def _task_event_stream(
-        manager: TaskManager,
-        task_id: str,
-        *,
-        timeout: float,
-        poll_interval: float,
-) -> AsyncIterator[str]:
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    last_status: TaskStatus | None = None
-
-    while loop.time() < deadline:
-        task = await manager.get(task_id)
-        if not task:
-            yield _sse_event("error", {"detail": "Task not found"})
-            return
-
-        if task.status != last_status:
-            last_status = task.status
-            yield _sse_event("status", TaskResponse.from_task(task).model_dump(mode="json"))
-
-        if last_status in _TERMINAL_STATUSES:
-            return
-
-        await asyncio.sleep(poll_interval)
-
-    yield _sse_event("timeout", {"detail": "Stream timeout"})
 
 
 def _from_state(key: StateKey) -> Callable[..., Any]:
@@ -83,7 +43,6 @@ def _from_state(key: StateKey) -> Callable[..., Any]:
 
 ManagerDep = Annotated["TaskManager", Depends(_from_state(StateKey.TASK_MANAGER))]
 ExecutorDep = Annotated["TaskExecutor", Depends(_from_state(StateKey.TASK_EXECUTOR))]
-SettingsDep = Annotated[GatewaySettings, Depends(_from_state(StateKey.SETTINGS))]
 
 
 def create_router() -> APIRouter:
@@ -127,13 +86,6 @@ def create_router() -> APIRouter:
         counts = await manager.count_by_status()
         total = sum(counts.values())
         return TaskStatsResponse(counts=counts, total=total)
-
-    @router.get("/tasks/{task_id}/stream")
-    async def stream_task(task_id: str, manager: ManagerDep, settings: SettingsDep) -> StreamingResponse:
-        stream = _task_event_stream(
-            manager, task_id, timeout=settings.task_stream_timeout, poll_interval=settings.task_poll_interval
-        )
-        return StreamingResponse(stream, media_type="text/event-stream")
 
     @router.get("/tasks/{task_id}")
     async def get_task(task_id: str, manager: ManagerDep) -> TaskResponse:
@@ -236,17 +188,15 @@ def create_router() -> APIRouter:
             manager: ManagerDep,
             days: int = Query(default=30, ge=1, le=365),
     ) -> StatsSummaryResponse:
-        data = await manager.get_stats_summary(days)
-        return StatsSummaryResponse(**data)
+        return await manager.get_stats_summary(days)
+
     @router.get("/stats/rules")
     async def stats_rules(
             manager: ManagerDep,
             days: int = Query(default=30, ge=1, le=365),
     ) -> RuleFrequencyResponse:
         items = await manager.get_rule_frequency(days)
-        return RuleFrequencyResponse(
-            items=[RuleFrequencyEntry(**item) for item in items],            days=days,
-        )
+        return RuleFrequencyResponse(items=items, days=days)
 
     @router.get("/stats/daily-volume")
     async def stats_daily_volume(
@@ -266,9 +216,6 @@ def create_router() -> APIRouter:
             limit: int = Query(default=10, ge=1, le=100),
     ) -> TopIssuesResponse:
         items = await manager.get_top_issues(days, limit)
-        return TopIssuesResponse(
-            items=[TopIssueEntry(**item) for item in items],            days=days,
-            limit=limit,
-        )
+        return TopIssuesResponse(items=items, days=days, limit=limit)
 
     return router

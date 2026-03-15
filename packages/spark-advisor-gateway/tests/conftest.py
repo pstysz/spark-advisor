@@ -16,6 +16,8 @@ from spark_advisor_gateway.config import GatewaySettings, StateKey
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.store import TaskStore
+from spark_advisor_gateway.ws.manager import ConnectionManager
+from spark_advisor_gateway.ws.routes import router as ws_router
 
 
 @pytest.fixture
@@ -31,8 +33,13 @@ async def task_store() -> TaskStore:
 
 
 @pytest.fixture
-async def task_manager(task_store: TaskStore) -> TaskManager:
-    return TaskManager(task_store)
+def connection_manager() -> ConnectionManager:
+    return ConnectionManager(heartbeat_interval=300.0)
+
+
+@pytest.fixture
+async def task_manager(task_store: TaskStore, connection_manager: ConnectionManager) -> TaskManager:
+    return TaskManager(task_store, on_status_change=connection_manager.broadcast)
 
 
 @pytest.fixture
@@ -49,15 +56,21 @@ def task_executor(mock_nc: AsyncMock, task_manager: TaskManager, settings: Gatew
 
 @pytest.fixture
 def app(
-    mock_nc: AsyncMock, task_manager: TaskManager, task_executor: TaskExecutor, settings: GatewaySettings
+    mock_nc: AsyncMock,
+    task_manager: TaskManager,
+    task_executor: TaskExecutor,
+    connection_manager: ConnectionManager,
+    settings: GatewaySettings,
 ) -> FastAPI:
     test_app = FastAPI()
     setattr(test_app.state, StateKey.NC, mock_nc)
     setattr(test_app.state, StateKey.SETTINGS, settings)
     setattr(test_app.state, StateKey.TASK_MANAGER, task_manager)
     setattr(test_app.state, StateKey.TASK_EXECUTOR, task_executor)
+    setattr(test_app.state, StateKey.CONNECTION_MANAGER, connection_manager)
     test_app.include_router(create_health_router())
     test_app.include_router(create_router())
+    test_app.include_router(ws_router)
     return test_app
 
 

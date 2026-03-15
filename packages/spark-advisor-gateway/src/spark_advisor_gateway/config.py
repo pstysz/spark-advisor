@@ -19,6 +19,7 @@ class StateKey(StrEnum):
     SETTINGS = "settings"
     TASK_MANAGER = "task_manager"
     TASK_EXECUTOR = "task_executor"
+    CONNECTION_MANAGER = "connection_manager"
 
 
 class GatewayNatsSettings(NatsSettings):
@@ -49,5 +50,4 @@ class GatewaySettings(BaseServiceSettings):
     server: ServerSettings = ServerSettings()
     nats: GatewayNatsSettings = GatewayNatsSettings()
     database_url: str = "sqlite+aiosqlite:///data/spark_advisor.db"
-    task_stream_timeout: float = 120.0
-    task_poll_interval: float = 0.5
+    ws_heartbeat_interval: float = 30.0
