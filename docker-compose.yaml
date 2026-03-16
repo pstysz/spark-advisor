@@ -34,7 +34,8 @@ services:
         condition: service_healthy
     environment:
       SA_CONNECTOR_NATS__URL: "nats://nats:4222"
-      SA_CONNECTOR_HISTORY_SERVER_URL: "${SPARK_HISTORY_SERVER_URL:-http://spark-history:18080}"
+      SA_CONNECTOR_POLLING_ENABLED: "${SA_CONNECTOR_POLLING_ENABLED:-false}"
+      SA_CONNECTOR_HISTORY_SERVER_URL: "${SPARK_HISTORY_SERVER_URL:-http://host.docker.internal:18080}"
       SA_CONNECTOR_DATABASE_URL: "sqlite+aiosqlite:////data/hs_connector.db"
     volumes:
       - hs-connector-data:/data
@@ -53,6 +54,23 @@ services:
       SA_GATEWAY_DATABASE_URL: "sqlite+aiosqlite:////data/spark_advisor.db"
     volumes:
       - gateway-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health/live')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: packages/spark-advisor-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    volumes:
+      - ./packages/spark-advisor-frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   nats-data:

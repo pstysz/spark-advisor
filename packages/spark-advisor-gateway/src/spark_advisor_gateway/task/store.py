@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, String, Text, func, select, text
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import create_async_engine as _create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
-from spark_advisor_models.model import AnalysisResult
+from spark_advisor_models.model import AnalysisMode, AnalysisResult, DataSource
 
 
 class _Base(DeclarativeBase):
@@ -20,6 +21,8 @@ class TaskRow(_Base):
 
     task_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     app_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    mode: Mapped[str] = mapped_column(String(10), nullable=False, default="ai")
+    data_source: Mapped[str] = mapped_column(String(20), nullable=False, default="hs_manual")
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -39,6 +42,10 @@ class TaskStore:
         async with self._engine.begin() as conn:
             await conn.execute(text("PRAGMA journal_mode=WAL"))
             await conn.run_sync(_Base.metadata.create_all)
+            with contextlib.suppress(Exception):
+                await conn.execute(
+                    text("ALTER TABLE tasks ADD COLUMN data_source VARCHAR(20) NOT NULL DEFAULT 'hs_manual'")
+                )
 
     async def close(self) -> None:
         await self._engine.dispose()
@@ -73,6 +80,7 @@ class TaskStore:
             offset: int = 0,
             status: TaskStatus | None = None,
             app_id: str | None = None,
+            data_source: DataSource | None = None,
     ) -> tuple[list[AnalysisTask], int]:
         async with self._session_factory() as session, session.begin():
             base = select(TaskRow)
@@ -80,6 +88,8 @@ class TaskStore:
                 base = base.where(TaskRow.status == status.value)
             if app_id is not None:
                 base = base.where(TaskRow.app_id == app_id)
+            if data_source is not None:
+                base = base.where(TaskRow.data_source == data_source.value)
 
             count_result = await session.execute(select(func.count()).select_from(base.subquery()))
             total: int = count_result.scalar_one()
@@ -102,6 +112,17 @@ class TaskStore:
             )
             row = result.scalar_one_or_none()
             return _to_task(row) if row else None
+
+    async def count_by_app_ids(self, app_ids: list[str]) -> dict[str, int]:
+        if not app_ids:
+            return {}
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TaskRow.app_id, func.count().label("cnt"))
+                .where(TaskRow.app_id.in_(app_ids))
+                .group_by(TaskRow.app_id)
+            )
+            return {row.app_id: row.cnt for row in result}
 
     async def count_by_status(self) -> dict[TaskStatus, int]:
         async with self._session_factory() as session:
@@ -130,6 +151,57 @@ class TaskStore:
             )
             return [(row.day, row.cnt) for row in result]
 
+    async def count_by_mode_since(self, since: datetime) -> list[tuple[str, int]]:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TaskRow.mode, func.count().label("cnt"))
+                .where(TaskRow.created_at >= _strip_tz(since))
+                .group_by(TaskRow.mode)
+            )
+            return [(row.mode, row.cnt) for row in result]
+
+    async def count_by_data_source_since(self, since: datetime) -> list[tuple[str, int]]:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TaskRow.data_source, func.count().label("cnt"))
+                .where(TaskRow.created_at >= _strip_tz(since))
+                .group_by(TaskRow.data_source)
+            )
+            return [(row.data_source, row.cnt) for row in result]
+
+    async def list_all_since(self, since: datetime) -> list[AnalysisTask]:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TaskRow)
+                .where(TaskRow.created_at >= _strip_tz(since))
+                .order_by(TaskRow.created_at.desc())
+            )
+            return [_to_task(row) for row in result.scalars()]
+
+    async def top_app_ids_since(self, since: datetime, limit: int) -> list[tuple[str, int]]:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TaskRow.app_id, func.count().label("cnt"))
+                .where(TaskRow.created_at >= _strip_tz(since))
+                .group_by(TaskRow.app_id)
+                .order_by(func.count().desc())
+                .limit(limit)
+            )
+            return [(row.app_id, row.cnt) for row in result]
+
+    async def count_daily_by_status_since(self, since: datetime) -> list[tuple[str, int, int]]:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                text(
+                    "SELECT date(created_at) AS day, count(*) AS total, "
+                    "sum(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed "
+                    "FROM tasks WHERE created_at >= :since "
+                    "GROUP BY day ORDER BY day"
+                ),
+                {"since": _strip_tz(since)},
+            )
+            return [(row.day, row.total, row.failed) for row in result]
+
     async def count_since(self, since: datetime) -> dict[TaskStatus, int]:
         async with self._session_factory() as session:
             result = await session.execute(
@@ -144,6 +216,8 @@ def _to_row(task: AnalysisTask) -> TaskRow:
     return TaskRow(
         task_id=task.task_id,
         app_id=task.app_id,
+        mode=task.mode.value,
+        data_source=task.data_source.value,
         status=task.status.value,
         created_at=_strip_tz(task.created_at),
         started_at=_strip_tz(task.started_at),
@@ -169,6 +243,8 @@ def _to_task(row: TaskRow) -> AnalysisTask:
     return AnalysisTask(
         task_id=row.task_id,
         app_id=row.app_id,
+        mode=AnalysisMode(row.mode),
+        data_source=DataSource(row.data_source),
         status=TaskStatus(row.status),
         created_at=row.created_at.replace(tzinfo=UTC),
         started_at=_attach_tz(row.started_at),

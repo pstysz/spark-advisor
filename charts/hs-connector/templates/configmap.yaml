@@ -9,6 +9,7 @@ data:
   SA_CONNECTOR_NATS__URL: {{ .Values.config.nats.url | quote }}
   SA_CONNECTOR_NATS__ANALYSIS_SUBMIT_SUBJECT: {{ .Values.config.nats.analysisSubmitSubject | quote }}
   SA_CONNECTOR_NATS__JOB_FETCH_SUBJECT: {{ .Values.config.nats.jobFetchSubject | quote }}
+  SA_CONNECTOR_POLLING_ENABLED: {{ .Values.config.pollingEnabled | quote }}
   SA_CONNECTOR_HISTORY_SERVER_URL: {{ .Values.config.historyServerUrl | quote }}
   SA_CONNECTOR_HISTORY_SERVER_TIMEOUT: {{ .Values.config.historyServerTimeout | quote }}
   SA_CONNECTOR_POLL_INTERVAL_SECONDS: {{ .Values.config.pollIntervalSeconds | quote }}

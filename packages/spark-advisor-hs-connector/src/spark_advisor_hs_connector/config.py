@@ -25,6 +25,7 @@ class ConnectorSettings(BaseServiceSettings):
     )
 
     nats: ConnectorNatsSettings = ConnectorNatsSettings()
+    polling_enabled: bool = False
     history_server_url: str = "http://localhost:18080"
     history_server_timeout: float = 30.0
     poll_interval_seconds: int = 60

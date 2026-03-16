@@ -7,7 +7,7 @@ import pytest
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
 from spark_advisor_gateway.task.store import TaskStore
-from spark_advisor_models.model import AnalysisResult
+from spark_advisor_models.model import AnalysisMode, AnalysisResult, DataSource
 from spark_advisor_models.testing import make_job
 
 
@@ -20,12 +20,16 @@ async def _make_store() -> TaskStore:
 def _make_task(
     task_id: str = "tid-1",
     app_id: str = "app-1",
+    mode: AnalysisMode = AnalysisMode.AI,
+    data_source: DataSource = DataSource.HS_MANUAL,
     status: TaskStatus = TaskStatus.PENDING,
     created_at: datetime | None = None,
 ) -> AnalysisTask:
     return AnalysisTask(
         task_id=task_id,
         app_id=app_id,
+        mode=mode,
+        data_source=data_source,
         status=status,
         created_at=created_at or datetime.now(UTC),
     )
@@ -41,8 +45,20 @@ async def test_create_and_get_roundtrip() -> None:
     assert loaded is not None
     assert loaded.task_id == task.task_id
     assert loaded.app_id == task.app_id
+    assert loaded.mode == AnalysisMode.AI
     assert loaded.status == TaskStatus.PENDING
     assert loaded.created_at.tzinfo == UTC
+
+
+@pytest.mark.asyncio
+async def test_create_and_get_roundtrip_agent_mode() -> None:
+    store = await _make_store()
+    task = _make_task(mode=AnalysisMode.AGENT)
+    await store.create(task)
+
+    loaded = await store.get(task.task_id)
+    assert loaded is not None
+    assert loaded.mode == AnalysisMode.AGENT
 
 
 @pytest.mark.asyncio
@@ -192,6 +208,26 @@ async def test_list_filtered_returns_total_count() -> None:
 
 
 @pytest.mark.asyncio
+async def test_count_by_app_ids() -> None:
+    store = await _make_store()
+    await store.create(_make_task(task_id="t1", app_id="app-A"))
+    await store.create(_make_task(task_id="t2", app_id="app-A"))
+    await store.create(_make_task(task_id="t3", app_id="app-B"))
+    await store.create(_make_task(task_id="t4", app_id="app-C"))
+
+    counts = await store.count_by_app_ids(["app-A", "app-B", "app-D"])
+    assert counts["app-A"] == 2
+    assert counts["app-B"] == 1
+    assert "app-D" not in counts
+
+
+@pytest.mark.asyncio
+async def test_count_by_app_ids_empty() -> None:
+    store = await _make_store()
+    assert await store.count_by_app_ids([]) == {}
+
+
+@pytest.mark.asyncio
 async def test_count_by_status() -> None:
     store = await _make_store()
     await store.create(_make_task(task_id="t1", status=TaskStatus.PENDING))
@@ -246,3 +282,51 @@ async def test_init_idempotent() -> None:
     await store.create(task)
     loaded = await store.get(task.task_id)
     assert loaded is not None
+
+
+@pytest.mark.asyncio
+async def test_data_source_roundtrip() -> None:
+    store = await _make_store()
+    task = _make_task(data_source=DataSource.HS_POLLER)
+    await store.create(task)
+
+    loaded = await store.get(task.task_id)
+    assert loaded is not None
+    assert loaded.data_source == DataSource.HS_POLLER
+
+
+@pytest.mark.asyncio
+async def test_default_data_source_is_hs_manual() -> None:
+    store = await _make_store()
+    task = _make_task()
+    await store.create(task)
+
+    loaded = await store.get(task.task_id)
+    assert loaded is not None
+    assert loaded.data_source == DataSource.HS_MANUAL
+
+
+@pytest.mark.asyncio
+async def test_count_by_data_source_since() -> None:
+    store = await _make_store()
+    since = datetime.now(UTC) - timedelta(hours=1)
+    await store.create(_make_task(task_id="t1", data_source=DataSource.HS_MANUAL))
+    await store.create(_make_task(task_id="t2", data_source=DataSource.HS_MANUAL))
+    await store.create(_make_task(task_id="t3", data_source=DataSource.HS_POLLER))
+
+    rows = await store.count_by_data_source_since(since)
+    counts = dict(rows)
+    assert counts["hs_manual"] == 2
+    assert counts["hs_poller"] == 1
+
+
+@pytest.mark.asyncio
+async def test_list_filtered_by_data_source() -> None:
+    store = await _make_store()
+    await store.create(_make_task(task_id="t1", data_source=DataSource.HS_MANUAL))
+    await store.create(_make_task(task_id="t2", data_source=DataSource.HS_POLLER))
+    await store.create(_make_task(task_id="t3", data_source=DataSource.HS_MANUAL))
+
+    tasks, total = await store.list_filtered(data_source=DataSource.HS_MANUAL)
+    assert total == 2
+    assert all(t.data_source == DataSource.HS_MANUAL for t in tasks)
