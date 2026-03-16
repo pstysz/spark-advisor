@@ -23,6 +23,7 @@ config:
     analyzeAgentTimeout: 300.0
     listAppsTimeout: 10.0
   databaseUrl: "sqlite+aiosqlite:////data/spark_advisor.db"
+  wsHeartbeatInterval: 30
   persistence:
     enabled: true
     size: 1Gi
@@ -39,7 +40,9 @@ imagePullSecrets: []
 ingress:
   enabled: false
   className: ""
-  annotations: {}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts:
     - host: spark-advisor.local
       paths:

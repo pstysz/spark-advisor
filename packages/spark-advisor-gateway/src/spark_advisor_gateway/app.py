@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import nats
@@ -9,6 +10,8 @@ import nats.aio.msg
 import orjson
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from spark_advisor_gateway.api.health import create_health_router
 from spark_advisor_gateway.api.routes import create_router
@@ -61,9 +64,12 @@ def create_app(settings: GatewaySettings) -> FastAPI:
         task_manager = TaskManager(store, on_status_change=ws_manager.broadcast)
         task_executor = TaskExecutor(nc, task_manager, settings)
 
+        async def _polling_cb(msg: nats.aio.msg.Msg) -> None:
+            await handle_polling_message(msg, task_manager, task_executor, settings)
+
         sub = await nc.subscribe(
             settings.nats.analysis_submit_subject,
-            cb=lambda msg: handle_polling_message(msg, task_manager, task_executor, settings),
+            cb=_polling_cb,
         )
         logger.info("Subscribed to %s", settings.nats.analysis_submit_subject)
 
@@ -88,6 +94,14 @@ def create_app(settings: GatewaySettings) -> FastAPI:
     app.include_router(create_health_router())
     app.include_router(create_router())
     app.include_router(ws_router)
+
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.exists():
+        app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="static-assets")
+
+        @app.get("/{path:path}", include_in_schema=False)
+        async def spa_fallback(path: str) -> FileResponse:
+            return FileResponse(static_dir / "index.html")
 
     return app
 

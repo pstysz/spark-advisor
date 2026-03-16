@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-import uuid
+import time
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -46,9 +46,11 @@ class TaskManager:
         mode: AnalysisMode = AnalysisMode.AI,
         data_source: DataSource = DataSource.HS_MANUAL,
     ) -> AnalysisTask:
+        now = datetime.now(UTC)
+        task_id = f"{time.time_ns()}_{app_id}"
         task = AnalysisTask(
-            task_id=str(uuid.uuid4()), app_id=app_id, mode=mode,
-            data_source=data_source, created_at=datetime.now(UTC),
+            task_id=task_id, app_id=app_id, mode=mode,
+            data_source=data_source, created_at=now,
         )
         await self._store.create(task)
         return task

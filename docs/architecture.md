@@ -5,27 +5,30 @@
 spark-advisor is a distributed system for automated Apache Spark job performance analysis. It collects job metrics from Spark History Server (or local event log files), runs a deterministic rules engine, optionally invokes Claude AI for recommendations, and delivers structured results via REST API or CLI.
 
 ```
-              ┌─────────────────────────────────────────────────────────┐
-              │                 spark-advisor services                  │
-              │                                                         │
-              │  ┌─────────────┐  analysis.submit  ┌────────────────┐   │
- Spark HS ───►│  │HS Connector │ ────────────────► │    Gateway     │   │
-              │  │             │ ◄─── job.fetch ── │   (FastAPI)    │◄───── User (HTTP)
-              │  └─────────────┘   (req-reply)     └───────┬────────┘   │
-              │                                            │            │
-              │                              analysis.run  │            │
-              │                               (req-reply)  │            │
-              │                                            ▼            │
-              │                                      ┌──────────┐       │
-              │                                      │ Analyzer │──► Claude API
-              │                                      │(rules+AI)│       │
-              │                                      └──────────┘       │
-              └─────────────────────────────────────────────────────────┘
+                          NATS Message Broker
+                 ┌────────────┬──────────────────┐
+                 │            │                  │
+            job.fetch    analysis.run     analysis.submit
+           (req-reply)   (req-reply)      (pub/sub)
+                 │            │                  │
+                 ▼            ▼                  │
+ ┌──────────────────┐  ┌──────────────┐  ┌───────┴─────────┐   ┌────────────┐
+ │  HS Connector    │  │   Analyzer   │  │     Gateway     │   │  Frontend  │
+ │  (FastStream)    │  │ (FastStream) │  │    (FastAPI)    │◄──│  (nginx)   │
+ │                  │  │              │  │                 │   │            │
+ │ • fetch jobs     │  │ • rules (11) │  │ • REST API (13) │   │ • React 19 │
+ │ • poll HS        │  │ • AI advisor │  │ • WebSocket     │   │ • Vite 6   │
+ │ • list apps      │  │ • agent mode │  │ • task store    │   │ • Recharts │
+ └────────┬─────────┘  └──────┬───────┘  └─────────────────┘   └─────┬──────┘
+          │                   │                                      │
+          ▼                   ▼                                      ▼
+     Spark History       Claude API                            User (Browser)
+       Server
 
  Event Log File ─── parse ──► CLI (standalone, no infrastructure)
 ```
 
-Three services communicate via NATS. A standalone CLI operates without any infrastructure for local analysis.
+Four services communicate via NATS (gateway, analyzer, hs-connector) and HTTP (frontend → gateway). Frontend serves a React SPA via nginx, proxying `/api/` requests to gateway. A standalone CLI operates without any infrastructure for local analysis.
 
 > Diagram: [01-system-overview.mmd](diagrams/01-system-overview.mmd)
 
@@ -56,6 +59,7 @@ Each package owns its domain and can be independently deployed, scaled, and test
 | **hs-connector** | Service | `HistoryServerClient`, mapper, `HistoryServerPoller`, `PollingState`, `ApplicationSummary` model                                                                                      | Analysis logic, Claude API, REST API    |
 | **cli**          | App     | Event log parser, Rich console output, `analyze` (file + HS + optional AI), `scan` (list HS apps), `version`                                                                          | NATS messaging, REST API serving        |
 | **mcp**          | App     | MCP server (stdio), 7 tools (`analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`, `get_stage_details`, `compare_jobs`), markdown formatting for MCP responses | NATS messaging, REST API serving        |
+| **frontend**     | SPA     | React 19 dashboard, nginx reverse proxy                                                                                                                                                                 | API logic, business rules               |
 
 ---
 
@@ -65,7 +69,7 @@ Each package owns its domain and can be independently deployed, scaled, and test
 spark-advisor/
 ├── pyproject.toml                           # workspace root
 ├── Makefile
-├── docker-compose.yaml                      # NATS + 3 services
+├── docker-compose.yaml                      # NATS + 4 services
 ├── packages/
 │   ├── spark-advisor-models/                # LIBRARY
 │   │   └── src/spark_advisor_models/
@@ -117,12 +121,20 @@ spark-advisor/
 │   │       ├── output/                      # Rich console
 │   │       └── event_log/                   # streaming parser
 │   │
-│   └── spark-advisor-mcp/                   # APP (MCP Server, stdio)
-│       └── src/spark_advisor_mcp/
-│           ├── __main__.py                  # python -m spark_advisor_mcp
-│           ├── server.py                    # FastMCP + 7 tool definitions
-│           ├── formatting.py                # Markdown formatters for MCP responses
-│           └── metric_explanations.py       # Metric definitions + threshold-based assessment
+│   ├── spark-advisor-mcp/                   # APP (MCP Server, stdio)
+│   │   └── src/spark_advisor_mcp/
+│   │       ├── __main__.py                  # python -m spark_advisor_mcp
+│   │       ├── server.py                    # FastMCP + 7 tool definitions
+│   │       ├── formatting.py                # Markdown formatters for MCP responses
+│   │       └── metric_explanations.py       # Metric definitions + threshold-based assessment
+│   │
+│   └── frontend/                            # SPA (React 19 + Vite 6 + nginx)
+│       ├── Dockerfile                       # Multi-stage: node build → nginx
+│       ├── nginx.conf                       # Reverse proxy /api/ → gateway, SPA fallback
+│       └── src/
+│           ├── pages/                       # Tasks, TaskDetail, Analyze, Statistics
+│           ├── components/                  # Shared UI components
+│           └── hooks/                       # WebSocket, data fetching
 │
 ├── sample_event_logs/
 └── docs/
@@ -298,6 +310,7 @@ API Gateway — the only externally-exposed service. 13 REST endpoints + WebSock
 - `SA_GATEWAY_NATS__ANALYZE_AGENT_TIMEOUT` — agent mode timeout (default: 300s)
 - `SA_GATEWAY_DATABASE_URL` — SQLite database URL (default: `sqlite+aiosqlite:///data/spark_advisor.db`)
 - `SA_GATEWAY_WS_HEARTBEAT_INTERVAL` — WebSocket heartbeat (default: 30s)
+- `SA_GATEWAY_NATS__POLLING_ANALYSIS_MODE` — analysis mode for poller-submitted tasks (default: static)
 
 **Key design decisions:**
 - Uses `nats-py` (not FastStream) — gateway needs request-reply with explicit timeout control, not subscriber pattern
@@ -329,6 +342,7 @@ The sole owner of Spark History Server integration. Two responsibilities:
 - `SA_CONNECTOR_NATS__URL` — NATS server URL
 - `SA_CONNECTOR_HISTORY_SERVER__URL` — Spark History Server URL
 - `SA_CONNECTOR_HISTORY_SERVER__TIMEOUT` — HTTP timeout (default: 30s)
+- `SA_CONNECTOR_POLLING_ENABLED` — enable/disable background polling (default: false)
 - `SA_CONNECTOR_POLL_INTERVAL_SECONDS` — batch poll interval (default: 60)
 - `SA_CONNECTOR_BATCH_SIZE` — max jobs per poll (default: 50)
 
@@ -396,6 +410,29 @@ MCP server exposing spark-advisor as tools for Claude Desktop, Cursor, and other
 
 > Setup guide: [mcp-setup.md](mcp-setup.md)
 
+### frontend (SPA)
+
+React 19 dashboard for spark-advisor. Provides a browser-based UI for submitting analyses, viewing results, and monitoring statistics.
+
+**Tech stack:** React 19 + TypeScript + Vite 6, nginx reverse proxy in Docker/K8s.
+
+**Pages:**
+- **Tasks list** — filterable, paginated list of analysis tasks
+- **Task detail** — 4 tabs: summary, rule violations, config comparison, raw result
+- **Analyze** — submit new analysis with History Server app autocomplete
+- **Statistics** — dashboard with summary, rule frequency, daily volume, top issues
+
+**Deployment modes:**
+- **Docker / K8s** — nginx serves the built SPA and reverse-proxies `/api/` to gateway (with WebSocket upgrade support)
+- **Local dev (without Docker)** — gateway mounts `frontend/dist/` via FastAPI `StaticFiles` as a fallback, no separate web server needed
+
+**Real-time updates:** WebSocket connection to `WS /api/v1/ws/tasks` for live task status changes.
+
+**Key design decisions:**
+- Frontend has no direct NATS dependency — all communication goes through gateway REST API and WebSocket
+- nginx handles SPA routing (all non-API paths serve `index.html`)
+- Reverse proxy config supports WebSocket upgrade for real-time task updates
+
 ---
 
 ## Data Flows
@@ -420,6 +457,8 @@ Gateway ─── HTTP 200 (poll GET /tasks/{id}) ──────────
 > Diagram: [07-on-demand-flow.mmd](diagrams/07-on-demand-flow.mmd)
 
 ### Batch Flow (Automatic discovery of new jobs)
+
+> Polling is disabled by default (`SA_CONNECTOR_POLLING_ENABLED=false`). When enabled, the default analysis mode for poller-submitted tasks is static (`SA_GATEWAY_NATS__POLLING_ANALYSIS_MODE=static`).
 
 ```
 asyncio loop (every 60s) ──► HS Connector.poll()
@@ -599,6 +638,10 @@ No DLQ (dead letter queue), no circuit breaker, no rate limiter. These are inten
 | **SQLAlchemy**        | Async ORM for task persistence (SQLite + WAL)                     | gateway                            |
 | **aiosqlite**         | Async SQLite driver for SQLAlchemy                                | gateway                            |
 | **respx**             | HTTP mocking for httpx                                            | hs-connector (tests)               |
+| **React 19**          | SPA framework                                                     | frontend                           |
+| **TypeScript**        | Type-safe frontend code                                           | frontend                           |
+| **Vite 6**            | Build tool + dev server                                           | frontend                           |
+| **nginx**             | Static file serving + reverse proxy                               | frontend (Docker/K8s)              |
 
 ---
 
@@ -695,9 +738,9 @@ Runs on push to `main`. Three jobs:
 
 | Job                | Trigger            | What it does                                                                      |
 |--------------------|--------------------|-----------------------------------------------------------------------------------|
-| **release-please** | Always             | Creates release PRs, manages version bumps across 7 packages + 4 Chart.yaml files |
+| **release-please** | Always             | Creates release PRs, manages version bumps across 8 packages + 4 Chart.yaml files |
 | **publish**        | On release created | `make check` → `uv build --package spark-advisor-cli` → `uv publish` to PyPI      |
-| **docker-publish** | On release created | Matrix builds 3 Docker images → pushes to `ghcr.io/pstysz/spark-advisor-*`        |
+| **docker-publish** | On release created | Matrix builds 4 Docker images → pushes to `ghcr.io/pstysz/spark-advisor-*`        |
 
 ### Docker images
 
@@ -708,13 +751,14 @@ Published to GitHub Container Registry on each release:
 | `ghcr.io/pstysz/spark-advisor-analyzer`     | `packages/spark-advisor-analyzer/Dockerfile`     |
 | `ghcr.io/pstysz/spark-advisor-gateway`      | `packages/spark-advisor-gateway/Dockerfile`      |
 | `ghcr.io/pstysz/spark-advisor-hs-connector` | `packages/spark-advisor-hs-connector/Dockerfile` |
+| `ghcr.io/pstysz/spark-advisor-frontend`     | `packages/frontend/Dockerfile`                   |
 
 Tags: `<version>` (e.g. `0.1.3`) + `latest`. Build context is the monorepo root (Dockerfiles use `COPY packages/...`). BuildX with GitHub Actions cache for fast builds.
 
 ### Version management
 
 release-please bumps all versions in a single PR via `# x-release-please-version` markers:
-- 7 `pyproject.toml` files
+- 8 `pyproject.toml` files (7 Python packages + frontend)
 - 4 `Chart.yaml` files (`version` + `appVersion` + dependency versions in umbrella)
 
 ---
@@ -767,7 +811,7 @@ These concepts existed in the previous Kafka-based architecture and have been in
 | #  | File                                                                    | Type            | Description                                       |
 |----|-------------------------------------------------------------------------|-----------------|---------------------------------------------------|
 | 01 | [01-system-overview.mmd](diagrams/01-system-overview.mmd)               | graph TB        | Full system: services, NATS, CLI, external        |
-| 02 | [02-package-dependencies.mmd](diagrams/02-package-dependencies.mmd)     | graph BT        | 7-package dependency graph                        |
+| 02 | [02-package-dependencies.mmd](diagrams/02-package-dependencies.mmd)     | graph BT        | 8-package dependency graph                        |
 | 03 | [03-models-package.mmd](diagrams/03-models-package.mmd)                 | graph TB        | Contents of models package                        |
 | 04 | [04-analyzer-pipeline.mmd](diagrams/04-analyzer-pipeline.mmd)           | flowchart TB    | Analyzer processing: NATS → rules → AI → reply    |
 | 05 | [05-nats-subjects.mmd](diagrams/05-nats-subjects.mmd)                   | graph LR        | NATS subjects, publishers, subscribers            |

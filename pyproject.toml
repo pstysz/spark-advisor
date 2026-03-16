@@ -6,3 +6,4 @@ requires-python = ">=3.12"
 
 [tool.uv.workspace]
 members = ["packages/*"]
+exclude = ["packages/spark-advisor-frontend"]

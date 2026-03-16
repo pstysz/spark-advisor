@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format check demo-local demo-remote up down clean docker-local minikube-deploy
+.PHONY: install dev test lint format check demo-local demo-remote up down clean docker-local minikube-deploy frontend-install frontend-build frontend-dev frontend-lint
 
 PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-cli packages/spark-advisor-analyzer packages/spark-advisor-hs-connector packages/spark-advisor-gateway packages/spark-advisor-mcp
 
@@ -50,7 +50,9 @@ docker-local:
 	for svc in $(SERVICES); do \
 		echo "\n=== Building $$svc:$(LOCAL_TAG) ==="; \
 		docker build -f packages/$$svc/Dockerfile -t $$svc:$(LOCAL_TAG) . || exit 1; \
-	done
+	done && \
+	echo "\n=== Building spark-advisor-frontend:$(LOCAL_TAG) ===" && \
+	docker build -f packages/spark-advisor-frontend/Dockerfile -t spark-advisor-frontend:$(LOCAL_TAG) packages/spark-advisor-frontend/
 
 minikube-deploy: docker-local
 	kubectl create namespace spark-advisor --dry-run=client -o yaml | kubectl apply -f -
@@ -64,7 +66,22 @@ minikube-deploy: docker-local
 		-f charts/spark-advisor/values-local.yaml \
 		--set analyzer.image.tag=$(LOCAL_TAG) \
 		--set gateway.image.tag=$(LOCAL_TAG) \
+		--set frontend.image.tag=$(LOCAL_TAG) \
 		--set hs-connector.image.tag=$(LOCAL_TAG)
+
+FRONTEND_DIR = packages/spark-advisor-frontend
+
+frontend-install:
+	cd $(FRONTEND_DIR) && npm ci
+
+frontend-build: frontend-install
+	cd $(FRONTEND_DIR) && npm run build
+
+frontend-dev:
+	cd $(FRONTEND_DIR) && npm run dev
+
+frontend-lint:
+	cd $(FRONTEND_DIR) && npm run type-check && npm run lint
 
 clean:
 	rm -rf dist/ build/ *.egg-info .mypy_cache .pytest_cache .ruff_cache htmlcov/
