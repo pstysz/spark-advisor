@@ -18,7 +18,7 @@ from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.store import TaskStore
 from spark_advisor_gateway.ws.manager import ConnectionManager
 from spark_advisor_gateway.ws.routes import router as ws_router
-from spark_advisor_models.model import JobAnalysis
+from spark_advisor_models.model import DataSource, JobAnalysis
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -34,7 +34,9 @@ async def handle_polling_message(
 ) -> None:
     try:
         job = JobAnalysis.model_validate(orjson.loads(msg.data))
-        result = await task_manager.create_if_not_active(job.app_id, rerun=False)
+        result = await task_manager.create_if_not_active(
+            job.app_id, rerun=False, data_source=DataSource.HS_POLLER,
+        )
         if result is None:
             return
         task, created = result

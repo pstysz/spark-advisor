@@ -23,10 +23,6 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
         Tasks
       </a>
-      <a href="applications.html">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
-        Applications
-      </a>
       <a href="analyze.html">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
         Analyze
@@ -89,12 +85,13 @@
           </select>
         </div>
         <div class="filter-group">
-          <label class="filter-label">Mode</label>
+          <label class="filter-label">Source</label>
           <select class="filter-select">
-            <option value="">All modes</option>
-            <option value="static">Static</option>
-            <option value="ai">AI</option>
-            <option value="agent">Agent</option>
+            <option value="">All sources</option>
+            <option value="hs_manual">HS Manual</option>
+            <option value="hs_poller">HS Poller</option>
+            <option value="file">File</option>
+            <option value="k8s">K8s</option>
           </select>
         </div>
         <div class="filter-group" style="flex: 1;">
@@ -110,9 +107,11 @@
           <table>
             <thead>
               <tr>
+                <th>Task ID</th>
                 <th>App ID</th>
-                <th>Status</th>
                 <th>Mode</th>
+                <th>Source</th>
+                <th>Status</th>
                 <th>Issues</th>
                 <th>Duration</th>
                 <th>Created</th>
@@ -120,9 +119,11 @@
             </thead>
             <tbody>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0042</a></td>
-                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">a1b2c3d4-e5f6-7890</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0042</td>
                 <td><span class="badge badge-mode">Agent</span></td>
+                <td><span class="badge badge-source">HS Manual</span></td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
                 <td>
                   <span class="badge badge-critical" style="font-size: 11px; padding: 1px 6px;">3</span>
                   <span class="badge badge-warning" style="font-size: 11px; padding: 1px 6px;">2</span>
@@ -131,17 +132,21 @@
                 <td class="td-muted">2 minutes ago</td>
               </tr>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0041</a></td>
-                <td><span class="badge badge-running"><span class="badge-dot"></span>Running</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">b2c3d4e5-f6a7-8901</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0041</td>
                 <td><span class="badge badge-mode">AI</span></td>
+                <td><span class="badge badge-source">HS Poller</span></td>
+                <td><span class="badge badge-running"><span class="badge-dot"></span>Running</span></td>
                 <td class="td-muted">—</td>
                 <td class="td-muted">1m 38s</td>
                 <td class="td-muted">5 minutes ago</td>
               </tr>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0040</a></td>
-                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">c3d4e5f6-a7b8-9012</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0040</td>
                 <td><span class="badge badge-mode">Static</span></td>
+                <td><span class="badge badge-source">File</span></td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
                 <td>
                   <span class="badge badge-warning" style="font-size: 11px; padding: 1px 6px;">1</span>
                   <span class="badge badge-info" style="font-size: 11px; padding: 1px 6px;">3</span>
@@ -150,17 +155,21 @@
                 <td class="td-muted">18 minutes ago</td>
               </tr>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0039</a></td>
-                <td><span class="badge badge-failed"><span class="badge-dot"></span>Failed</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">d4e5f6a7-b8c9-0123</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0039</td>
                 <td><span class="badge badge-mode">Agent</span></td>
+                <td><span class="badge badge-source">HS Manual</span></td>
+                <td><span class="badge badge-failed"><span class="badge-dot"></span>Failed</span></td>
                 <td class="td-muted">—</td>
                 <td class="td-muted">0m 08s</td>
                 <td class="td-muted">1 hour ago</td>
               </tr>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0038</a></td>
-                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">e5f6a7b8-c9d0-1234</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0038</td>
                 <td><span class="badge badge-mode">AI</span></td>
+                <td><span class="badge badge-source">HS Poller</span></td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
                 <td>
                   <span class="badge badge-critical" style="font-size: 11px; padding: 1px 6px;">1</span>
                   <span class="badge badge-warning" style="font-size: 11px; padding: 1px 6px;">4</span>
@@ -170,9 +179,11 @@
                 <td class="td-muted">2 hours ago</td>
               </tr>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0037</a></td>
-                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">f6a7b8c9-d0e1-2345</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0037</td>
                 <td><span class="badge badge-mode">Static</span></td>
+                <td><span class="badge badge-source">HS Manual</span></td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
                 <td>
                   <span class="badge badge-info" style="font-size: 11px; padding: 1px 6px;">2</span>
                 </td>
@@ -180,9 +191,11 @@
                 <td class="td-muted">3 hours ago</td>
               </tr>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0036</a></td>
-                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">a7b8c9d0-e1f2-3456</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0036</td>
                 <td><span class="badge badge-mode">Agent</span></td>
+                <td><span class="badge badge-source">HS Poller</span></td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
                 <td>
                   <span class="badge badge-critical" style="font-size: 11px; padding: 1px 6px;">2</span>
                   <span class="badge badge-warning" style="font-size: 11px; padding: 1px 6px;">3</span>
@@ -192,17 +205,21 @@
                 <td class="td-muted">4 hours ago</td>
               </tr>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0035</a></td>
-                <td><span class="badge badge-pending"><span class="badge-dot"></span>Pending</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">b8c9d0e1-f2a3-4567</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0035</td>
                 <td><span class="badge badge-mode">AI</span></td>
+                <td><span class="badge badge-source">HS Manual</span></td>
+                <td><span class="badge badge-pending"><span class="badge-dot"></span>Pending</span></td>
                 <td class="td-muted">—</td>
                 <td class="td-muted">—</td>
                 <td class="td-muted">5 hours ago</td>
               </tr>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0034</a></td>
-                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">c9d0e1f2-a3b4-5678</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0034</td>
                 <td><span class="badge badge-mode">AI</span></td>
+                <td><span class="badge badge-source">File</span></td>
+                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
                 <td>
                   <span class="badge badge-warning" style="font-size: 11px; padding: 1px 6px;">2</span>
                   <span class="badge badge-info" style="font-size: 11px; padding: 1px 6px;">1</span>
@@ -211,14 +228,13 @@
                 <td class="td-muted">6 hours ago</td>
               </tr>
               <tr>
-                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">application_1710500000000_0033</a></td>
-                <td><span class="badge badge-completed"><span class="badge-dot"></span>Completed</span></td>
+                <td><a href="task-detail.html" class="td-link font-mono" style="font-size: 13px;">d0e1f2a3-b4c5-6789</a></td>
+                <td class="font-mono" style="font-size: 13px;">app_1710500000000_0033</td>
                 <td><span class="badge badge-mode">Static</span></td>
-                <td>
-                  <span class="badge badge-critical" style="font-size: 11px; padding: 1px 6px;">1</span>
-                  <span class="badge badge-info" style="font-size: 11px; padding: 1px 6px;">4</span>
-                </td>
-                <td class="td-muted">0m 35s</td>
+                <td><span class="badge badge-source">HS Poller</span></td>
+                <td><span class="badge badge-failed"><span class="badge-dot"></span>Failed</span></td>
+                <td class="td-muted">—</td>
+                <td class="td-muted">0m 05s</td>
                 <td class="td-muted">8 hours ago</td>
               </tr>
             </tbody>

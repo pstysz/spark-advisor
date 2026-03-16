@@ -217,18 +217,19 @@ body {
 /* Stat Cards */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
 }
 
 .stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .stat-card-header {
@@ -303,6 +304,11 @@ body {
   color: var(--accent-purple);
 }
 
+.badge-source {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+}
+
 .badge-dot {
   width: 6px;
   height: 6px;
@@ -358,6 +364,17 @@ tbody tr:hover {
 
 tbody tr:last-child td {
   border-bottom: none;
+}
+
+thead th:nth-child(3),
+thead th:nth-child(4),
+thead th:nth-child(5),
+thead th:nth-child(6),
+tbody td:nth-child(3),
+tbody td:nth-child(4),
+tbody td:nth-child(5),
+tbody td:nth-child(6) {
+  text-align: center;
 }
 
 .td-muted {
@@ -693,6 +710,29 @@ tbody tr:last-child td {
 .btn-page:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+/* Analyze button (inline in table) */
+.btn-analyze {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: var(--accent-orange-dim);
+  color: var(--accent-orange);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-analyze:hover {
+  background: rgba(249, 115, 22, 0.2);
+  border-color: rgba(249, 115, 22, 0.4);
 }
 
 /* Analysis count badge */
