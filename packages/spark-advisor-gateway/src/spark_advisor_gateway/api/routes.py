@@ -13,17 +13,23 @@ from spark_advisor_gateway.api.schemas import (
     ConfigComparisonResponse,
     DailyVolumeEntry,
     DailyVolumeResponse,
+    DataSourceBreakdownResponse,
+    DurationByModeResponse,
+    FailureRateTrendResponse,
+    ModeBreakdownResponse,
     PaginatedApplicationResponse,
     PaginatedTaskResponse,
     RuleFrequencyResponse,
     RuleViolationResponse,
+    SeverityTrendResponse,
     StatsSummaryResponse,
     TaskResponse,
     TaskStatsResponse,
+    TopAppsResponse,
     TopIssuesResponse,
 )
 from spark_advisor_gateway.config import StateKey
-from spark_advisor_gateway.task.models import TaskStatus
+from spark_advisor_gateway.task.models import DataSource, TaskStatus
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -55,13 +61,19 @@ def create_router() -> APIRouter:
     )
     async def list_applications(
             executor: ExecutorDep,
+            manager: ManagerDep,
             limit: int = Query(default=20, ge=1, le=500, description="Maximum number of applications to return"),
             offset: int = Query(default=0, ge=0, description="Number of applications to skip"),
     ) -> PaginatedApplicationResponse:
         all_apps = await executor.list_applications(offset + limit)
         page = all_apps[offset:offset + limit]
+        app_ids = [app.id for app in page]
+        counts = await manager.count_by_app_ids(app_ids)
         return PaginatedApplicationResponse(
-            items=[ApplicationResponse.from_summary(app) for app in page],
+            items=[
+                ApplicationResponse.from_summary(app, analysis_count=counts.get(app.id, 0))
+                for app in page
+            ],
             total=len(all_apps),
             limit=limit,
             offset=offset,
@@ -79,7 +91,9 @@ def create_router() -> APIRouter:
             executor: ExecutorDep,
             response: Response,
     ) -> AnalyzeResponse:
-        result = await manager.create_if_not_active(body.app_id, rerun=body.rerun)
+        result = await manager.create_if_not_active(
+            body.app_id, rerun=body.rerun, mode=body.mode, data_source=body.data_source,
+        )
         if result is None:
             raise HTTPException(status_code=409, detail="Task is still running, cannot rerun")
         task, created = result
@@ -122,8 +136,11 @@ def create_router() -> APIRouter:
             offset: int = Query(default=0, ge=0, description="Number of tasks to skip"),
             status: TaskStatus | None = None,
             app_id: str | None = None,
+            data_source: DataSource | None = None,
     ) -> PaginatedTaskResponse:
-        tasks, total = await manager.list_filtered(limit=limit, offset=offset, status=status, app_id=app_id)
+        tasks, total = await manager.list_filtered(
+            limit=limit, offset=offset, status=status, app_id=app_id, data_source=data_source,
+        )
         return PaginatedTaskResponse(
             items=[TaskResponse.from_task(t) for t in tasks],
             total=total,
@@ -271,5 +288,84 @@ def create_router() -> APIRouter:
     ) -> TopIssuesResponse:
         items = await manager.get_top_issues(days, limit)
         return TopIssuesResponse(items=items, days=days, limit=limit)
+
+    @router.get(
+        "/stats/mode-breakdown",
+        summary="Get analysis count by mode",
+        description="Shows how many analyses were run in each mode (static, ai, agent).",
+        tags=["statistics"],
+    )
+    async def stats_mode_breakdown(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
+    ) -> ModeBreakdownResponse:
+        items = await manager.get_mode_breakdown(days)
+        return ModeBreakdownResponse(items=items, days=days)
+
+    @router.get(
+        "/stats/severity-trend",
+        summary="Get severity counts over time",
+        description="Daily breakdown of CRITICAL, WARNING, and INFO rule violations.",
+        tags=["statistics"],
+    )
+    async def stats_severity_trend(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
+    ) -> SeverityTrendResponse:
+        items = await manager.get_severity_trend(days)
+        return SeverityTrendResponse(items=items, days=days)
+
+    @router.get(
+        "/stats/top-apps",
+        summary="Get most analyzed applications",
+        description="Returns top N applications with the most analyses.",
+        tags=["statistics"],
+    )
+    async def stats_top_apps(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
+            limit: int = Query(default=10, ge=1, le=100, description="Maximum number of apps to return"),
+    ) -> TopAppsResponse:
+        items = await manager.get_top_apps(days, limit)
+        return TopAppsResponse(items=items, limit=limit, days=days)
+
+    @router.get(
+        "/stats/duration-by-mode",
+        summary="Get average duration by analysis mode",
+        description="Compares average analysis duration across modes (static, ai, agent).",
+        tags=["statistics"],
+    )
+    async def stats_duration_by_mode(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
+    ) -> DurationByModeResponse:
+        items = await manager.get_duration_by_mode(days)
+        return DurationByModeResponse(items=items, days=days)
+
+    @router.get(
+        "/stats/failure-rate",
+        summary="Get daily failure rate trend",
+        description="Daily total and failed task counts with failure rate percentage.",
+        tags=["statistics"],
+    )
+    async def stats_failure_rate(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
+    ) -> FailureRateTrendResponse:
+        items = await manager.get_failure_rate_trend(days)
+        return FailureRateTrendResponse(items=items, days=days)
+
+    @router.get(
+        "/stats/source-breakdown",
+        summary="Get analysis count by data source",
+        description="Shows how many analyses originated from each data source (hs_manual, hs_poller, file, k8s).",
+        tags=["statistics"],
+    )
+    async def stats_source_breakdown(
+            manager: ManagerDep,
+            days: int = Query(default=30, ge=1, le=365, description="Number of days to look back"),
+    ) -> DataSourceBreakdownResponse:
+        items = await manager.get_data_source_breakdown(days)
+        return DataSourceBreakdownResponse(items=items, days=days)
 
     return router

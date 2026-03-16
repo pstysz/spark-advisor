@@ -7,13 +7,20 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
+from spark_advisor_models.model import AnalysisMode, DataSource
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from spark_advisor_gateway.api.schemas import (
+        DataSourceBreakdownEntry,
+        DurationByModeEntry,
+        FailureRateTrendEntry,
+        ModeBreakdownEntry,
         RuleFrequencyEntry,
+        SeverityTrendEntry,
         StatsSummaryResponse,
+        TopAppEntry,
         TopIssueEntry,
     )
     from spark_advisor_gateway.task.store import TaskStore
@@ -33,13 +40,26 @@ class TaskManager:
         self._store = store
         self._on_status_change = on_status_change
 
-    async def create(self, app_id: str) -> AnalysisTask:
-        task = AnalysisTask(task_id=str(uuid.uuid4()), app_id=app_id, created_at=datetime.now(UTC))
+    async def create(
+        self,
+        app_id: str,
+        mode: AnalysisMode = AnalysisMode.AI,
+        data_source: DataSource = DataSource.HS_MANUAL,
+    ) -> AnalysisTask:
+        task = AnalysisTask(
+            task_id=str(uuid.uuid4()), app_id=app_id, mode=mode,
+            data_source=data_source, created_at=datetime.now(UTC),
+        )
         await self._store.create(task)
         return task
 
     async def create_if_not_active(
-        self, app_id: str, *, rerun: bool = False,
+        self,
+        app_id: str,
+        *,
+        rerun: bool = False,
+        mode: AnalysisMode = AnalysisMode.AI,
+        data_source: DataSource = DataSource.HS_MANUAL,
     ) -> tuple[AnalysisTask, bool] | None:
         """Try to create a task for app_id with deduplication.
 
@@ -50,19 +70,19 @@ class TaskManager:
         """
         existing = await self._store.find_latest_by_app_id(app_id)
         if existing is None:
-            return await self.create(app_id), True
+            return await self.create(app_id, mode, data_source), True
 
         if not rerun:
             if existing.status not in _TERMINAL_STATUSES:
                 logger.info("Skipping %s — active task %s (%s)", app_id, existing.task_id, existing.status)
                 return existing, False
-            return await self.create(app_id), True
+            return await self.create(app_id, mode, data_source), True
 
         if existing.status not in _TERMINAL_STATUSES:
             logger.info("Cannot rerun %s — task %s still %s", app_id, existing.task_id, existing.status)
             return None
 
-        return await self.create(app_id), True
+        return await self.create(app_id, mode, data_source), True
 
     async def get(self, task_id: str) -> AnalysisTask | None:
         return await self._store.get(task_id)
@@ -77,8 +97,14 @@ class TaskManager:
         offset: int = 0,
         status: TaskStatus | None = None,
         app_id: str | None = None,
+        data_source: DataSource | None = None,
     ) -> tuple[list[AnalysisTask], int]:
-        return await self._store.list_filtered(limit=limit, offset=offset, status=status, app_id=app_id)
+        return await self._store.list_filtered(
+            limit=limit, offset=offset, status=status, app_id=app_id, data_source=data_source,
+        )
+
+    async def count_by_app_ids(self, app_ids: list[str]) -> dict[str, int]:
+        return await self._store.count_by_app_ids(app_ids)
 
     async def count_by_status(self) -> dict[TaskStatus, int]:
         return await self._store.count_by_status()
@@ -119,6 +145,7 @@ class TaskManager:
             "task_id": task.task_id,
             "app_id": task.app_id,
             "status": task.status.value,
+            "data_source": task.data_source.value,
         }
         if task.started_at:
             data["started_at"] = task.started_at.isoformat()
@@ -139,6 +166,7 @@ class TaskManager:
 
         avg_duration: float | None = None
         ai_usage_pct: float | None = None
+        avg_issues: float | None = None
         if completed > 0:
             completed_tasks = await self._store.list_completed_since(since)
             durations = [
@@ -149,6 +177,8 @@ class TaskManager:
             avg_duration = sum(durations) / len(durations) if durations else None
             ai_count = sum(1 for t in completed_tasks if t.result and t.result.ai_report)
             ai_usage_pct = (ai_count / completed) * 100
+            issue_counts = [len(t.result.rule_results) for t in completed_tasks if t.result]
+            avg_issues = sum(issue_counts) / len(issue_counts) if issue_counts else None
 
         return StatsSummaryResponse(
             total=total,
@@ -156,6 +186,7 @@ class TaskManager:
             failed=failed,
             avg_duration_seconds=round(avg_duration, 2) if avg_duration is not None else None,
             ai_usage_percent=round(ai_usage_pct, 1) if ai_usage_pct is not None else None,
+            avg_issues_per_analysis=round(avg_issues, 1) if avg_issues is not None else None,
         )
 
     async def get_rule_frequency(self, days: int = 30) -> list[RuleFrequencyEntry]:
@@ -186,24 +217,106 @@ class TaskManager:
         since = datetime.now(UTC) - timedelta(days=days)
         tasks = await self._store.list_completed_since(since)
         counter: Counter[str] = Counter()
-        rule_meta: dict[str, tuple[str, Severity]] = {}
+        rule_meta: dict[str, tuple[str, str, Severity]] = {}
         example_app: dict[str, str] = {}
         for t in tasks:
             if not t.result:
                 continue
             for r in t.result.rule_results:
                 counter[r.rule_id] += 1
-                rule_meta[r.rule_id] = (r.title, r.severity)
+                rule_meta[r.rule_id] = (r.title, r.message, r.severity)
                 if r.rule_id not in example_app:
                     example_app[r.rule_id] = t.app_id
         return [
             TopIssueEntry(
                 rule_id=rid,
                 title=rule_meta[rid][0],
+                message=rule_meta[rid][1],
                 count=cnt,
-                severity=rule_meta[rid][1],
+                severity=rule_meta[rid][2],
                 example_app_id=example_app[rid],
             )
             for rid, cnt in counter.most_common(limit)
+        ]
+
+    async def get_mode_breakdown(self, days: int = 30) -> list[ModeBreakdownEntry]:
+        from spark_advisor_gateway.api.schemas import ModeBreakdownEntry
+
+        since = datetime.now(UTC) - timedelta(days=days)
+        rows = await self._store.count_by_mode_since(since)
+        return [ModeBreakdownEntry(mode=AnalysisMode(mode), count=cnt) for mode, cnt in rows]
+
+    async def get_data_source_breakdown(self, days: int = 30) -> list[DataSourceBreakdownEntry]:
+        from spark_advisor_gateway.api.schemas import DataSourceBreakdownEntry
+
+        since = datetime.now(UTC) - timedelta(days=days)
+        rows = await self._store.count_by_data_source_since(since)
+        return [DataSourceBreakdownEntry(data_source=DataSource(ds), count=cnt) for ds, cnt in rows]
+
+    async def get_severity_trend(self, days: int = 30) -> list[SeverityTrendEntry]:
+        from spark_advisor_gateway.api.schemas import SeverityTrendEntry
+        from spark_advisor_models.model import Severity as Sev
+
+        since = datetime.now(UTC) - timedelta(days=days)
+        tasks = await self._store.list_completed_since(since)
+        daily: dict[str, dict[str, int]] = {}
+        for t in tasks:
+            if not t.result or not t.completed_at:
+                continue
+            day = t.completed_at.strftime("%Y-%m-%d")
+            if day not in daily:
+                daily[day] = {"critical": 0, "warning": 0, "info": 0}
+            for r in t.result.rule_results:
+                if r.severity == Sev.CRITICAL:
+                    daily[day]["critical"] += 1
+                elif r.severity == Sev.WARNING:
+                    daily[day]["warning"] += 1
+                else:
+                    daily[day]["info"] += 1
+        return [
+            SeverityTrendEntry(date=day, **counts)
+            for day, counts in sorted(daily.items())
+        ]
+
+    async def get_top_apps(self, days: int = 30, limit: int = 10) -> list[TopAppEntry]:
+        from spark_advisor_gateway.api.schemas import TopAppEntry
+
+        since = datetime.now(UTC) - timedelta(days=days)
+        rows = await self._store.top_app_ids_since(since, limit)
+        return [TopAppEntry(app_id=app_id, analysis_count=cnt) for app_id, cnt in rows]
+
+    async def get_duration_by_mode(self, days: int = 30) -> list[DurationByModeEntry]:
+        from spark_advisor_gateway.api.schemas import DurationByModeEntry
+
+        since = datetime.now(UTC) - timedelta(days=days)
+        tasks = await self._store.list_completed_since(since)
+        mode_durations: dict[AnalysisMode, list[float]] = {}
+        for t in tasks:
+            if t.started_at and t.completed_at:
+                mode_durations.setdefault(t.mode, []).append(
+                    (t.completed_at - t.started_at).total_seconds()
+                )
+        return [
+            DurationByModeEntry(
+                mode=mode,
+                avg_duration_seconds=round(sum(durs) / len(durs), 2),
+                count=len(durs),
+            )
+            for mode, durs in sorted(mode_durations.items(), key=lambda x: x[0].value)
+        ]
+
+    async def get_failure_rate_trend(self, days: int = 30) -> list[FailureRateTrendEntry]:
+        from spark_advisor_gateway.api.schemas import FailureRateTrendEntry
+
+        since = datetime.now(UTC) - timedelta(days=days)
+        rows = await self._store.count_daily_by_status_since(since)
+        return [
+            FailureRateTrendEntry(
+                date=day,
+                total=total,
+                failed=failed,
+                rate=round((failed / total) * 100, 1) if total > 0 else 0.0,
+            )
+            for day, total, failed in rows
         ]
 

@@ -11,6 +11,13 @@ class AnalysisMode(StrEnum):
     AGENT = "agent"
 
 
+class DataSource(StrEnum):
+    HS_MANUAL = "hs_manual"
+    HS_POLLER = "hs_poller"
+    FILE = "file"
+    K8S = "k8s"
+
+
 class OutputFormat(StrEnum):
     TEXT = "text"
     JSON = "json"
