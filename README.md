@@ -23,6 +23,7 @@
   <p>
     <a href="#features">Features</a> •
     <a href="#quick-start">Quick Start</a> •
+    <a href="#web-dashboard">Web Dashboard</a> •
     <a href="#cli-usage">CLI Usage</a> •
     <a href="#mcp-server">MCP Server</a> •
     <a href="#microservices">Microservices</a> •
@@ -115,6 +116,34 @@ export ANTHROPIC_API_KEY=sk-ant-...
 uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json
 ```
 
+## Web Dashboard
+
+React 19 SPA with real-time updates via WebSocket, served by nginx with reverse proxy to gateway API.
+
+### Tasks — analysis results with filtering and real-time status
+
+![Tasks list](.github/screenshots/tasks.jpeg)
+
+### Task Detail — issues, stages, and config comparison
+
+![Task detail](.github/screenshots/task_details.jpeg)
+
+### Analyze — submit new analysis with History Server autocomplete
+
+![Analyze](.github/screenshots/analyze.jpeg)
+
+### Statistics — KPI cards, charts, and trend analysis
+
+![Statistics](.github/screenshots/statistics.jpeg)
+
+### Run
+
+```bash
+make up                          # docker compose — all services + frontend on http://localhost:3000
+cd packages/spark-advisor-frontend && npm run dev  # dev mode with hot reload on http://localhost:5173
+```
+
+
 ## What it detects
 
 | Rule               | Condition                                                | Severity                            |
@@ -132,6 +161,8 @@ uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json
 | Memory overhead    | GC > 20% AND memory utilization > 80%                    | WARNING                             |
 
 All thresholds are configurable via `Thresholds` model.
+
+---
 
 ## CLI Usage
 
@@ -272,18 +303,6 @@ wscat -c ws://localhost:8080/api/v1/ws/tasks
 
 ```bash
 make down
-```
-
-### Web Dashboard
-
-After `make up`, open http://localhost:3000 for the web dashboard. Features:
-- **Tasks** — list with filters, pagination, real-time status updates via WebSocket
-- **Analyze** — submit new analysis with app ID autocomplete from History Server
-- **Statistics** — KPI cards, charts (daily volume, rule frequency, severity trends, failure rate)
-
-For development with hot reload:
-```bash
-cd packages/spark-advisor-frontend && npm run dev  # http://localhost:5173
 ```
 
 ## Kubernetes
