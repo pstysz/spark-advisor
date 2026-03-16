@@ -48,7 +48,15 @@
         },
         {
           "type": "generic",
+          "path": "charts/frontend/Chart.yaml"
+        },
+        {
+          "type": "generic",
           "path": "charts/hs-connector/Chart.yaml"
+        },
+        {
+          "type": "generic",
+          "path": "packages/spark-advisor-frontend/package.json"
         },
         {
           "type": "generic",

@@ -9,8 +9,10 @@ gateway:
   config:
     nats:
       url: "nats://spark-advisor-nats:4222"
-  ingress:
-    enabled: false
+
+frontend:
+  config:
+    gatewayUrl: "http://spark-advisor-gateway:8080"
 
 hs-connector:
   config:

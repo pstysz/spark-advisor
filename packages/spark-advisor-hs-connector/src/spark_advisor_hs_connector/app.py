@@ -70,6 +70,9 @@ async def on_shutdown() -> None:
 
 @app.after_startup
 async def start_polling() -> None:
+    if not settings.polling_enabled:
+        logger.info("Polling disabled (SA_CONNECTOR_POLLING_ENABLED=false)")
+        return
     poller: HistoryServerPoller = app.context.get(ContextKey.POLLER)
     polling_task = asyncio.create_task(_polling_loop(poller, settings.poll_interval_seconds))
     app.context.set_global(ContextKey.POLLING_TASK, polling_task)

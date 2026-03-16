@@ -14,6 +14,10 @@ dependencies:
     version: "0.1.9" # x-release-please-version
     repository: "file://../gateway"
     alias: gateway
+  - name: spark-advisor-frontend
+    version: "0.1.9" # x-release-please-version
+    repository: "file://../frontend"
+    alias: frontend
   - name: spark-advisor-hs-connector
     version: "0.1.9" # x-release-please-version
     repository: "file://../hs-connector"

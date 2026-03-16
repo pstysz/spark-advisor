@@ -9,7 +9,7 @@
     <a href="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml"><img src="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
     <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
-    <img src="https://img.shields.io/badge/tests-495%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-525%20passing-brightgreen" alt="Tests">
   </p>
   <p>
     <img src="https://img.shields.io/badge/Spark-E25A1C?logo=apachespark&logoColor=white" alt="Apache Spark">
@@ -85,6 +85,7 @@ The rules engine runs for free and catches known patterns. The AI layer adds con
 - **Dashboard-ready REST API** — 13 endpoints with pagination, filtering, statistics, config comparison, WebSocket streaming
 - **3 microservices** — NATS-based distributed pipeline (gateway, analyzer, hs-connector)
 - **Streaming parser** — processes 100MB+ event log files line-by-line without loading into memory
+- **Web dashboard** — React 19 SPA with real-time task updates, analysis submission, statistics charts, config comparison
 - **Rich CLI** — tables, colors, severity badges, suggested spark-defaults.conf
 
 ## Quick Start
@@ -220,13 +221,13 @@ See [docs/mcp-setup.md](docs/mcp-setup.md) for Cursor and Claude Code configurat
 Three NATS-based services for distributed analysis:
 
 ```
-User → Gateway (REST) → NATS → HS Connector (fetch) → NATS → Analyzer (rules + AI) → result
+User → Frontend (nginx) → Gateway (REST) → NATS → HS Connector (fetch) → NATS → Analyzer (rules + AI) → result
 ```
 
 ### Start
 
 ```bash
-make up    # docker compose up -d (NATS + gateway + analyzer + hs-connector)
+make up    # docker compose up -d (NATS + gateway + analyzer + hs-connector + frontend)
 ```
 
 ### Usage
@@ -271,6 +272,18 @@ wscat -c ws://localhost:8080/api/v1/ws/tasks
 
 ```bash
 make down
+```
+
+### Web Dashboard
+
+After `make up`, open http://localhost:3000 for the web dashboard. Features:
+- **Tasks** — list with filters, pagination, real-time status updates via WebSocket
+- **Analyze** — submit new analysis with app ID autocomplete from History Server
+- **Statistics** — KPI cards, charts (daily volume, rule frequency, severity trends, failure rate)
+
+For development with hot reload:
+```bash
+cd packages/spark-advisor-frontend && npm run dev  # http://localhost:5173
 ```
 
 ## Kubernetes
@@ -327,7 +340,8 @@ charts/
 ├── spark-advisor/       # Umbrella chart (installs everything)
 ├── analyzer/            # Rules engine + AI worker (NATS subscriber)
 ├── gateway/             # REST API (Service + optional Ingress)
-└── hs-connector/        # History Server poller (NATS subscriber)
+├── hs-connector/        # History Server poller (NATS subscriber)
+└── frontend/           # Web dashboard (nginx + reverse proxy)
 ```
 
 Each service has a ConfigMap mapping `values.yaml` to the `SA_*` environment variables expected by pydantic-settings. NATS URL is auto-resolved from the release name when deployed via the umbrella chart.
@@ -336,6 +350,7 @@ Docker images are published to GitHub Container Registry on each release:
 - `ghcr.io/pstysz/spark-advisor-analyzer`
 - `ghcr.io/pstysz/spark-advisor-gateway`
 - `ghcr.io/pstysz/spark-advisor-hs-connector`
+- `ghcr.io/pstysz/spark-advisor-frontend`
 
 ## Architecture
 
@@ -346,12 +361,13 @@ graph TB
         EL["Event Log File"]
     end
 
-    subgraph packages["spark-advisor (uv monorepo, 7 packages)"]
+    subgraph packages["spark-advisor (uv monorepo, 8 packages)"]
         MODELS["models<br/>(Pydantic contracts)"]
         RULES["rules<br/>(11 deterministic rules)"]
         ANALYZER["analyzer<br/>(rules + AI worker)"]
         CONNECTOR["hs-connector<br/>(History Server client)"]
         GATEWAY["gateway<br/>(REST API)"]
+        FRONTEND["frontend<br/>(React SPA)"]
         CLI["cli<br/>(Typer + Rich)"]
         MCP["mcp<br/>(MCP server)"]
     end
@@ -373,6 +389,7 @@ graph TB
     CONNECTOR --> MCP
     ANALYZER --> CLI
 
+    FRONTEND --> GATEWAY
     GATEWAY --> NATS
     NATS --> CONNECTOR
     NATS --> ANALYZER
@@ -387,12 +404,13 @@ graph TB
 - **gateway** — REST API + NATS orchestration, depends only on models
 - **cli** — standalone CLI, depends on models + rules + analyzer + hs-connector
 - **mcp** — MCP server, depends on models + rules + analyzer + hs-connector + cli
+- **frontend** — React SPA (TypeScript), communicates with gateway via REST API and WebSocket
 
 ## Development
 
 ```bash
 make check       # Lint + mypy + all tests (CI-ready)
-make test        # Run 495 tests across 7 packages
+make test        # Run 525 tests across 8 packages
 make lint        # Ruff + mypy (strict)
 make format      # Auto-format code
 make demo-local  # Run rules-only analysis on sample event log
@@ -428,7 +446,7 @@ make down        # Stop microservices
 
 ### Testing
 
-495 tests across 7 packages: models (10), rules (45), cli (78), analyzer (86), hs-connector (68), gateway (132), mcp (75).
+525 tests across 8 packages: models (10), rules (45), cli (78), analyzer (86), hs-connector (68), gateway (132), mcp (75), frontend (30).
 
 ```bash
 uv run pytest -v               # all packages
@@ -442,7 +460,7 @@ cd packages/spark-advisor-rules && uv run pytest -v  # single package
 - [x] Rules engine (11 rules)
 - [x] AI advisor with Claude API (tool use + structured output)
 - [x] Rich CLI with suggested spark-defaults.conf
-- [x] uv monorepo (7 packages)
+- [x] uv monorepo (8 packages)
 - [x] 3 NATS-based microservices (gateway, analyzer, hs-connector)
 - [x] Agent mode — multi-turn Claude analysis with 6 tools
 - [x] MCP server — Claude Desktop / Cursor integration (5 tools)
@@ -455,6 +473,7 @@ cd packages/spark-advisor-rules && uv run pytest -v  # single package
 - [x] Dashboard REST API (13 endpoints + WebSocket)
 - [x] Statistics aggregation (summary, rule frequency, daily volume, top issues)
 - [x] OpenAPI schema with examples and tagged endpoints
+- [x] Web dashboard — React 19 SPA with real-time updates, statistics, analysis submission
 - [ ] Terminal demo GIF
 
 ## License

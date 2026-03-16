@@ -11,6 +11,7 @@ config:
     url: "nats://localhost:4222"
     analysisSubmitSubject: "analysis.submit"
     jobFetchSubject: "job.fetch"
+  pollingEnabled: false
   historyServerUrl: "http://localhost:18080"
   historyServerTimeout: 30.0
   pollIntervalSeconds: 60
