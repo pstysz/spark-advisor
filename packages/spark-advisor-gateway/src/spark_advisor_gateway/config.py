@@ -32,7 +32,7 @@ class GatewayNatsSettings(NatsSettings):
     analyze_agent_timeout: float = 300.0
     list_apps_timeout: float = 10.0
     analysis_submit_subject: str = NATS_ANALYSIS_SUBMIT_SUBJECT
-    polling_analysis_mode: AnalysisMode = AnalysisMode.AI
+    polling_analysis_mode: AnalysisMode = AnalysisMode.STATIC
 
 
 class ServerSettings(BaseModel):

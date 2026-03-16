@@ -20,3 +20,4 @@ data:
   SA_GATEWAY_NATS__ANALYSIS_SUBMIT_SUBJECT: {{ .Values.config.nats.analysisSubmitSubject | quote }}
   SA_GATEWAY_NATS__POLLING_ANALYSIS_MODE: {{ .Values.config.nats.pollingAnalysisMode | quote }}
   SA_GATEWAY_DATABASE_URL: {{ .Values.config.databaseUrl | quote }}
+  SA_GATEWAY_WS_HEARTBEAT_INTERVAL: {{ .Values.config.wsHeartbeatInterval | quote }}

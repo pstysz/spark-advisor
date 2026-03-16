@@ -28,7 +28,7 @@ class AdviceOrchestrator:
             return self._agent.run(job)
 
         rule_results = self._static.analyze(job)
-        ai_report = self._llm.analyze(job, rule_results) if self._llm else None
+        ai_report = self._llm.analyze(job, rule_results) if self._llm and mode != AnalysisMode.STATIC else None
         return AnalysisResult(
             app_id=job.app_id,
             job=job,

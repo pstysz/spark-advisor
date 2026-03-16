@@ -15,10 +15,16 @@ gateway:
     pullPolicy: Never
   config:
     logLevel: "DEBUG"
+
+frontend:
+  image:
+    repository: spark-advisor-frontend
+    tag: ""
+    pullPolicy: Never
   service:
     type: NodePort
-    port: 8080
-    nodePort: 30080
+    port: 80
+    nodePort: 30081
 
 hs-connector:
   image:

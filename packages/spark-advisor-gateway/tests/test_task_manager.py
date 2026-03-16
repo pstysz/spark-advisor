@@ -5,7 +5,7 @@ import pytest
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.models import TaskStatus
 from spark_advisor_gateway.task.store import TaskStore
-from spark_advisor_models.model import AnalysisResult
+from spark_advisor_models.model import AnalysisMode, AnalysisResult, DataSource
 from spark_advisor_models.testing import make_job
 
 
@@ -22,7 +22,17 @@ class TestTaskManagerCreate:
         task = await manager.create("app-1")
         assert task.status == TaskStatus.PENDING
         assert task.app_id == "app-1"
+        assert task.mode == AnalysisMode.AI
         assert task.task_id
+
+    @pytest.mark.asyncio
+    async def test_creates_task_with_agent_mode(self) -> None:
+        manager = await _make_manager()
+        task = await manager.create("app-1", mode=AnalysisMode.AGENT)
+        assert task.mode == AnalysisMode.AGENT
+        loaded = await manager.get(task.task_id)
+        assert loaded is not None
+        assert loaded.mode == AnalysisMode.AGENT
 
     @pytest.mark.asyncio
     async def test_creates_unique_ids(self) -> None:
@@ -168,6 +178,16 @@ class TestCreateIfNotActive:
         assert created is True
         assert task.app_id == "app-new"
         assert task.status == TaskStatus.PENDING
+        assert task.mode == AnalysisMode.AI
+
+    @pytest.mark.asyncio
+    async def test_creates_with_mode(self) -> None:
+        manager = await _make_manager()
+        result = await manager.create_if_not_active("app-new", mode=AnalysisMode.AGENT)
+        assert result is not None
+        task, created = result
+        assert created is True
+        assert task.mode == AnalysisMode.AGENT
 
     @pytest.mark.asyncio
     async def test_returns_existing_pending_task(self) -> None:
@@ -239,3 +259,31 @@ class TestCreateIfNotActive:
         await manager.create("app-pend")
         result = await manager.create_if_not_active("app-pend", rerun=True)
         assert result is None
+
+
+class TestDataSource:
+    @pytest.mark.asyncio
+    async def test_create_with_data_source(self) -> None:
+        manager = await _make_manager()
+        task = await manager.create("app-1", data_source=DataSource.HS_POLLER)
+        assert task.data_source == DataSource.HS_POLLER
+        loaded = await manager.get(task.task_id)
+        assert loaded is not None
+        assert loaded.data_source == DataSource.HS_POLLER
+
+    @pytest.mark.asyncio
+    async def test_create_default_data_source(self) -> None:
+        manager = await _make_manager()
+        task = await manager.create("app-1")
+        assert task.data_source == DataSource.HS_MANUAL
+
+    @pytest.mark.asyncio
+    async def test_create_if_not_active_with_data_source(self) -> None:
+        manager = await _make_manager()
+        result = await manager.create_if_not_active(
+            "app-new", data_source=DataSource.HS_POLLER,
+        )
+        assert result is not None
+        task, created = result
+        assert created is True
+        assert task.data_source == DataSource.HS_POLLER

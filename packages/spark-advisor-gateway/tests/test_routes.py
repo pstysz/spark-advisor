@@ -10,6 +10,7 @@ from spark_advisor_models.model import (
     AdvisorReport,
     AnalysisMode,
     AnalysisResult,
+    DataSource,
     Recommendation,
     RuleResult,
     Severity,
@@ -63,7 +64,9 @@ async def test_get_task_returns_pending(client: AsyncClient, task_manager: TaskM
     assert response.status_code == 200
     data = response.json()
     assert data["app_id"] == "app-456"
+    assert data["mode"] == "ai"
     assert data["status"] == "pending"
+    assert data["severity_counts"] is None
 
 
 @pytest.mark.asyncio
@@ -207,8 +210,33 @@ async def test_list_applications_returns_apps(client: AsyncClient, mock_nc: Asyn
     assert items[0]["user"] == "hdfs"
     assert items[0]["start_time"] == "2026-02-26T18:06:24.459GMT"
     assert items[0]["end_time"] == "2026-02-26T18:07:58.746GMT"
+    assert items[0]["analysis_count"] == 0
     assert items[1]["id"] == "app-002"
     assert items[1]["duration_ms"] == 0
+    assert items[1]["analysis_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_applications_includes_analysis_count(
+    client: AsyncClient, mock_nc: AsyncMock, task_manager: TaskManager,
+) -> None:
+    await task_manager.create("app-001")
+    await task_manager.create("app-001")
+    await task_manager.create("app-002")
+
+    mock_nc.request.return_value = _nats_reply(
+        [
+            {"id": "app-001", "name": "Job1", "attempts": []},
+            {"id": "app-002", "name": "Job2", "attempts": []},
+            {"id": "app-003", "name": "Job3", "attempts": []},
+        ]
+    )
+    response = await client.get("/api/v1/applications")
+    assert response.status_code == 200
+    items = {i["id"]: i for i in response.json()["items"]}
+    assert items["app-001"]["analysis_count"] == 2
+    assert items["app-002"]["analysis_count"] == 1
+    assert items["app-003"]["analysis_count"] == 0
 
 
 @pytest.mark.asyncio
@@ -445,6 +473,22 @@ async def test_app_history_pagination(client: AsyncClient, task_manager: TaskMan
 
 
 @pytest.mark.asyncio
+async def test_get_completed_task_has_severity_counts(client: AsyncClient, task_manager: TaskManager) -> None:
+    rules = [
+        _make_rule_result(severity=Severity.CRITICAL),
+        _make_rule_result(rule_id="spill", severity=Severity.WARNING),
+        _make_rule_result(rule_id="gc", severity=Severity.WARNING),
+        _make_rule_result(rule_id="small_files", severity=Severity.INFO),
+    ]
+    task_id = await _create_completed_task(task_manager, rule_results=rules)
+
+    response = await client.get(f"/api/v1/tasks/{task_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["severity_counts"] == {"CRITICAL": 1, "WARNING": 2, "INFO": 1}
+
+
+@pytest.mark.asyncio
 async def test_task_rules_returns_violations(client: AsyncClient, task_manager: TaskManager) -> None:
     rules = [_make_rule_result(), _make_rule_result(rule_id="gc_pressure", severity=Severity.CRITICAL)]
     task_id = await _create_completed_task(task_manager, rule_results=rules)
@@ -639,6 +683,7 @@ async def test_stats_top_issues(client: AsyncClient, task_manager: TaskManager) 
     data = response.json()
     assert len(data["items"]) == 1
     assert data["items"][0]["rule_id"] == "shuffle_partitions"
+    assert data["items"][0]["message"] == "Consider increasing shuffle partitions"
     assert data["items"][0]["count"] == 2
     assert data["items"][0]["example_app_id"] in ("app-ti1", "app-ti2")
     assert data["limit"] == 1
@@ -669,3 +714,187 @@ async def test_openapi_routes_have_summaries_and_tags(client: AsyncClient) -> No
             if method in ("get", "post", "put", "delete", "patch"):
                 assert "summary" in spec, f"Missing summary on {method.upper()} {path}"
                 assert "tags" in spec, f"Missing tags on {method.upper()} {path}"
+
+
+@pytest.mark.asyncio
+async def test_stats_summary_includes_avg_issues(client: AsyncClient, task_manager: TaskManager) -> None:
+    rules = [_make_rule_result(), _make_rule_result(rule_id="gc", severity=Severity.CRITICAL)]
+    await _create_completed_task(task_manager, "app-ai1", rule_results=rules)
+    await _create_completed_task(task_manager, "app-ai2", rule_results=[_make_rule_result()])
+
+    response = await client.get("/api/v1/stats/summary")
+    data = response.json()
+    assert data["avg_issues_per_analysis"] == 1.5
+
+
+@pytest.mark.asyncio
+async def test_stats_mode_breakdown_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/stats/mode-breakdown")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"] == []
+    assert data["days"] == 30
+
+
+@pytest.mark.asyncio
+async def test_stats_mode_breakdown_with_data(client: AsyncClient, task_manager: TaskManager) -> None:
+    await _create_completed_task(task_manager, "app-mb1")
+    await _create_completed_task(task_manager, "app-mb2")
+    task_s = await task_manager.create("app-mb3", mode=AnalysisMode.STATIC)
+    await task_manager.mark_running(task_s.task_id)
+    job = make_job(app_id="app-mb3")
+    result = AnalysisResult(app_id="app-mb3", job=job, rule_results=[])
+    await task_manager.mark_completed(task_s.task_id, result)
+
+    response = await client.get("/api/v1/stats/mode-breakdown")
+    assert response.status_code == 200
+    items = {i["mode"]: i["count"] for i in response.json()["items"]}
+    assert items["ai"] == 2
+    assert items["static"] == 1
+
+
+@pytest.mark.asyncio
+async def test_stats_severity_trend_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/stats/severity-trend")
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_stats_severity_trend_with_data(client: AsyncClient, task_manager: TaskManager) -> None:
+    rules = [
+        _make_rule_result(severity=Severity.CRITICAL),
+        _make_rule_result(rule_id="gc", severity=Severity.WARNING),
+    ]
+    await _create_completed_task(task_manager, "app-st1", rule_results=rules)
+
+    response = await client.get("/api/v1/stats/severity-trend")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["critical"] == 1
+    assert items[0]["warning"] == 1
+    assert items[0]["info"] == 0
+
+
+@pytest.mark.asyncio
+async def test_stats_top_apps_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/stats/top-apps")
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_stats_top_apps_with_data(client: AsyncClient, task_manager: TaskManager) -> None:
+    await _create_completed_task(task_manager, "app-ta1")
+    await _create_completed_task(task_manager, "app-ta1")
+    await _create_completed_task(task_manager, "app-ta2")
+
+    response = await client.get("/api/v1/stats/top-apps?limit=2")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 2
+    assert data["items"][0]["app_id"] == "app-ta1"
+    assert data["items"][0]["analysis_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_stats_duration_by_mode_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/stats/duration-by-mode")
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_stats_duration_by_mode_with_data(client: AsyncClient, task_manager: TaskManager) -> None:
+    await _create_completed_task(task_manager, "app-dm1")
+
+    response = await client.get("/api/v1/stats/duration-by-mode")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) >= 1
+    assert items[0]["mode"] == "ai"
+    assert items[0]["avg_duration_seconds"] >= 0
+    assert items[0]["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_stats_failure_rate_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/stats/failure-rate")
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_stats_failure_rate_with_data(client: AsyncClient, task_manager: TaskManager) -> None:
+    await _create_completed_task(task_manager, "app-fr1")
+    task_f = await task_manager.create("app-fr2")
+    await task_manager.mark_running(task_f.task_id)
+    await task_manager.mark_failed(task_f.task_id, "timeout")
+
+    response = await client.get("/api/v1/stats/failure-rate")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["total"] == 2
+    assert items[0]["failed"] == 1
+    assert items[0]["rate"] == 50.0
+
+
+@pytest.mark.asyncio
+async def test_analyze_with_explicit_data_source(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/analyze", json={"app_id": "app-ds1", "data_source": "hs_poller"},
+    )
+    assert response.status_code == 202
+
+
+@pytest.mark.asyncio
+async def test_analyze_default_data_source(client: AsyncClient, task_manager: TaskManager) -> None:
+    response = await client.post("/api/v1/analyze", json={"app_id": "app-ds2"})
+    assert response.status_code == 202
+    task_id = response.json()["task_id"]
+    task = await task_manager.get(task_id)
+    assert task is not None
+    assert task.data_source == DataSource.HS_MANUAL
+
+
+@pytest.mark.asyncio
+async def test_get_task_includes_data_source(client: AsyncClient, task_manager: TaskManager) -> None:
+    task = await task_manager.create("app-ds3", data_source=DataSource.HS_POLLER)
+    response = await client.get(f"/api/v1/tasks/{task.task_id}")
+    assert response.status_code == 200
+    assert response.json()["data_source"] == "hs_poller"
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_filter_by_data_source(client: AsyncClient, task_manager: TaskManager) -> None:
+    await task_manager.create("app-f1", data_source=DataSource.HS_MANUAL)
+    await task_manager.create("app-f2", data_source=DataSource.HS_POLLER)
+    await task_manager.create("app-f3", data_source=DataSource.HS_MANUAL)
+
+    response = await client.get("/api/v1/tasks?data_source=hs_manual")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
+    assert all(t["data_source"] == "hs_manual" for t in data["items"])
+
+
+@pytest.mark.asyncio
+async def test_stats_source_breakdown_empty(client: AsyncClient) -> None:
+    response = await client.get("/api/v1/stats/source-breakdown")
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_stats_source_breakdown_with_data(client: AsyncClient, task_manager: TaskManager) -> None:
+    await task_manager.create("app-sb1", data_source=DataSource.HS_MANUAL)
+    await task_manager.create("app-sb2", data_source=DataSource.HS_MANUAL)
+    await task_manager.create("app-sb3", data_source=DataSource.HS_POLLER)
+
+    response = await client.get("/api/v1/stats/source-breakdown")
+    assert response.status_code == 200
+    items = {i["data_source"]: i["count"] for i in response.json()["items"]}
+    assert items["hs_manual"] == 2
+    assert items["hs_poller"] == 1
