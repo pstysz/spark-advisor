@@ -2,24 +2,24 @@ apiVersion: v2
 name: spark-advisor
 description: Spark Advisor — AI-powered Spark job performance analyzer (umbrella chart)
 type: application
-version: 0.1.9 # x-release-please-version
-appVersion: "0.1.9" # x-release-please-version
+version: 0.1.10 # x-release-please-version
+appVersion: "0.1.10" # x-release-please-version
 
 dependencies:
   - name: spark-advisor-analyzer
-    version: "0.1.9" # x-release-please-version
+    version: "0.1.10" # x-release-please-version
     repository: "file://../analyzer"
     alias: analyzer
   - name: spark-advisor-gateway
-    version: "0.1.9" # x-release-please-version
+    version: "0.1.10" # x-release-please-version
     repository: "file://../gateway"
     alias: gateway
   - name: spark-advisor-frontend
-    version: "0.1.9" # x-release-please-version
+    version: "0.1.10" # x-release-please-version
     repository: "file://../frontend"
     alias: frontend
   - name: spark-advisor-hs-connector
-    version: "0.1.9" # x-release-please-version
+    version: "0.1.10" # x-release-please-version
     repository: "file://../hs-connector"
     alias: hs-connector
   - name: nats
