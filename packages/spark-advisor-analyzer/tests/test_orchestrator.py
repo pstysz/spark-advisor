@@ -11,7 +11,7 @@ from spark_advisor_rules import StaticAnalysisService
 class TestAdviceOrchestrator:
     def test_rules_only_returns_result_without_ai(self) -> None:
         orchestrator = AdviceOrchestrator(StaticAnalysisService())
-        result = orchestrator.run(make_job())
+        result = orchestrator.run(make_job(), mode=AnalysisMode.STATIC)
 
         assert isinstance(result, AnalysisResult)
         assert result.app_id == "app-test-001"
@@ -38,9 +38,14 @@ class TestAdviceOrchestrator:
 
     def test_rule_results_always_present(self) -> None:
         orchestrator = AdviceOrchestrator(StaticAnalysisService())
-        result = orchestrator.run(make_job())
+        result = orchestrator.run(make_job(), mode=AnalysisMode.STATIC)
 
         assert isinstance(result.rule_results, list)
+
+    def test_ai_mode_without_llm_raises_error(self) -> None:
+        orchestrator = AdviceOrchestrator(StaticAnalysisService())
+        with pytest.raises(ValueError, match="AI mode requested but no LlmAnalysisService"):
+            orchestrator.run(make_job(), mode=AnalysisMode.AI)
 
     def test_use_agent_without_agent_raises_error(self) -> None:
         orchestrator = AdviceOrchestrator(StaticAnalysisService())

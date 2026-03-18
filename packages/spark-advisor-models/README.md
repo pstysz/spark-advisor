@@ -15,6 +15,8 @@ pip install spark-advisor-models
 - **AI tool schemas** — input/output models for Claude API, generated from Pydantic (`model/input.py`)
 - **Spark config wrapper** — typed access to spark.* properties (`model/spark_config.py`)
 - **Shared configuration** — rule thresholds, AI settings, NATS settings (`config.py`, `settings.py`)
+- **Structured logging** — `configure_logging()`, `bind_nats_context()`, `nats_handler_context()` (`logging.py`)
+- **Distributed tracing** — OpenTelemetry W3C Traceparent propagation via NATS headers (`tracing.py`)
 - **Utilities** — byte formatting, statistics helpers (`util/`)
 
 ## Usage

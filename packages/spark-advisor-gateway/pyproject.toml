@@ -28,6 +28,9 @@ dependencies = [
     "orjson>=3.9",
     "sqlalchemy[asyncio]>=2.0",
     "aiosqlite>=0.20",
+    "prometheus-client>=0.21",
+    "prometheus-fastapi-instrumentator>=7.0",
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
 ]
 
 [project.urls]

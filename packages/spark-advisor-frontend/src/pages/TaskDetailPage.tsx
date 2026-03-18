@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router";
+import { useParams, useNavigate } from "react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs } from "@/components/ui/Tabs";
 import { OverviewTab } from "@/components/task/OverviewTab";
@@ -7,16 +7,16 @@ import { IssuesTab } from "@/components/task/IssuesTab";
 import { StagesTab } from "@/components/task/StagesTab";
 import { ConfigTab } from "@/components/task/ConfigTab";
 import { useTask, useTaskRules, useTaskConfig } from "@/hooks/useTaskDetail";
-import { useTaskWebSocket } from "@/hooks/useTaskWebSocket";
-import { useMemo } from "react";
+import { useSubmitAnalysis } from "@/hooks/useAnalyze";
 
 export function TaskDetailPage() {
   const { taskId } = useParams<{ taskId: string }>();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
-  const wsTaskIds = useMemo(() => taskId ? [taskId] : [], [taskId]);
-  useTaskWebSocket(wsTaskIds);
 
+  const { mutate: rerun, isPending: rerunPending } = useSubmitAnalysis();
   const { data: task, isLoading, error } = useTask(taskId!);
+  const isTerminal = task?.status === "completed" || task?.status === "failed";
   const isCompleted = task?.status === "completed";
   const { data: rules } = useTaskRules(taskId!, isCompleted);
   const { data: config } = useTaskConfig(taskId!, isCompleted);
@@ -62,6 +62,24 @@ export function TaskDetailPage() {
           { label: "Tasks", to: "/" },
           { label: task.task_id.slice(0, 8) + "..." },
         ]}
+        actions={
+          isTerminal ? (
+            <button
+              className="btn-rerun"
+              disabled={rerunPending}
+              onClick={() => rerun(
+                { app_id: task.app_id, mode: task.mode, rerun: true },
+                { onSuccess: (result) => { if (result.status === 202) navigate(`/tasks/${result.data.task_id}`); } },
+              )}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+              </svg>
+              {rerunPending ? "Submitting..." : "Rerun Analysis"}
+            </button>
+          ) : undefined
+        }
       />
       <div className="page-body">
         <div className="card">

@@ -1,7 +1,7 @@
 import json
-import logging
 from typing import Any
 
+import structlog
 from anthropic.types import (
     Message,
     MessageParam,
@@ -20,9 +20,10 @@ from spark_advisor_analyzer.ai.client import AnthropicClient
 from spark_advisor_analyzer.ai.report_builder import build_advisor_report
 from spark_advisor_models.config import AiSettings
 from spark_advisor_models.model import AnalysisResult, AnalysisToolInput, JobAnalysis
+from spark_advisor_models.tracing import get_tracer
 from spark_advisor_rules import StaticAnalysisService
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 class AgentOrchestrator:
@@ -91,14 +92,16 @@ class AgentOrchestrator:
         *,
         tool_choice: ToolChoiceAutoParam | ToolChoiceToolParam,
     ) -> Message:
-        return self._client.create_message(
-            model=self._ai.model,
-            max_tokens=self._ai.max_tokens,
-            system=self._system_prompt,
-            messages=messages,
-            tools=AGENT_TOOLS,
-            tool_choice=tool_choice,
-        )
+        tracer = get_tracer()
+        with tracer.start_as_current_span("analyzer.agent.claude_call"):
+            return self._client.create_message(
+                model=self._ai.model,
+                max_tokens=self._ai.max_tokens,
+                system=self._system_prompt,
+                messages=messages,
+                tools=AGENT_TOOLS,
+                tool_choice=tool_choice,
+            )
 
     def _execute_single_tool(
         self,
@@ -106,8 +109,10 @@ class AgentOrchestrator:
         input_data: Any,
         context: AgentContext,
     ) -> str:
+        tracer = get_tracer()
         try:
-            return execute_tool(name, input_data, context, self._static)
+            with tracer.start_as_current_span("analyzer.agent.tool_execute", attributes={"tool": name}):
+                return execute_tool(name, input_data, context, self._static)
         except ToolExecutionError as e:
             logger.warning("Tool %s failed: %s", name, e)
             return json.dumps({"error": str(e)})

@@ -13,11 +13,18 @@ from httpx import ASGITransport, AsyncClient
 from spark_advisor_gateway.api.health import create_health_router
 from spark_advisor_gateway.api.routes import create_router
 from spark_advisor_gateway.config import GatewaySettings, StateKey
+from spark_advisor_gateway.metrics import setup_metrics
 from spark_advisor_gateway.task.executor import TaskExecutor
 from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.store import TaskStore
 from spark_advisor_gateway.ws.manager import ConnectionManager
 from spark_advisor_gateway.ws.routes import router as ws_router
+from spark_advisor_models.logging import configure_logging
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _configure_structlog() -> None:
+    configure_logging("gateway-test", "DEBUG", json_output=False)
 
 
 @pytest.fixture
@@ -57,14 +64,17 @@ def task_executor(mock_nc: AsyncMock, task_manager: TaskManager, settings: Gatew
 @pytest.fixture
 def app(
     mock_nc: AsyncMock,
+    task_store: TaskStore,
     task_manager: TaskManager,
     task_executor: TaskExecutor,
     connection_manager: ConnectionManager,
     settings: GatewaySettings,
 ) -> FastAPI:
     test_app = FastAPI()
+    setup_metrics(test_app, enabled=True)
     setattr(test_app.state, StateKey.NC, mock_nc)
     setattr(test_app.state, StateKey.SETTINGS, settings)
+    setattr(test_app.state, StateKey.TASK_STORE, task_store)
     setattr(test_app.state, StateKey.TASK_MANAGER, task_manager)
     setattr(test_app.state, StateKey.TASK_EXECUTOR, task_executor)
     setattr(test_app.state, StateKey.CONNECTION_MANAGER, connection_manager)

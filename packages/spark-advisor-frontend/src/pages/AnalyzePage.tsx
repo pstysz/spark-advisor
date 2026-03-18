@@ -144,6 +144,12 @@ export function AnalyzePage() {
                 </div>
               )}
 
+              {error && !isConflict && (
+                <div style={{ padding: 12, background: "var(--severity-critical-dim, rgba(239, 68, 68, 0.1))", borderRadius: 8, color: "var(--severity-critical, #ef4444)", fontSize: 13, marginBottom: 16 }}>
+                  {error instanceof Error ? error.message : "Failed to submit analysis. Please try again."}
+                </div>
+              )}
+
               <button type="submit" className="submit-btn" disabled={isPending || !appId.trim()}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="6 3 20 12 6 21 6 3" />

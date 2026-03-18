@@ -1,6 +1,6 @@
-import logging
 import os
 
+import structlog
 from faststream import FastStream
 from faststream.nats import NatsBroker
 
@@ -8,18 +8,21 @@ from spark_advisor_analyzer.ai.client import AnthropicClient
 from spark_advisor_analyzer.config import AnalyzerSettings, ContextKey
 from spark_advisor_analyzer.factory import create_analysis_stack
 from spark_advisor_analyzer.handlers import router
+from spark_advisor_models.logging import configure_logging
+from spark_advisor_models.tracing import configure_tracing
 
 settings = AnalyzerSettings()
 broker = NatsBroker(settings.nats.url)
 broker.include_router(router)
 app = FastStream(broker)
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 @app.on_startup
 async def on_startup() -> None:
-    logging.basicConfig(level=settings.log_level)
+    configure_logging(settings.service_name, settings.log_level, json_output=settings.json_log)
+    configure_tracing(settings.service_name, settings.otel.endpoint, enabled=settings.otel.enabled)
 
     ai_client: AnthropicClient | None = None
     if settings.ai.enabled and os.environ.get("ANTHROPIC_API_KEY"):
@@ -35,6 +38,7 @@ async def on_startup() -> None:
         thresholds=settings.thresholds,
     )
     app.context.set_global(ContextKey.ORCHESTRATOR, orchestrator)
+    app.context.set_global(ContextKey.SERVICE_NAME, settings.service_name)
 
     logger.info(
         "Analyzer started: ai_enabled=%s model=%s",
@@ -48,7 +52,7 @@ async def on_shutdown() -> None:
     ai_client: AnthropicClient | None = app.context.get(ContextKey.AI_CLIENT)
     if ai_client is not None:
         ai_client.close()
-        logging.getLogger(__name__).info("AnthropicClient closed")
+        logger.info("AnthropicClient closed")
 
 
 def main() -> None:

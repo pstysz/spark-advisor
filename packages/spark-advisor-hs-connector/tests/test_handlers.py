@@ -61,6 +61,7 @@ async def test_fetch_job_returns_job_analysis() -> None:
 
     async with TestNatsBroker(broker, with_real=False) as br:
         app.context.set_global("hs_client", hs_client)
+        app.context.set_global("service_name", "spark-advisor-hs-connector")
         result = await br.request(
             {"app_id": "app-001"},
             subject=NATS_FETCH_JOB_SUBJECT,
@@ -87,6 +88,7 @@ async def test_list_applications_returns_list() -> None:
 
     async with TestNatsBroker(broker, with_real=False) as br:
         app.context.set_global("hs_client", hs_client)
+        app.context.set_global("service_name", "spark-advisor-hs-connector")
         result = await br.request(
             {"limit": 10},
             subject=NATS_APPLICATIONS_LIST_SUBJECT,
@@ -106,6 +108,7 @@ async def test_list_applications_returns_error_on_failure() -> None:
 
     async with TestNatsBroker(broker, with_real=False) as br:
         app.context.set_global("hs_client", hs_client)
+        app.context.set_global("service_name", "spark-advisor-hs-connector")
         result = await br.request(
             {},
             subject=NATS_APPLICATIONS_LIST_SUBJECT,

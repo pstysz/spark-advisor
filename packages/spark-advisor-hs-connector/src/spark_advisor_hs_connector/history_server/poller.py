@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
+import structlog
+
 from spark_advisor_hs_connector.job_analysis_builder import fetch_job_analysis
+from spark_advisor_models.tracing import get_tracer, inject_correlation_context
 
 if TYPE_CHECKING:
     from faststream.nats import NatsBroker
@@ -12,7 +14,7 @@ if TYPE_CHECKING:
     from spark_advisor_hs_connector.history_server.client import HistoryServerClient
     from spark_advisor_hs_connector.store import PollingStore
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 class HistoryServerPoller:
@@ -31,26 +33,33 @@ class HistoryServerPoller:
         self._batch_size = batch_size
 
     async def poll(self) -> int:
-        apps = await asyncio.to_thread(self._hs_client.list_applications, limit=self._batch_size)
-        all_ids = [app.id for app in apps]
-        new_ids = await self.store.filter_new_and_mark(all_ids)
+        tracer = get_tracer()
+        with tracer.start_as_current_span("hs.poll"):
+            apps = await asyncio.to_thread(self._hs_client.list_applications, limit=self._batch_size)
+            all_ids = [app.id for app in apps]
+            new_ids = await self.store.filter_new_and_mark(all_ids)
 
-        if not new_ids:
-            logger.debug("No new applications found")
-            return 0
+            if not new_ids:
+                logger.debug("No new applications found")
+                return 0
 
-        published = 0
-        for app_id in new_ids:
-            try:
-                await self._fetch_and_publish(app_id)
-                published += 1
-            except Exception:
-                logger.exception("Failed to fetch/publish app %s, will retry next cycle", app_id)
-                await self.store.remove(app_id)
+            published = 0
+            for app_id in new_ids:
+                try:
+                    await self._fetch_and_publish(app_id)
+                    published += 1
+                except Exception:
+                    logger.exception("Failed to fetch/publish app %s, will retry next cycle", app_id)
+                    await self.store.remove(app_id)
 
-        logger.info("Poll complete: %d/%d new apps published", published, len(new_ids))
-        return published
+            logger.info("Poll complete: %d/%d new apps published", published, len(new_ids))
+            return published
 
     async def _fetch_and_publish(self, app_id: str) -> None:
-        job = await asyncio.to_thread(fetch_job_analysis, self._hs_client, app_id)
-        await self._broker.publish(job.model_dump(mode="json"), subject=self._publish_subject)
+        tracer = get_tracer()
+        with tracer.start_as_current_span("hs.fetch_and_publish", attributes={"app_id": app_id}):
+            job = await asyncio.to_thread(fetch_job_analysis, self._hs_client, app_id)
+            headers = inject_correlation_context({})
+            await self._broker.publish(
+                job.model_dump(mode="json"), subject=self._publish_subject, headers=headers,
+            )

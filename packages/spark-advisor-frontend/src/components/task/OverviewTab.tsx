@@ -32,9 +32,27 @@ export function OverviewTab({ task }: OverviewTabProps) {
           <InfoRow label="Created" value={formatDateTime(task.created_at)} />
           {task.started_at && <InfoRow label="Started" value={formatDateTime(task.started_at)} />}
           {task.completed_at && <InfoRow label="Completed" value={formatDateTime(task.completed_at)} />}
-          {task.error && <InfoRow label="Error" value={<span style={{ color: "var(--severity-critical)" }}>{task.error}</span>} />}
         </div>
       </div>
+
+      {task.error && (
+        <div style={{
+          padding: "12px 16px",
+          background: "var(--severity-critical-dim, rgba(239, 68, 68, 0.1))",
+          borderRadius: 8,
+          border: "1px solid var(--severity-critical, #ef4444)",
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-start",
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--severity-critical, #ef4444)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span style={{ color: "var(--severity-critical, #ef4444)", fontSize: 13, lineHeight: 1.5 }}>{task.error}</span>
+        </div>
+      )}
 
       {task.severity_counts && (
         <div>

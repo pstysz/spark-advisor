@@ -15,6 +15,7 @@ from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
 class ContextKey(StrEnum):
     AI_CLIENT = "ai_client"
     ORCHESTRATOR = "orchestrator"
+    SERVICE_NAME = "service_name"
 
 
 class AnalyzerNatsSettings(NatsSettings):
@@ -28,6 +29,7 @@ class AnalyzerSettings(BaseServiceSettings):
         yaml_file="/etc/spark-advisor/analyzer/config.yaml",
     )
 
+    service_name: str = "spark-advisor-analyzer"
     nats: AnalyzerNatsSettings = AnalyzerNatsSettings()
     thresholds: Thresholds = DEFAULT_THRESHOLDS
     ai: AiSettings = DEFAULT_AI_SETTINGS
