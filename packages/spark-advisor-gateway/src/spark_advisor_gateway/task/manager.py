@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from spark_advisor_gateway.metrics import task_duration_observe, tasks_total_inc
+from spark_advisor_gateway.metrics import (
+    analysis_mode_inc,
+    rules_violations_inc,
+    task_duration_observe,
+    tasks_total_inc,
+)
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
 from spark_advisor_models.model import AnalysisMode, DataSource
 
@@ -121,6 +126,7 @@ class TaskManager:
         task.started_at = datetime.now(UTC)
         await self._store.update(task)
         tasks_total_inc("started")
+        analysis_mode_inc(task.mode.value)
         await self._notify(task)
 
     async def mark_completed(self, task_id: str, result: AnalysisResult) -> None:
@@ -132,6 +138,8 @@ class TaskManager:
         task.result = result
         await self._store.update(task)
         tasks_total_inc("completed")
+        for rule_result in result.rule_results:
+            rules_violations_inc(rule_result.rule_id, rule_result.severity.value)
         if task.started_at and task.completed_at:
             duration = (task.completed_at - task.started_at).total_seconds()
             task_duration_observe(task.mode.value, duration)

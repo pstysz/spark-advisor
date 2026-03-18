@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from spark_advisor_gateway.metrics import task_duration_observe, tasks_total_inc
+
 if TYPE_CHECKING:
     from httpx import AsyncClient
 
@@ -23,3 +25,24 @@ async def test_metrics_contains_custom_counters(client: AsyncClient) -> None:
     body = response.text
     assert "sa_tasks_total" in body
     assert "sa_task_duration_seconds" in body
+
+
+@pytest.mark.asyncio
+async def test_tasks_total_inc_increments_counter(client: AsyncClient) -> None:
+    tasks_total_inc("completed")
+    tasks_total_inc("completed")
+    tasks_total_inc("failed")
+    response = await client.get("/metrics")
+    body = response.text
+    assert 'sa_tasks_total{status="completed"}' in body
+    assert 'sa_tasks_total{status="failed"}' in body
+
+
+@pytest.mark.asyncio
+async def test_task_duration_observe_records_histogram(client: AsyncClient) -> None:
+    task_duration_observe("ai", 5.5)
+    task_duration_observe("ai", 12.0)
+    response = await client.get("/metrics")
+    body = response.text
+    assert "sa_task_duration_seconds_count" in body
+    assert "sa_task_duration_seconds_sum" in body

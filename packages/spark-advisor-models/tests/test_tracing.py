@@ -6,8 +6,9 @@ from opentelemetry.sdk.trace import TracerProvider
 
 from spark_advisor_models.tracing import (
     TRACE_ID_HEADER,
-    _build_trace_id_vars,
+    TracingConfig,
     add_otel_trace_context,
+    build_trace_context_vars,
     configure_tracing,
     extract_fallback_trace_id,
     extract_trace_context,
@@ -21,20 +22,22 @@ def _fresh_provider() -> TracerProvider:
     return TracerProvider(resource=Resource.create({SERVICE_NAME: "test"}))
 
 
-class TestConfigureTracing:
+class TestTracingConfig:
     def setup_method(self) -> None:
-        import spark_advisor_models.tracing as mod
-
-        mod._tracer = None
+        TracingConfig._service_name = "spark-advisor"
         trace.set_tracer_provider(_fresh_provider())
 
-    def test_disabled_does_not_set_tracer(self) -> None:
+    def test_configure_sets_service_name(self) -> None:
+        configure_tracing("my-service", "http://localhost:4317", enabled=False)
+        assert TracingConfig._service_name == "my-service"
+
+    def test_disabled_does_not_set_provider(self) -> None:
         configure_tracing("test", "http://localhost:4317", enabled=False)
-        import spark_advisor_models.tracing as mod
+        tracer = get_tracer()
+        assert tracer is not None
 
-        assert mod._tracer is None
-
-    def test_get_tracer_returns_noop_when_not_configured(self) -> None:
+    def test_get_tracer_returns_tracer_with_service_name(self) -> None:
+        TracingConfig._service_name = "my-service"
         tracer = get_tracer()
         assert tracer is not None
 
@@ -112,6 +115,12 @@ class TestInjectCorrelationContext:
 
         uuid.UUID(result[TRACE_ID_HEADER])
 
+    def test_does_not_overwrite_existing_trace_id_header(self) -> None:
+        context.attach(context.Context())
+        headers = {TRACE_ID_HEADER: "existing-uuid"}
+        result = inject_correlation_context(headers)
+        assert result[TRACE_ID_HEADER] == "existing-uuid"
+
 
 class TestExtractFallbackTraceId:
     def setup_method(self) -> None:
@@ -138,18 +147,18 @@ class TestExtractFallbackTraceId:
         assert extract_fallback_trace_id({}) == ""
 
 
-class TestBuildTraceIdVars:
+class TestBuildTraceContextVars:
     def setup_method(self) -> None:
         trace.set_tracer_provider(_fresh_provider())
 
     def test_empty_with_active_otel_span(self) -> None:
         tracer = trace.get_tracer("test")
         with tracer.start_as_current_span("parent"):
-            assert _build_trace_id_vars() == {}
+            assert build_trace_context_vars() == {}
 
     def test_uuid_without_otel_span(self) -> None:
         context.attach(context.Context())
-        result = _build_trace_id_vars()
+        result = build_trace_context_vars()
         assert "trace_id" in result
         import uuid
 

@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 import structlog
 
-from spark_advisor_models.tracing import add_otel_trace_context
+from spark_advisor_models.tracing import add_otel_trace_context, get_tracer
+
+__all__ = [
+    "bind_nats_context",
+    "configure_logging",
+    "nats_handler_context",
+]
+
+_TRANSIENT_CONTEXT_KEYS = ("trace_id", "app_id", "task_id")
 
 
 def configure_logging(service: str, log_level: str, *, json_output: bool = True) -> None:
@@ -42,7 +55,10 @@ def configure_logging(service: str, log_level: str, *, json_output: bool = True)
     handler.setFormatter(formatter)
 
     root = logging.getLogger()
-    root.handlers.clear()
+    root.handlers = [
+        h for h in root.handlers
+        if not isinstance(h.formatter, structlog.stdlib.ProcessorFormatter)
+    ]
     root.addHandler(handler)
     root.setLevel(log_level.upper())
 
@@ -59,8 +75,21 @@ def bind_nats_context(headers: dict[str, str] | None, **extra: str) -> None:
 
     fallback_trace_id = extract_fallback_trace_id(headers)
 
-    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.unbind_contextvars(*_TRANSIENT_CONTEXT_KEYS)
+
     if fallback_trace_id:
         structlog.contextvars.bind_contextvars(trace_id=fallback_trace_id, **extra)
     else:
         structlog.contextvars.bind_contextvars(**extra)
+
+
+@asynccontextmanager
+async def nats_handler_context(
+    msg_headers: dict[str, str] | None,
+    span_name: str,
+    span_attributes: dict[str, Any],
+    **log_context: str,
+) -> AsyncIterator[None]:
+    bind_nats_context(msg_headers, **log_context)
+    with get_tracer().start_as_current_span(span_name, attributes=span_attributes):
+        yield

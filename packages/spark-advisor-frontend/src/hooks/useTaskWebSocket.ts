@@ -1,11 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-
-interface WsMessage {
-  event: "status" | "ping";
-  task_id?: string;
-  data?: Record<string, unknown>;
-}
+import { handleMessage, type WsMessage } from "@/lib/notifications";
 
 export function useTaskWebSocket(taskIds?: string[]) {
   const queryClient = useQueryClient();
@@ -28,11 +23,7 @@ export function useTaskWebSocket(taskIds?: string[]) {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data as string) as WsMessage;
-        if (msg.event === "status" && msg.task_id) {
-          void queryClient.invalidateQueries({ queryKey: ["task", msg.task_id] });
-          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-          void queryClient.invalidateQueries({ queryKey: ["stats"] });
-        }
+        handleMessage(msg, queryClient);
       } catch {
         // ignore
       }

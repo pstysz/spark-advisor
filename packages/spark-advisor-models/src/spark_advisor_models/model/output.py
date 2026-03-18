@@ -71,6 +71,12 @@ class AdvisorReport(BaseModel):
     suggested_config: dict[str, str] = Field(default_factory=dict)
 
 
+class ErrorResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    error: str
+
+
 class AnalysisResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 

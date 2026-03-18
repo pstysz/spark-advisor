@@ -14,5 +14,14 @@ dependencies:
 - name: nats
   repository: https://nats-io.github.io/k8s/helm/charts/
   version: 1.2.6
-digest: sha256:f387c84de42eb0ce6d75656f5adcc07a2c5a3067b0bd409c25ee5375d432cf54
-generated: "2026-03-17T18:53:56.398657+01:00"
+- name: spark-advisor-prometheus
+  repository: file://../prometheus
+  version: 0.1.10
+- name: spark-advisor-tempo
+  repository: file://../tempo
+  version: 0.1.10
+- name: spark-advisor-grafana
+  repository: file://../grafana
+  version: 0.1.10
+digest: sha256:41da66336b64c01ced84f8f5b72c2942f3a23b3e9e62cce6e528be524f37d9a8
+generated: "2026-03-18T11:47:05.544737+01:00"

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 
+import pytest
 import structlog
 
-from spark_advisor_models.logging import bind_nats_context, configure_logging
+from spark_advisor_models.logging import bind_nats_context, configure_logging, nats_handler_context
 
 
 class TestConfigureLogging:
@@ -17,7 +18,11 @@ class TestConfigureLogging:
     def test_configures_root_handler(self) -> None:
         configure_logging("test-service", "INFO")
         root = logging.getLogger()
-        assert len(root.handlers) == 1
+        structlog_handlers = [
+            h for h in root.handlers
+            if isinstance(h.formatter, structlog.stdlib.ProcessorFormatter)
+        ]
+        assert len(structlog_handlers) == 1
         assert root.level == logging.INFO
 
     def test_json_renderer_produces_valid_json(self, capsys: object) -> None:
@@ -59,6 +64,31 @@ class TestConfigureLogging:
         logger = structlog.stdlib.get_logger("mymodule")
         assert logger is not None
 
+    def test_idempotent_reconfiguration(self) -> None:
+        configure_logging("svc1", "INFO")
+        configure_logging("svc2", "DEBUG")
+        root = logging.getLogger()
+        structlog_handlers = [
+            h for h in root.handlers
+            if isinstance(h.formatter, structlog.stdlib.ProcessorFormatter)
+        ]
+        assert len(structlog_handlers) == 1
+        assert root.level == logging.DEBUG
+
+    def test_preserves_non_structlog_handlers(self) -> None:
+        root = logging.getLogger()
+        pre_count = len(root.handlers)
+        external_handler = logging.StreamHandler()
+        root.addHandler(external_handler)
+        configure_logging("test-service", "INFO")
+        assert external_handler in root.handlers
+        structlog_handlers = [
+            h for h in root.handlers
+            if isinstance(h.formatter, structlog.stdlib.ProcessorFormatter)
+        ]
+        assert len(structlog_handlers) == 1
+        assert len(root.handlers) == pre_count + 2
+
 
 class TestBindNatsContext:
     def setup_method(self) -> None:
@@ -75,11 +105,20 @@ class TestBindNatsContext:
         assert ctx["app_id"] == "app-42"
         assert ctx["service"] == "analyzer"
 
-    def test_clears_previous_context(self) -> None:
-        structlog.contextvars.bind_contextvars(old_key="old_value")
-        bind_nats_context(None, service="test")
+    def test_unbinds_transient_keys_preserving_persistent(self) -> None:
+        structlog.contextvars.bind_contextvars(service="my-service", old_key="preserved")
+        bind_nats_context(None, app_id="app-1")
         ctx = structlog.contextvars.get_contextvars()
-        assert "old_key" not in ctx
+        assert ctx.get("service") == "my-service"
+        assert ctx.get("old_key") == "preserved"
+        assert ctx.get("app_id") == "app-1"
+
+    def test_clears_transient_keys_from_previous_call(self) -> None:
+        structlog.contextvars.bind_contextvars(service="svc")
+        bind_nats_context(None, app_id="app-1", service="svc")
+        bind_nats_context(None, service="svc")
+        ctx = structlog.contextvars.get_contextvars()
+        assert "app_id" not in ctx
 
     def test_attaches_otel_context_from_traceparent(self) -> None:
         from opentelemetry import trace
@@ -130,3 +169,43 @@ class TestBindNatsContext:
         bind_nats_context(None, service="analyzer")
         ctx = structlog.contextvars.get_contextvars()
         assert "trace_id" not in ctx
+
+
+class TestNatsHandlerContext:
+    def setup_method(self) -> None:
+        structlog.contextvars.clear_contextvars()
+
+    @pytest.mark.asyncio
+    async def test_binds_context_and_creates_span(self) -> None:
+        from opentelemetry import trace
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+        from opentelemetry.sdk.trace import TracerProvider
+
+        provider = TracerProvider(resource=Resource.create({SERVICE_NAME: "test"}))
+        trace.set_tracer_provider(provider)
+
+        async with nats_handler_context(
+            None, "test.span", {"key": "val"}, service="my-svc",
+        ):
+            span = trace.get_current_span()
+            assert span.get_span_context().is_valid
+            ctx = structlog.contextvars.get_contextvars()
+            assert ctx["service"] == "my-svc"
+
+    @pytest.mark.asyncio
+    async def test_span_ends_after_context_exit(self) -> None:
+        from opentelemetry import context, trace
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+        from opentelemetry.sdk.trace import TracerProvider
+
+        provider = TracerProvider(resource=Resource.create({SERVICE_NAME: "test"}))
+        trace.set_tracer_provider(provider)
+        context.attach(context.Context())
+
+        async with nats_handler_context(
+            None, "test.span", {}, service="svc",
+        ):
+            pass
+
+        span = trace.get_current_span()
+        assert not span.get_span_context().is_valid

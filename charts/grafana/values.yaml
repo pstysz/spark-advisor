@@ -1,0 +1,17 @@
+fullnameOverride: "spark-advisor-grafana"
+
+image:
+  repository: grafana/grafana
+  tag: "11.1.0"
+  pullPolicy: IfNotPresent
+
+config:
+  adminPassword: "admin"
+  prometheusUrl: "http://spark-advisor-prometheus:9090"
+  tempoUrl: "http://spark-advisor-tempo:3200"
+
+service:
+  type: ClusterIP
+  port: 3000
+
+resources: {}
