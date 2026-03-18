@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.10...spark-advisor-v0.1.11) (2026-03-18)
+
+
+### Features
+
+* observability added ([0f36172](https://github.com/pstysz/spark-advisor/commit/0f361721b15470960ca20bee2b937f9f867c04fe))
+
 ## [0.1.10](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.9...spark-advisor-v0.1.10) (2026-03-16)
 
 

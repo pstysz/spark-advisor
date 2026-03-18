@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-gateway"
-version = "0.1.10" # x-release-please-version
+version = "0.1.11" # x-release-please-version
 description = "API Gateway for spark-advisor - REST + NATS task orchestration"
 readme = "README.md"
 license = "Apache-2.0"
@@ -21,7 +21,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "spark-advisor-models==0.1.10",  # x-release-please-version
+    "spark-advisor-models==0.1.11",  # x-release-please-version
     "fastapi>=0.115",
     "uvicorn>=0.34",
     "nats-py>=2.9",
