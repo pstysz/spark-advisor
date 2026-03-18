@@ -15,7 +15,7 @@ config:
     analysisResultSubject: "analysis.result"
   otel:
     enabled: true
-    endpoint: "http://tempo:4317"
+    endpoint: "http://spark-advisor-tempo:4317"
   ai:
     enabled: true
     model: "claude-sonnet-4-6"

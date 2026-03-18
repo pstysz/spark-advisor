@@ -32,8 +32,14 @@ interface ModeBadgeProps {
   mode: AnalysisMode;
 }
 
+const modeLabels: Record<AnalysisMode, string> = {
+  static: "Static",
+  ai: "AI",
+  agent: "Agent",
+};
+
 export function ModeBadge({ mode }: ModeBadgeProps) {
-  return <span className="badge badge-mode">{mode}</span>;
+  return <span className={`badge badge-mode-${mode}`}>{modeLabels[mode]}</span>;
 }
 
 interface SourceBadgeProps {
@@ -48,5 +54,5 @@ const sourceLabels: Record<DataSource, string> = {
 };
 
 export function SourceBadge({ source }: SourceBadgeProps) {
-  return <span className="badge badge-source">{sourceLabels[source]}</span>;
+  return <span className={`badge badge-source-${source}`}>{sourceLabels[source]}</span>;
 }

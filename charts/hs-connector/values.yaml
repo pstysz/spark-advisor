@@ -15,7 +15,7 @@ config:
     jobFetchSubject: "job.fetch"
   otel:
     enabled: true
-    endpoint: "http://tempo:4317"
+    endpoint: "http://spark-advisor-tempo:4317"
   pollingEnabled: false
   historyServerUrl: "http://localhost:18080"
   historyServerTimeout: 30.0

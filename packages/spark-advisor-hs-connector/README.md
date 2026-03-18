@@ -39,6 +39,7 @@ spark-advisor-hs-connector
 | `SA_CONNECTOR_NATS__URL` | `nats://localhost:4222` | NATS broker URL |
 | `SA_CONNECTOR_POLL_INTERVAL_SECONDS` | `60` | Polling interval |
 | `SA_CONNECTOR_BATCH_SIZE` | `50` | Apps per poll cycle |
+| `SA_CONNECTOR_OTEL__ENABLED` | `false` | Enable OpenTelemetry distributed tracing |
 
 ## Links
 

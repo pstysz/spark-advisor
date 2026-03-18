@@ -22,7 +22,7 @@ from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.store import TaskStore
 from spark_advisor_gateway.ws.manager import ConnectionManager
 from spark_advisor_gateway.ws.routes import router as ws_router
-from spark_advisor_models.logging import bind_nats_context, configure_logging
+from spark_advisor_models.logging import configure_logging, nats_handler_context
 from spark_advisor_models.model import DataSource, JobAnalysis
 from spark_advisor_models.tracing import configure_tracing
 
@@ -40,17 +40,21 @@ async def handle_polling_message(
 ) -> None:
     try:
         job = JobAnalysis.model_validate(orjson.loads(msg.data))
-        bind_nats_context(msg.headers, service=settings.service_name, app_id=job.app_id)
-        result = await task_manager.create_if_not_active(
-            job.app_id, rerun=False, data_source=DataSource.HS_POLLER,
-        )
-        if result is None:
-            return
-        task, created = result
-        if not created:
-            return
-        task_executor.submit_with_job(task.task_id, job, settings.nats.polling_analysis_mode)
-        logger.info("Created task %s for polled app %s", task.task_id, job.app_id)
+        async with nats_handler_context(
+            msg.headers, "gateway.handle_polling",
+            {"app_id": job.app_id},
+            service=settings.service_name, app_id=job.app_id,
+        ):
+            result = await task_manager.create_if_not_active(
+                job.app_id, rerun=False, data_source=DataSource.HS_POLLER,
+            )
+            if result is None:
+                return
+            task, created = result
+            if not created:
+                return
+            task_executor.submit_with_job(task.task_id, job, settings.nats.polling_analysis_mode)
+            logger.info("Created task %s for polled app %s", task.task_id, job.app_id)
     except Exception:
         logger.exception("Failed to handle polling message")
 

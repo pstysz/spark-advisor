@@ -9,7 +9,7 @@
     <a href="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml"><img src="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
     <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
-    <img src="https://img.shields.io/badge/tests-535%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-570%20passing-brightgreen" alt="Tests">
   </p>
   <p>
     <img src="https://img.shields.io/badge/Spark-E25A1C?logo=apachespark&logoColor=white" alt="Apache Spark">
@@ -83,7 +83,7 @@ The rules engine runs for free and catches known patterns. The AI layer adds con
 - **AI advisor** with Claude API — prioritized recommendations with causal chains and concrete config values
 - **Agent mode** — multi-turn Claude analysis where AI autonomously explores job data using 6 tools
 - **MCP server** — use spark-advisor as tools in Claude Desktop, Cursor, or any MCP client
-- **Dashboard-ready REST API** — 18 endpoints with pagination, filtering, statistics, config comparison, WebSocket streaming
+- **REST API** — 18 endpoints with pagination, filtering, statistics, config comparison, WebSocket streaming
 - **3 microservices** — NATS-based distributed pipeline (gateway, analyzer, hs-connector)
 - **Observability** — structlog structured logging, OpenTelemetry distributed tracing (W3C Traceparent via NATS, Grafana Tempo), optional Prometheus metrics + Grafana dashboard
 - **Streaming parser** — processes 100MB+ event log files line-by-line without loading into memory
@@ -458,7 +458,7 @@ graph TB
 
 ```bash
 make check       # Lint + mypy + all tests (CI-ready)
-make test        # Run 535 tests across 8 packages
+make test        # Run 570 tests across 7 packages
 make lint        # Ruff + mypy (strict)
 make format      # Auto-format code
 make demo-local  # Run rules-only analysis on sample event log
@@ -494,12 +494,13 @@ make monitoring-down # Stop monitoring stack
 | **structlog**         | Structured logging (JSON/console, correlation IDs)    |
 | **Prometheus**        | Metrics collection (gateway, optional)                |
 | **Grafana**           | Monitoring dashboard (optional)                       |
+| **OpenTelemetry**     | Distributed tracing (W3C Traceparent, Grafana Tempo)  |
 | **Helm**              | Kubernetes deployment (umbrella chart + 4 subcharts)  |
 | **Docker**            | Multi-stage builds with uv, published to ghcr.io      |
 
 ### Testing
 
-535 tests across 8 packages: models (18), rules (45), cli (78), analyzer (86), hs-connector (68), gateway (165), mcp (75).
+570 tests across 7 packages: models (47), rules (45), cli (78), analyzer (86), hs-connector (68), gateway (171), mcp (75).
 
 ```bash
 uv run pytest -v               # all packages
@@ -516,19 +517,19 @@ cd packages/spark-advisor-rules && uv run pytest -v  # single package
 - [x] uv monorepo (8 packages)
 - [x] 3 NATS-based microservices (gateway, analyzer, hs-connector)
 - [x] Agent mode — multi-turn Claude analysis with 6 tools
-- [x] MCP server — Claude Desktop / Cursor integration (5 tools)
+- [x] MCP server — Claude Desktop / Cursor integration (7 tools)
 - [x] GitHub Actions CI (lint + test + Helm lint)
-- [x] Helm charts for Kubernetes deployment (umbrella chart + 3 subcharts)
+- [x] Helm charts for Kubernetes deployment (umbrella chart + 4 subcharts)
 - [x] Docker images published to ghcr.io on release
 - [x] PyPI release (`pip install spark-advisor`)
 - [x] Task persistence (SQLite + SQLAlchemy async)
 - [x] Task deduplication with rerun support
-- [x] Dashboard REST API (13 endpoints + WebSocket)
+- [x] Dashboard REST API (18 endpoints + WebSocket)
 - [x] Statistics aggregation (summary, rule frequency, daily volume, top issues)
 - [x] OpenAPI schema with examples and tagged endpoints
 - [x] Web dashboard — React 19 SPA with real-time updates, statistics, analysis submission
 - [x] Structured logging (structlog) with JSON/console rendering
-- [x] Correlation ID tracing across NATS microservices
+- [x] OpenTelemetry distributed tracing (W3C Traceparent via NATS headers, Grafana Tempo)
 - [x] Prometheus metrics + Grafana dashboard (optional)
 - [x] Extended health checks (NATS connectivity, SQLite)
 - [ ] Terminal demo GIF

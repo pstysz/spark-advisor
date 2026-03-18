@@ -36,6 +36,7 @@ Or use via `spark-advisor` CLI or `spark-advisor-mcp` server.
 | `SA_ANALYZER_NATS__URL` | `nats://localhost:4222` | NATS broker URL |
 | `SA_ANALYZER_AI__ENABLED` | `true` | Enable AI analysis |
 | `ANTHROPIC_API_KEY` | — | Claude API key (required if AI enabled) |
+| `SA_ANALYZER_OTEL__ENABLED` | `false` | Enable OpenTelemetry distributed tracing |
 
 ## Links
 

@@ -6,6 +6,10 @@ export function useTask(taskId: string) {
   return useQuery({
     queryKey: ["task", taskId],
     queryFn: () => get<TaskResponse>(`/tasks/${taskId}`),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "pending" || status === "running" ? 2000 : false;
+    },
   });
 }
 

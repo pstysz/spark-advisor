@@ -24,3 +24,12 @@ nats:
   config:
     jetstream:
       enabled: true
+
+prometheus:
+  enabled: false
+
+tempo:
+  enabled: false
+
+grafana:
+  enabled: false

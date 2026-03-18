@@ -27,7 +27,7 @@ config:
     listAppsTimeout: 10.0
   otel:
     enabled: true
-    endpoint: "http://tempo:4317"
+    endpoint: "http://spark-advisor-tempo:4317"
   databaseUrl: "sqlite+aiosqlite:////data/spark_advisor.db"
   wsHeartbeatInterval: 30
   persistence:
