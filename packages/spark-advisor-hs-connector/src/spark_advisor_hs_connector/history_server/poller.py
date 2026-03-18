@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
+
+import structlog
 
 from spark_advisor_hs_connector.job_analysis_builder import fetch_job_analysis
 
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
     from spark_advisor_hs_connector.history_server.client import HistoryServerClient
     from spark_advisor_hs_connector.store import PollingStore
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 class HistoryServerPoller:

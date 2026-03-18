@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 import orjson
+import structlog
 from fastapi import HTTPException
 from pydantic import TypeAdapter
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from spark_advisor_gateway.config import GatewaySettings
     from spark_advisor_gateway.task.manager import TaskManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 _APP_LIST_ADAPTER: TypeAdapter[list[ApplicationSummary]] = TypeAdapter(list[ApplicationSummary])
 
@@ -55,6 +55,8 @@ class TaskExecutor:
         task.add_done_callback(self._background_tasks.discard)
 
     async def _execute(self, task_id: str, app_id: str, mode: AnalysisMode = AnalysisMode.AI) -> None:
+        structlog.contextvars.bind_contextvars(task_id=task_id, app_id=app_id)
+        headers = {"X-Correlation-ID": task_id}
         try:
             await self._tasks.mark_running(task_id)
 
@@ -62,6 +64,7 @@ class TaskExecutor:
                 self._settings.nats.job_fetch_subject,
                 orjson.dumps({"app_id": app_id}),
                 timeout=self._settings.nats.fetch_timeout,
+                headers=headers,
             )
 
             job_payload = fetch_job_reply.data
@@ -70,23 +73,27 @@ class TaskExecutor:
                 await self._tasks.mark_failed(task_id, f"Fetch failed: {job_data['error']}")
                 return
 
-            await self._analyze_and_mark_completed(task_id, job_payload, mode)
+            await self._analyze_and_mark_completed(task_id, job_payload, mode, headers)
 
         except Exception as e:
             logger.exception("Task %s failed", task_id)
             await self._tasks.mark_failed(task_id, str(e))
 
     async def _execute_with_job(self, task_id: str, job: JobAnalysis, mode: AnalysisMode = AnalysisMode.AI) -> None:
+        structlog.contextvars.bind_contextvars(task_id=task_id, app_id=job.app_id)
+        headers = {"X-Correlation-ID": task_id}
         try:
             await self._tasks.mark_running(task_id)
             job_data = orjson.dumps(job.model_dump(mode="json"))
-            await self._analyze_and_mark_completed(task_id, job_data, mode)
+            await self._analyze_and_mark_completed(task_id, job_data, mode, headers)
 
         except Exception as e:
             logger.exception("Task %s failed", task_id)
             await self._tasks.mark_failed(task_id, str(e))
 
-    async def _analyze_and_mark_completed(self, task_id: str, job_payload: bytes, mode: AnalysisMode) -> None:
+    async def _analyze_and_mark_completed(
+        self, task_id: str, job_payload: bytes, mode: AnalysisMode, headers: dict[str, str] | None = None,
+    ) -> None:
         if mode == AnalysisMode.AGENT:
             subject = self._settings.nats.analysis_run_agent_subject
             timeout = self._settings.nats.analyze_agent_timeout
@@ -98,6 +105,7 @@ class TaskExecutor:
             subject,
             job_payload,
             timeout=timeout,
+            headers=headers,
         )
 
         analyze_data = orjson.loads(analyze_reply.data)

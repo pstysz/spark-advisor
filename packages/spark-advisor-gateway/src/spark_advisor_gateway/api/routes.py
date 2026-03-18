@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Annotated, Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from spark_advisor_gateway.api.schemas import (
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from spark_advisor_gateway.task.executor import TaskExecutor
     from spark_advisor_gateway.task.manager import TaskManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 def _from_state(key: StateKey) -> Callable[..., Any]:

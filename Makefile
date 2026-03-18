@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format check demo-local demo-remote up down clean docker-local minikube-deploy frontend-install frontend-build frontend-dev frontend-lint
+.PHONY: install dev test lint format check demo-local demo-remote up down clean docker-local minikube-deploy frontend-install frontend-build frontend-dev frontend-lint monitoring-up monitoring-down
 
 PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-cli packages/spark-advisor-analyzer packages/spark-advisor-hs-connector packages/spark-advisor-gateway packages/spark-advisor-mcp
 
@@ -82,6 +82,12 @@ frontend-dev:
 
 frontend-lint:
 	cd $(FRONTEND_DIR) && npm run type-check && npm run lint
+
+monitoring-up:
+	docker compose -f monitoring/docker-compose.monitoring.yaml up -d
+
+monitoring-down:
+	docker compose -f monitoring/docker-compose.monitoring.yaml down
 
 clean:
 	rm -rf dist/ build/ *.egg-info .mypy_cache .pytest_cache .ruff_cache htmlcov/

@@ -1,8 +1,8 @@
 import asyncio
-import logging
 
+import structlog
 from faststream.context import Context
-from faststream.nats import NatsRouter
+from faststream.nats import NatsMessage, NatsRouter
 from pydantic import BaseModel
 
 from spark_advisor_analyzer.config import ContextKey
@@ -12,10 +12,11 @@ from spark_advisor_models.defaults import (
     NATS_ANALYSIS_RUN_AGENT_SUBJECT,
     NATS_ANALYSIS_RUN_SUBJECT,
 )
+from spark_advisor_models.logging import bind_nats_context
 from spark_advisor_models.model import AnalysisMode, AnalysisResult, JobAnalysis
 
 router = NatsRouter()
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 class ErrorResponse(BaseModel):
@@ -26,8 +27,10 @@ class ErrorResponse(BaseModel):
 @router.publisher(NATS_ANALYSIS_RESULT_SUBJECT)
 async def handle_analyze(
     job: JobAnalysis,
+    msg: NatsMessage,
     orchestrator: AdviceOrchestrator = Context(ContextKey.ORCHESTRATOR),  # type: ignore[assignment]  # noqa: B008
 ) -> AnalysisResult | ErrorResponse:
+    bind_nats_context(msg.headers, app_id=job.app_id, service="analyzer")
     try:
         return await asyncio.to_thread(orchestrator.run, job)
     except Exception as e:
@@ -39,8 +42,10 @@ async def handle_analyze(
 @router.publisher(NATS_ANALYSIS_RESULT_SUBJECT)
 async def handle_agent_analyze(
     job: JobAnalysis,
+    msg: NatsMessage,
     orchestrator: AdviceOrchestrator = Context(ContextKey.ORCHESTRATOR),  # type: ignore[assignment]  # noqa: B008
 ) -> AnalysisResult | ErrorResponse:
+    bind_nats_context(msg.headers, app_id=job.app_id, service="analyzer")
     try:
         return await asyncio.to_thread(orchestrator.run, job, mode=AnalysisMode.AGENT)
     except Exception as e:

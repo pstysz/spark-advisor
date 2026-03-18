@@ -13,6 +13,7 @@ class BaseServiceSettings(BaseSettings):
     )
 
     log_level: str = "INFO"
+    json_log: bool = False
 
     @classmethod
     def settings_customise_sources(

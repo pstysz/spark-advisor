@@ -9,7 +9,7 @@
     <a href="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml"><img src="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
     <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
-    <img src="https://img.shields.io/badge/tests-525%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-535%20passing-brightgreen" alt="Tests">
   </p>
   <p>
     <img src="https://img.shields.io/badge/Spark-E25A1C?logo=apachespark&logoColor=white" alt="Apache Spark">
@@ -83,8 +83,9 @@ The rules engine runs for free and catches known patterns. The AI layer adds con
 - **AI advisor** with Claude API — prioritized recommendations with causal chains and concrete config values
 - **Agent mode** — multi-turn Claude analysis where AI autonomously explores job data using 6 tools
 - **MCP server** — use spark-advisor as tools in Claude Desktop, Cursor, or any MCP client
-- **Dashboard-ready REST API** — 13 endpoints with pagination, filtering, statistics, config comparison, WebSocket streaming
+- **Dashboard-ready REST API** — 18 endpoints with pagination, filtering, statistics, config comparison, WebSocket streaming
 - **3 microservices** — NATS-based distributed pipeline (gateway, analyzer, hs-connector)
+- **Observability** — structlog structured logging, correlation ID tracing via NATS, optional Prometheus metrics + Grafana dashboard
 - **Streaming parser** — processes 100MB+ event log files line-by-line without loading into memory
 - **Web dashboard** — React 19 SPA with real-time task updates, analysis submission, statistics charts, config comparison
 - **Rich CLI** — tables, colors, severity badges, suggested spark-defaults.conf
@@ -365,6 +366,31 @@ charts/
 
 Each service has a ConfigMap mapping `values.yaml` to the `SA_*` environment variables expected by pydantic-settings. NATS URL is auto-resolved from the release name when deployed via the umbrella chart.
 
+### Observability (optional)
+
+Observability is **disabled by default** for docker-compose (local dev) and **enabled by default** in Helm charts (production). Services work out-of-the-box with console logging — no extra configuration needed for local development.
+
+Helm charts ship with `jsonLog: true` and `metricsEnabled: true`. To override for debugging:
+
+```bash
+helm install spark-advisor charts/spark-advisor \
+  --set gateway.config.jsonLog=false    # console logging in pod
+```
+
+| Feature | Env var | Default (docker-compose) | Default (Helm) | Description |
+|---------|---------|-------------------------|----------------|-------------|
+| JSON logging | `SA_*_JSON_LOG` | `false` | `true` | Structured JSON logs (structlog) |
+| Prometheus metrics | `SA_GATEWAY_METRICS_ENABLED` | `false` | `true` | `/metrics` endpoint on gateway |
+| Correlation ID | Always on | — | — | `X-Correlation-ID` header propagated via NATS |
+| Health checks | Always on | — | — | `/health/ready` (gateway), NATS exec probes (analyzer, hs-connector) |
+
+Optional Grafana + Prometheus stack (requires `make up` running first):
+```bash
+SA_GATEWAY_METRICS_ENABLED=true make up   # Enable /metrics for Prometheus scraping
+make monitoring-up                         # Start Prometheus (localhost:9090) + Grafana (localhost:3001)
+make monitoring-down                       # Stop monitoring
+```
+
 Docker images are published to GitHub Container Registry on each release:
 - `ghcr.io/pstysz/spark-advisor-analyzer`
 - `ghcr.io/pstysz/spark-advisor-gateway`
@@ -429,12 +455,14 @@ graph TB
 
 ```bash
 make check       # Lint + mypy + all tests (CI-ready)
-make test        # Run 525 tests across 8 packages
+make test        # Run 535 tests across 8 packages
 make lint        # Ruff + mypy (strict)
 make format      # Auto-format code
 make demo-local  # Run rules-only analysis on sample event log
 make up          # Start microservices (docker compose)
 make down        # Stop microservices
+make monitoring-up   # Start Prometheus + Grafana (optional)
+make monitoring-down # Stop monitoring stack
 ```
 
 ### Tech Stack
@@ -460,12 +488,15 @@ make down        # Stop microservices
 | **pytest**            | Testing with coverage and fixtures                    |
 | **SQLAlchemy**        | Async ORM for task persistence (SQLite + WAL mode)    |
 | **aiosqlite**         | Async SQLite driver for SQLAlchemy                    |
-| **Helm**              | Kubernetes deployment (umbrella chart + 3 subcharts)  |
+| **structlog**         | Structured logging (JSON/console, correlation IDs)    |
+| **Prometheus**        | Metrics collection (gateway, optional)                |
+| **Grafana**           | Monitoring dashboard (optional)                       |
+| **Helm**              | Kubernetes deployment (umbrella chart + 4 subcharts)  |
 | **Docker**            | Multi-stage builds with uv, published to ghcr.io      |
 
 ### Testing
 
-525 tests across 8 packages: models (10), rules (45), cli (78), analyzer (86), hs-connector (68), gateway (132), mcp (75), frontend (30).
+535 tests across 8 packages: models (18), rules (45), cli (78), analyzer (86), hs-connector (68), gateway (165), mcp (75).
 
 ```bash
 uv run pytest -v               # all packages
@@ -493,6 +524,10 @@ cd packages/spark-advisor-rules && uv run pytest -v  # single package
 - [x] Statistics aggregation (summary, rule frequency, daily volume, top issues)
 - [x] OpenAPI schema with examples and tagged endpoints
 - [x] Web dashboard — React 19 SPA with real-time updates, statistics, analysis submission
+- [x] Structured logging (structlog) with JSON/console rendering
+- [x] Correlation ID tracing across NATS microservices
+- [x] Prometheus metrics + Grafana dashboard (optional)
+- [x] Extended health checks (NATS connectivity, SQLite)
 - [ ] Terminal demo GIF
 
 ## License

@@ -1,7 +1,7 @@
 import json
-import logging
 from typing import Any
 
+import structlog
 from anthropic.types import (
     Message,
     MessageParam,
@@ -22,7 +22,7 @@ from spark_advisor_models.config import AiSettings
 from spark_advisor_models.model import AnalysisResult, AnalysisToolInput, JobAnalysis
 from spark_advisor_rules import StaticAnalysisService
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 class AgentOrchestrator:
