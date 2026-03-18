@@ -61,6 +61,18 @@
         {
           "type": "generic",
           "path": "charts/spark-advisor/Chart.yaml"
+        },
+        {
+          "type": "generic",
+          "path": "charts/prometheus/Chart.yaml"
+        },
+        {
+          "type": "generic",
+          "path": "charts/grafana/Chart.yaml"
+        },
+        {
+          "type": "generic",
+          "path": "charts/tempo/Chart.yaml"
         }
       ]
     }
