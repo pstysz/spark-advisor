@@ -6,12 +6,16 @@ image:
   pullPolicy: IfNotPresent
 
 config:
+  serviceName: "spark-advisor-analyzer"
   logLevel: "INFO"
   jsonLog: true
   nats:
     url: "nats://localhost:4222"
     analysisRunSubject: "analysis.run"
     analysisResultSubject: "analysis.result"
+  otel:
+    enabled: true
+    endpoint: "http://tempo:4317"
   ai:
     enabled: true
     model: "claude-sonnet-4-6"

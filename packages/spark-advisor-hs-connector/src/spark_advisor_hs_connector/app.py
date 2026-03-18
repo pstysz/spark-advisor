@@ -11,6 +11,7 @@ from spark_advisor_hs_connector.history_server.client import HistoryServerClient
 from spark_advisor_hs_connector.history_server.poller import HistoryServerPoller
 from spark_advisor_hs_connector.store import PollingStore
 from spark_advisor_models.logging import configure_logging
+from spark_advisor_models.tracing import configure_tracing
 
 settings = ConnectorSettings()
 broker = NatsBroker(settings.nats.url)
@@ -22,7 +23,13 @@ logger = structlog.stdlib.get_logger(__name__)
 
 @app.on_startup
 async def on_startup() -> None:
-    configure_logging("hs-connector", settings.log_level, json_output=settings.json_log)
+    configure_logging(settings.service_name, settings.log_level, json_output=settings.json_log)
+    configure_tracing(settings.service_name, settings.otel.endpoint, enabled=settings.otel.enabled)
+
+    if settings.otel.enabled:
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+        HTTPXClientInstrumentor().instrument()
 
     hs_client = HistoryServerClient(settings.history_server_url, settings.history_server_timeout)
     hs_client.open()
@@ -41,6 +48,7 @@ async def on_startup() -> None:
     app.context.set_global(ContextKey.POLLER, poller)
     app.context.set_global(ContextKey.HS_CLIENT, hs_client)
     app.context.set_global(ContextKey.POLLING_STATE, polling_state)
+    app.context.set_global(ContextKey.SERVICE_NAME, settings.service_name)
 
     logger.info(
         "HS Connector started: history_server=%s poll_interval=%ds",

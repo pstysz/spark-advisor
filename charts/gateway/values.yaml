@@ -6,6 +6,7 @@ image:
   pullPolicy: IfNotPresent
 
 config:
+  serviceName: "spark-advisor-gateway"
   logLevel: "INFO"
   jsonLog: true
   metricsEnabled: true
@@ -24,6 +25,9 @@ config:
     analyzeTimeout: 120.0
     analyzeAgentTimeout: 300.0
     listAppsTimeout: 10.0
+  otel:
+    enabled: true
+    endpoint: "http://tempo:4317"
   databaseUrl: "sqlite+aiosqlite:////data/spark_advisor.db"
   wsHeartbeatInterval: 30
   persistence:

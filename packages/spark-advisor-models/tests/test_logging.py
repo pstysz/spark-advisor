@@ -64,25 +64,69 @@ class TestBindNatsContext:
     def setup_method(self) -> None:
         structlog.contextvars.clear_contextvars()
 
-    def test_binds_correlation_id_from_headers(self) -> None:
-        bind_nats_context({"X-Correlation-ID": "task-123"}, service="analyzer")
+    def test_binds_service_from_kwargs(self) -> None:
+        bind_nats_context(None, service="analyzer")
         ctx = structlog.contextvars.get_contextvars()
-        assert ctx["correlation_id"] == "task-123"
         assert ctx["service"] == "analyzer"
 
-    def test_empty_correlation_id_when_no_headers(self) -> None:
-        bind_nats_context(None, service="hs-connector")
-        ctx = structlog.contextvars.get_contextvars()
-        assert ctx["correlation_id"] == ""
-        assert ctx["service"] == "hs-connector"
-
-    def test_extra_kwargs_bound(self) -> None:
-        bind_nats_context({"X-Correlation-ID": "t-1"}, app_id="app-42", service="analyzer")
+    def test_binds_extra_kwargs(self) -> None:
+        bind_nats_context(None, app_id="app-42", service="analyzer")
         ctx = structlog.contextvars.get_contextvars()
         assert ctx["app_id"] == "app-42"
+        assert ctx["service"] == "analyzer"
 
     def test_clears_previous_context(self) -> None:
         structlog.contextvars.bind_contextvars(old_key="old_value")
         bind_nats_context(None, service="test")
         ctx = structlog.contextvars.get_contextvars()
         assert "old_key" not in ctx
+
+    def test_attaches_otel_context_from_traceparent(self) -> None:
+        from opentelemetry import trace
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+        from opentelemetry.sdk.trace import TracerProvider
+
+        provider = TracerProvider(resource=Resource.create({SERVICE_NAME: "test"}))
+        trace.set_tracer_provider(provider)
+        tracer = trace.get_tracer("test")
+
+        with tracer.start_as_current_span("parent") as span:
+            from spark_advisor_models.tracing import inject_trace_context
+
+            headers: dict[str, str] = {}
+            inject_trace_context(headers)
+
+        bind_nats_context(headers, service="analyzer")
+        current_span = trace.get_current_span()
+        assert current_span.get_span_context().trace_id == span.get_span_context().trace_id
+
+    def test_no_fallback_trace_id_when_otel_active(self) -> None:
+        from opentelemetry import trace
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+        from opentelemetry.sdk.trace import TracerProvider
+
+        provider = TracerProvider(resource=Resource.create({SERVICE_NAME: "test"}))
+        trace.set_tracer_provider(provider)
+        tracer = trace.get_tracer("test")
+
+        with tracer.start_as_current_span("parent"):
+            from spark_advisor_models.tracing import inject_trace_context
+
+            headers: dict[str, str] = {}
+            inject_trace_context(headers)
+
+        bind_nats_context(headers, service="analyzer")
+        ctx = structlog.contextvars.get_contextvars()
+        assert "trace_id" not in ctx
+
+    def test_trace_id_fallback_to_header(self) -> None:
+        from spark_advisor_models.tracing import TRACE_ID_HEADER
+
+        bind_nats_context({TRACE_ID_HEADER: "uuid-123"}, service="analyzer")
+        ctx = structlog.contextvars.get_contextvars()
+        assert ctx["trace_id"] == "uuid-123"
+
+    def test_no_trace_id_when_no_otel_no_header(self) -> None:
+        bind_nats_context(None, service="analyzer")
+        ctx = structlog.contextvars.get_contextvars()
+        assert "trace_id" not in ctx

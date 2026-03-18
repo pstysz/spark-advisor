@@ -11,6 +11,7 @@ class ContextKey(StrEnum):
     HS_CLIENT = "hs_client"
     POLLING_TASK = "polling_task"
     POLLING_STATE = "polling_state"
+    SERVICE_NAME = "service_name"
 
 
 class ConnectorNatsSettings(NatsSettings):
@@ -24,6 +25,7 @@ class ConnectorSettings(BaseServiceSettings):
         yaml_file="/etc/spark-advisor/hs-connector/config.yaml",
     )
 
+    service_name: str = "spark-advisor-hs-connector"
     nats: ConnectorNatsSettings = ConnectorNatsSettings()
     polling_enabled: bool = False
     history_server_url: str = "http://localhost:18080"

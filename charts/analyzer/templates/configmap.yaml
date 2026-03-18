@@ -5,11 +5,14 @@ metadata:
   labels:
     {{- include "analyzer.labels" . | nindent 4 }}
 data:
+  SA_ANALYZER_SERVICE_NAME: {{ .Values.config.serviceName | quote }}
   SA_ANALYZER_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
   SA_ANALYZER_JSON_LOG: {{ .Values.config.jsonLog | quote }}
   SA_ANALYZER_NATS__URL: {{ .Values.config.nats.url | quote }}
   SA_ANALYZER_NATS__ANALYSIS_RUN_SUBJECT: {{ .Values.config.nats.analysisRunSubject | quote }}
   SA_ANALYZER_NATS__ANALYSIS_RESULT_SUBJECT: {{ .Values.config.nats.analysisResultSubject | quote }}
+  SA_ANALYZER_OTEL__ENABLED: {{ .Values.config.otel.enabled | quote }}
+  SA_ANALYZER_OTEL__ENDPOINT: {{ .Values.config.otel.endpoint | quote }}
   SA_ANALYZER_AI__ENABLED: {{ .Values.config.ai.enabled | quote }}
   SA_ANALYZER_AI__MODEL: {{ .Values.config.ai.model | quote }}
   SA_ANALYZER_AI__API_TIMEOUT: {{ .Values.config.ai.apiTimeout | quote }}

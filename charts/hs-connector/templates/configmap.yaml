@@ -5,11 +5,14 @@ metadata:
   labels:
     {{- include "hs-connector.labels" . | nindent 4 }}
 data:
+  SA_CONNECTOR_SERVICE_NAME: {{ .Values.config.serviceName | quote }}
   SA_CONNECTOR_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
   SA_CONNECTOR_JSON_LOG: {{ .Values.config.jsonLog | quote }}
   SA_CONNECTOR_NATS__URL: {{ .Values.config.nats.url | quote }}
   SA_CONNECTOR_NATS__ANALYSIS_SUBMIT_SUBJECT: {{ .Values.config.nats.analysisSubmitSubject | quote }}
   SA_CONNECTOR_NATS__JOB_FETCH_SUBJECT: {{ .Values.config.nats.jobFetchSubject | quote }}
+  SA_CONNECTOR_OTEL__ENABLED: {{ .Values.config.otel.enabled | quote }}
+  SA_CONNECTOR_OTEL__ENDPOINT: {{ .Values.config.otel.endpoint | quote }}
   SA_CONNECTOR_POLLING_ENABLED: {{ .Values.config.pollingEnabled | quote }}
   SA_CONNECTOR_HISTORY_SERVER_URL: {{ .Values.config.historyServerUrl | quote }}
   SA_CONNECTOR_HISTORY_SERVER_TIMEOUT: {{ .Values.config.historyServerTimeout | quote }}
