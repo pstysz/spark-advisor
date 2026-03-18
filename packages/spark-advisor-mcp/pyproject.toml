@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-mcp"
-version = "0.1.11" # x-release-please-version
+version = "0.1.12" # x-release-please-version
 description = "MCP server exposing spark-advisor tools for Claude Desktop and other MCP clients"
 readme = "README.md"
 license = "Apache-2.0"
@@ -19,11 +19,11 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "spark-advisor-models==0.1.11",  # x-release-please-version
-    "spark-advisor-rules==0.1.11",  # x-release-please-version
-    "spark-advisor-analyzer==0.1.11",  # x-release-please-version
-    "spark-advisor-hs-connector==0.1.11",  # x-release-please-version
-    "spark-advisor-cli==0.1.11",  # x-release-please-version
+    "spark-advisor-models==0.1.12",  # x-release-please-version
+    "spark-advisor-rules==0.1.12",  # x-release-please-version
+    "spark-advisor-analyzer==0.1.12",  # x-release-please-version
+    "spark-advisor-hs-connector==0.1.12",  # x-release-please-version
+    "spark-advisor-cli==0.1.12",  # x-release-please-version
     "mcp>=1.26",
 ]
 

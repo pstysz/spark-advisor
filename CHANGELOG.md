@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.11...spark-advisor-v0.1.12) (2026-03-18)
+
+
+### Bug Fixes
+
+* release please version ([aa2c3ea](https://github.com/pstysz/spark-advisor/commit/aa2c3ead971d62acb5854c6fe7af9e2adc814e10))
+
 ## [0.1.11](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.10...spark-advisor-v0.1.11) (2026-03-18)
 
 
