@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RecommendationInput(BaseModel):
@@ -22,6 +22,7 @@ class AnalysisToolInput(BaseModel):
     severity: Literal["critical", "warning", "info"] = Field(description="Overall severity of findings.")
     recommendations: list[RecommendationInput] = Field(description="Prioritized list of recommendations (max 7).")
     causal_chain: str = Field(description="Causal chain between related problems, if any. Empty string if none.")
+
 
 class FetchJobRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
