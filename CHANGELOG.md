@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.13](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.12...spark-advisor-v0.1.13) (2026-03-18)
+
+
+### Bug Fixes
+
+* missing fe packages in Dockerfile ([6e93e72](https://github.com/pstysz/spark-advisor/commit/6e93e72bec67a412cab9584d1b472fe0375fbc85))
+* missing fe packages in Dockerfile ([72a0a7e](https://github.com/pstysz/spark-advisor/commit/72a0a7e04a2e61fd5ce79b9d7d668a0e99c1212c))
+
 ## [0.1.12](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.11...spark-advisor-v0.1.12) (2026-03-18)
 
 
