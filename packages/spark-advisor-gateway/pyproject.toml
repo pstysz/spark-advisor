@@ -30,6 +30,7 @@ dependencies = [
     "aiosqlite>=0.20",
     "prometheus-client>=0.21",
     "prometheus-fastapi-instrumentator>=7.0",
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
 ]
 
 [project.urls]

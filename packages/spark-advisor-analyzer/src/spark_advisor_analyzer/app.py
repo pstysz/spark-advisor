@@ -9,6 +9,7 @@ from spark_advisor_analyzer.config import AnalyzerSettings, ContextKey
 from spark_advisor_analyzer.factory import create_analysis_stack
 from spark_advisor_analyzer.handlers import router
 from spark_advisor_models.logging import configure_logging
+from spark_advisor_models.tracing import configure_tracing
 
 settings = AnalyzerSettings()
 broker = NatsBroker(settings.nats.url)
@@ -20,7 +21,8 @@ logger = structlog.stdlib.get_logger(__name__)
 
 @app.on_startup
 async def on_startup() -> None:
-    configure_logging("analyzer", settings.log_level, json_output=settings.json_log)
+    configure_logging(settings.service_name, settings.log_level, json_output=settings.json_log)
+    configure_tracing(settings.service_name, settings.otel.endpoint, enabled=settings.otel.enabled)
 
     ai_client: AnthropicClient | None = None
     if settings.ai.enabled and os.environ.get("ANTHROPIC_API_KEY"):
@@ -36,6 +38,7 @@ async def on_startup() -> None:
         thresholds=settings.thresholds,
     )
     app.context.set_global(ContextKey.ORCHESTRATOR, orchestrator)
+    app.context.set_global(ContextKey.SERVICE_NAME, settings.service_name)
 
     logger.info(
         "Analyzer started: ai_enabled=%s model=%s",

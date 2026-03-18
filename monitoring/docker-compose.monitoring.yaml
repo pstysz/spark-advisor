@@ -8,6 +8,17 @@ services:
     networks:
       - spark-advisor_default
 
+  tempo:
+    image: grafana/tempo:2.5.0
+    command: ["-config.file=/etc/tempo.yaml"]
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml:ro
+    networks:
+      - spark-advisor_default
+
   grafana:
     image: grafana/grafana:11.1.0
     ports:

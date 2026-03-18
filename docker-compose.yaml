@@ -24,6 +24,8 @@ services:
       SA_ANALYZER_NATS__URL: "nats://nats:4222"
       SA_ANALYZER_AI__ENABLED: "true"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      SA_ANALYZER_OTEL__ENABLED: "${SA_OTEL_ENABLED:-false}"
+      SA_ANALYZER_OTEL__ENDPOINT: "${SA_OTEL_ENDPOINT:-http://tempo:4317}"
 
   hs-connector:
     build:
@@ -37,6 +39,8 @@ services:
       SA_CONNECTOR_POLLING_ENABLED: "${SA_CONNECTOR_POLLING_ENABLED:-false}"
       SA_CONNECTOR_HISTORY_SERVER_URL: "${SPARK_HISTORY_SERVER_URL:-http://host.docker.internal:18080}"
       SA_CONNECTOR_DATABASE_URL: "sqlite+aiosqlite:////data/hs_connector.db"
+      SA_CONNECTOR_OTEL__ENABLED: "${SA_OTEL_ENABLED:-false}"
+      SA_CONNECTOR_OTEL__ENDPOINT: "${SA_OTEL_ENDPOINT:-http://tempo:4317}"
     volumes:
       - hs-connector-data:/data
 
@@ -52,6 +56,8 @@ services:
     environment:
       SA_GATEWAY_NATS__URL: "nats://nats:4222"
       SA_GATEWAY_DATABASE_URL: "sqlite+aiosqlite:////data/spark_advisor.db"
+      SA_GATEWAY_OTEL__ENABLED: "${SA_OTEL_ENABLED:-false}"
+      SA_GATEWAY_OTEL__ENDPOINT: "${SA_OTEL_ENDPOINT:-http://tempo:4317}"
     volumes:
       - gateway-data:/data
     healthcheck:

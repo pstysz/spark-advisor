@@ -25,6 +25,7 @@ dependencies = [
     "faststream[nats]>=0.6",
     "sqlalchemy[asyncio]>=2.0",
     "aiosqlite>=0.20",
+    "opentelemetry-instrumentation-httpx>=0.46b0",
 ]
 
 [project.urls]

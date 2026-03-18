@@ -22,8 +22,9 @@ from spark_advisor_gateway.task.manager import TaskManager
 from spark_advisor_gateway.task.store import TaskStore
 from spark_advisor_gateway.ws.manager import ConnectionManager
 from spark_advisor_gateway.ws.routes import router as ws_router
-from spark_advisor_models.logging import configure_logging
+from spark_advisor_models.logging import bind_nats_context, configure_logging
 from spark_advisor_models.model import DataSource, JobAnalysis
+from spark_advisor_models.tracing import configure_tracing
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -39,6 +40,7 @@ async def handle_polling_message(
 ) -> None:
     try:
         job = JobAnalysis.model_validate(orjson.loads(msg.data))
+        bind_nats_context(msg.headers, service=settings.service_name, app_id=job.app_id)
         result = await task_manager.create_if_not_active(
             job.app_id, rerun=False, data_source=DataSource.HS_POLLER,
         )
@@ -96,6 +98,11 @@ def create_app(settings: GatewaySettings) -> FastAPI:
 
     setup_metrics(app, enabled=settings.metrics_enabled)
 
+    if settings.otel.enabled:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+        FastAPIInstrumentor.instrument_app(app)
+
     app.include_router(create_health_router())
     app.include_router(create_router())
     app.include_router(ws_router)
@@ -113,6 +120,7 @@ def create_app(settings: GatewaySettings) -> FastAPI:
 
 def main() -> None:
     settings = GatewaySettings()
-    configure_logging("gateway", settings.log_level, json_output=settings.json_log)
+    configure_logging(settings.service_name, settings.log_level, json_output=settings.json_log)
+    configure_tracing(settings.service_name, settings.otel.endpoint, enabled=settings.otel.enabled)
     app = create_app(settings)
     uvicorn.run(app, host=settings.server.host, port=settings.server.port)

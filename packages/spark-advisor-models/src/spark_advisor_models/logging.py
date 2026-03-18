@@ -4,10 +4,13 @@ import logging
 
 import structlog
 
+from spark_advisor_models.tracing import add_otel_trace_context
+
 
 def configure_logging(service: str, log_level: str, *, json_output: bool = True) -> None:
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
+        add_otel_trace_context,  # type: ignore[list-item]
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
@@ -47,6 +50,17 @@ def configure_logging(service: str, log_level: str, *, json_output: bool = True)
 
 
 def bind_nats_context(headers: dict[str, str] | None, **extra: str) -> None:
-    correlation_id = (headers or {}).get("X-Correlation-ID", "")
+    from opentelemetry import context
+
+    from spark_advisor_models.tracing import extract_fallback_trace_id, extract_trace_context
+
+    otel_ctx = extract_trace_context(headers)
+    context.attach(otel_ctx)
+
+    fallback_trace_id = extract_fallback_trace_id(headers)
+
     structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(correlation_id=correlation_id, **extra)
+    if fallback_trace_id:
+        structlog.contextvars.bind_contextvars(trace_id=fallback_trace_id, **extra)
+    else:
+        structlog.contextvars.bind_contextvars(**extra)

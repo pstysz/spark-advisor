@@ -85,7 +85,7 @@ The rules engine runs for free and catches known patterns. The AI layer adds con
 - **MCP server** — use spark-advisor as tools in Claude Desktop, Cursor, or any MCP client
 - **Dashboard-ready REST API** — 18 endpoints with pagination, filtering, statistics, config comparison, WebSocket streaming
 - **3 microservices** — NATS-based distributed pipeline (gateway, analyzer, hs-connector)
-- **Observability** — structlog structured logging, correlation ID tracing via NATS, optional Prometheus metrics + Grafana dashboard
+- **Observability** — structlog structured logging, OpenTelemetry distributed tracing (W3C Traceparent via NATS, Grafana Tempo), optional Prometheus metrics + Grafana dashboard
 - **Streaming parser** — processes 100MB+ event log files line-by-line without loading into memory
 - **Web dashboard** — React 19 SPA with real-time task updates, analysis submission, statistics charts, config comparison
 - **Rich CLI** — tables, colors, severity badges, suggested spark-defaults.conf
@@ -381,15 +381,18 @@ helm install spark-advisor charts/spark-advisor \
 |---------|---------|-------------------------|----------------|-------------|
 | JSON logging | `SA_*_JSON_LOG` | `false` | `true` | Structured JSON logs (structlog) |
 | Prometheus metrics | `SA_GATEWAY_METRICS_ENABLED` | `false` | `true` | `/metrics` endpoint on gateway |
-| Correlation ID | Always on | — | — | `X-Correlation-ID` header propagated via NATS |
+| Distributed tracing | `SA_*_OTEL__ENABLED` | `false` | `true` | OpenTelemetry spans with W3C Traceparent via NATS |
+| Tracing endpoint | `SA_*_OTEL__ENDPOINT` | `http://localhost:4317` | `http://tempo:4317` | OTLP gRPC collector (Grafana Tempo) |
 | Health checks | Always on | — | — | `/health/ready` (gateway), NATS exec probes (analyzer, hs-connector) |
 
-Optional Grafana + Prometheus stack (requires `make up` running first):
+Optional monitoring stack (requires `make up` running first):
 ```bash
-SA_GATEWAY_METRICS_ENABLED=true make up   # Enable /metrics for Prometheus scraping
-make monitoring-up                         # Start Prometheus (localhost:9090) + Grafana (localhost:3001)
+SA_GATEWAY_METRICS_ENABLED=true SA_OTEL_ENABLED=true make up   # Enable metrics + tracing
+make monitoring-up                         # Start Prometheus + Grafana + Tempo
 make monitoring-down                       # Stop monitoring
 ```
+
+With tracing enabled, logs include `trace_id` and `span_id` fields. Traces are visible in Grafana (localhost:3001) → Tempo datasource.
 
 Docker images are published to GitHub Container Registry on each release:
 - `ghcr.io/pstysz/spark-advisor-analyzer`

@@ -48,6 +48,7 @@ class GatewaySettings(BaseServiceSettings):
         yaml_file="/etc/spark-advisor/gateway/config.yaml",
     )
 
+    service_name: str = "spark-advisor-gateway"
     server: ServerSettings = ServerSettings()
     nats: GatewayNatsSettings = GatewayNatsSettings()
     database_url: str = "sqlite+aiosqlite:///data/spark_advisor.db"

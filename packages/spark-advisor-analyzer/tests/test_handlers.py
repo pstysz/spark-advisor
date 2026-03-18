@@ -17,6 +17,7 @@ async def test_analyze_request_returns_result() -> None:
 
     async with TestNatsBroker(broker, with_real=False) as br:
         app.context.set_global("orchestrator", orchestrator)
+        app.context.set_global("service_name", "spark-advisor-analyzer")
         result = await br.request(
             job.model_dump(mode="json"),
             subject=NATS_ANALYSIS_RUN_SUBJECT,
@@ -34,6 +35,7 @@ async def test_agent_analyze_without_agent_returns_error() -> None:
 
     async with TestNatsBroker(broker, with_real=False) as br:
         app.context.set_global("orchestrator", orchestrator)
+        app.context.set_global("service_name", "spark-advisor-analyzer")
         result = await br.request(
             job.model_dump(mode="json"),
             subject=NATS_ANALYSIS_RUN_AGENT_SUBJECT,

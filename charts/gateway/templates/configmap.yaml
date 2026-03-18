@@ -5,6 +5,7 @@ metadata:
   labels:
     {{- include "gateway.labels" . | nindent 4 }}
 data:
+  SA_GATEWAY_SERVICE_NAME: {{ .Values.config.serviceName | quote }}
   SA_GATEWAY_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
   SA_GATEWAY_JSON_LOG: {{ .Values.config.jsonLog | quote }}
   SA_GATEWAY_METRICS_ENABLED: {{ .Values.config.metricsEnabled | quote }}
@@ -21,5 +22,7 @@ data:
   SA_GATEWAY_NATS__LIST_APPS_TIMEOUT: {{ .Values.config.nats.listAppsTimeout | quote }}
   SA_GATEWAY_NATS__ANALYSIS_SUBMIT_SUBJECT: {{ .Values.config.nats.analysisSubmitSubject | quote }}
   SA_GATEWAY_NATS__POLLING_ANALYSIS_MODE: {{ .Values.config.nats.pollingAnalysisMode | quote }}
+  SA_GATEWAY_OTEL__ENABLED: {{ .Values.config.otel.enabled | quote }}
+  SA_GATEWAY_OTEL__ENDPOINT: {{ .Values.config.otel.endpoint | quote }}
   SA_GATEWAY_DATABASE_URL: {{ .Values.config.databaseUrl | quote }}
   SA_GATEWAY_WS_HEARTBEAT_INTERVAL: {{ .Values.config.wsHeartbeatInterval | quote }}
