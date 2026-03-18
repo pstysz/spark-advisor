@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-import logging
+import time
 from typing import TYPE_CHECKING
 
 import orjson
+import structlog
 from fastapi import HTTPException
 from pydantic import TypeAdapter
 
+from spark_advisor_gateway.metrics import nats_request_observe
 from spark_advisor_models.model import AnalysisMode, AnalysisResult, ApplicationSummary, JobAnalysis
+from spark_advisor_models.tracing import (
+    TRACE_ID_HEADER,
+    build_trace_context_vars,
+    get_tracer,
+    inject_correlation_context,
+)
 
 if TYPE_CHECKING:
     import nats.aio.client
@@ -16,9 +24,11 @@ if TYPE_CHECKING:
     from spark_advisor_gateway.config import GatewaySettings
     from spark_advisor_gateway.task.manager import TaskManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 _APP_LIST_ADAPTER: TypeAdapter[list[ApplicationSummary]] = TypeAdapter(list[ApplicationSummary])
+
+_TRANSIENT_CONTEXT_KEYS = ("trace_id", "app_id", "task_id")
 
 
 class TaskExecutor:
@@ -34,10 +44,12 @@ class TaskExecutor:
         self._background_tasks: set[asyncio.Task[None]] = set()
 
     async def list_applications(self, limit: int) -> list[ApplicationSummary]:
+        headers = inject_correlation_context({})
         reply = await self._nc.request(
             self._settings.nats.apps_list_subject,
             orjson.dumps({"limit": limit}),
             timeout=self._settings.nats.list_apps_timeout,
+            headers=headers,
         )
         data = orjson.loads(reply.data)
         if isinstance(data, dict) and "error" in data:
@@ -55,38 +67,66 @@ class TaskExecutor:
         task.add_done_callback(self._background_tasks.discard)
 
     async def _execute(self, task_id: str, app_id: str, mode: AnalysisMode = AnalysisMode.AI) -> None:
-        try:
-            await self._tasks.mark_running(task_id)
+        tracer = get_tracer()
+        attrs = {"task_id": task_id, "app_id": app_id, "mode": mode.value}
+        with tracer.start_as_current_span("gateway.execute_analysis", attributes=attrs):
+            trace_vars = build_trace_context_vars()
+            base_headers = self._build_base_headers(trace_vars)
 
-            fetch_job_reply = await self._nc.request(
-                self._settings.nats.job_fetch_subject,
-                orjson.dumps({"app_id": app_id}),
-                timeout=self._settings.nats.fetch_timeout,
+            structlog.contextvars.unbind_contextvars(*_TRANSIENT_CONTEXT_KEYS)
+            structlog.contextvars.bind_contextvars(
+                task_id=task_id, app_id=app_id, **trace_vars,
             )
+            try:
+                await self._tasks.mark_running(task_id)
 
-            job_payload = fetch_job_reply.data
-            job_data = orjson.loads(job_payload)
-            if "error" in job_data:
-                await self._tasks.mark_failed(task_id, f"Fetch failed: {job_data['error']}")
-                return
+                with tracer.start_as_current_span("gateway.nats_fetch_job", attributes={"app_id": app_id}):
+                    headers = inject_correlation_context(dict(base_headers))
+                    t0 = time.monotonic()
+                    fetch_job_reply = await self._nc.request(
+                        self._settings.nats.job_fetch_subject,
+                        orjson.dumps({"app_id": app_id}),
+                        timeout=self._settings.nats.fetch_timeout,
+                        headers=headers,
+                    )
+                    nats_request_observe("fetch_job", time.monotonic() - t0)
 
-            await self._analyze_and_mark_completed(task_id, job_payload, mode)
+                job_payload = fetch_job_reply.data
+                job_data = orjson.loads(job_payload)
+                if "error" in job_data:
+                    await self._tasks.mark_failed(task_id, f"Fetch failed: {job_data['error']}")
+                    return
 
-        except Exception as e:
-            logger.exception("Task %s failed", task_id)
-            await self._tasks.mark_failed(task_id, str(e))
+                await self._analyze_and_mark_completed(task_id, job_payload, mode, base_headers)
+
+            except Exception as e:
+                logger.exception("Task %s failed", task_id)
+                await self._tasks.mark_failed(task_id, str(e))
 
     async def _execute_with_job(self, task_id: str, job: JobAnalysis, mode: AnalysisMode = AnalysisMode.AI) -> None:
-        try:
-            await self._tasks.mark_running(task_id)
-            job_data = orjson.dumps(job.model_dump(mode="json"))
-            await self._analyze_and_mark_completed(task_id, job_data, mode)
+        tracer = get_tracer()
+        attrs = {"task_id": task_id, "app_id": job.app_id, "mode": mode.value}
+        with tracer.start_as_current_span("gateway.execute_analysis", attributes=attrs):
+            trace_vars = build_trace_context_vars()
+            base_headers = self._build_base_headers(trace_vars)
 
-        except Exception as e:
-            logger.exception("Task %s failed", task_id)
-            await self._tasks.mark_failed(task_id, str(e))
+            structlog.contextvars.unbind_contextvars(*_TRANSIENT_CONTEXT_KEYS)
+            structlog.contextvars.bind_contextvars(
+                task_id=task_id, app_id=job.app_id, **trace_vars,
+            )
+            try:
+                await self._tasks.mark_running(task_id)
+                job_data = orjson.dumps(job.model_dump(mode="json"))
+                await self._analyze_and_mark_completed(task_id, job_data, mode, base_headers)
 
-    async def _analyze_and_mark_completed(self, task_id: str, job_payload: bytes, mode: AnalysisMode) -> None:
+            except Exception as e:
+                logger.exception("Task %s failed", task_id)
+                await self._tasks.mark_failed(task_id, str(e))
+
+    async def _analyze_and_mark_completed(
+        self, task_id: str, job_payload: bytes, mode: AnalysisMode, base_headers: dict[str, str],
+    ) -> None:
+        tracer = get_tracer()
         if mode == AnalysisMode.AGENT:
             subject = self._settings.nats.analysis_run_agent_subject
             timeout = self._settings.nats.analyze_agent_timeout
@@ -94,11 +134,16 @@ class TaskExecutor:
             subject = self._settings.nats.analysis_run_subject
             timeout = self._settings.nats.analyze_timeout
 
-        analyze_reply = await self._nc.request(
-            subject,
-            job_payload,
-            timeout=timeout,
-        )
+        with tracer.start_as_current_span("gateway.nats_analyze", attributes={"mode": mode.value}):
+            headers = inject_correlation_context(dict(base_headers))
+            t0 = time.monotonic()
+            analyze_reply = await self._nc.request(
+                subject,
+                job_payload,
+                timeout=timeout,
+                headers=headers,
+            )
+            nats_request_observe("analyze", time.monotonic() - t0)
 
         analyze_data = orjson.loads(analyze_reply.data)
         if "error" in analyze_data:
@@ -107,3 +152,9 @@ class TaskExecutor:
 
         result = AnalysisResult.model_validate(analyze_data)
         await self._tasks.mark_completed(task_id, result)
+
+    @staticmethod
+    def _build_base_headers(trace_vars: dict[str, str]) -> dict[str, str]:
+        if "trace_id" in trace_vars:
+            return {TRACE_ID_HEADER: trace_vars["trace_id"]}
+        return {}

@@ -17,6 +17,7 @@ from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
 class StateKey(StrEnum):
     NC = "nc"
     SETTINGS = "settings"
+    TASK_STORE = "task_store"
     TASK_MANAGER = "task_manager"
     TASK_EXECUTOR = "task_executor"
     CONNECTION_MANAGER = "connection_manager"
@@ -47,7 +48,9 @@ class GatewaySettings(BaseServiceSettings):
         yaml_file="/etc/spark-advisor/gateway/config.yaml",
     )
 
+    service_name: str = "spark-advisor-gateway"
     server: ServerSettings = ServerSettings()
     nats: GatewayNatsSettings = GatewayNatsSettings()
     database_url: str = "sqlite+aiosqlite:///data/spark_advisor.db"
     ws_heartbeat_interval: float = 30.0
+    metrics_enabled: bool = False

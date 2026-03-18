@@ -16,7 +16,7 @@ spark-advisor is a distributed system for automated Apache Spark job performance
  │  HS Connector    │  │   Analyzer   │  │     Gateway     │   │  Frontend  │
  │  (FastStream)    │  │ (FastStream) │  │    (FastAPI)    │◄──│  (nginx)   │
  │                  │  │              │  │                 │   │            │
- │ • fetch jobs     │  │ • rules (11) │  │ • REST API (13) │   │ • React 19 │
+ │ • fetch jobs     │  │ • rules (11) │  │ • REST API (18) │   │ • React 19 │
  │ • poll HS        │  │ • AI advisor │  │ • WebSocket     │   │ • Vite 6   │
  │ • list apps      │  │ • agent mode │  │ • task store    │   │ • Recharts │
  └────────┬─────────┘  └──────┬───────┘  └─────────────────┘   └─────┬──────┘
@@ -76,6 +76,8 @@ spark-advisor/
 │   │       ├── model/                       # metrics, spark_config, output, input
 │   │       ├── config.py                    # Thresholds, AiSettings
 │   │       ├── settings.py                  # BaseServiceSettings, NatsSettings
+│   │       ├── logging.py                   # configure_logging(), bind_nats_context(), nats_handler_context()
+│   │       ├── tracing.py                   # TracingConfig, configure_tracing(), get_tracer(), inject/extract
 │   │       └── util/                        # bytes, stats
 │   │
 │   ├── spark-advisor-rules/                 # LIBRARY
@@ -189,7 +191,9 @@ Foundation package. All Pydantic contracts that flow through NATS live here. No 
 - `model/output.py` — `AnalysisMode`, `Severity`, `OutputFormat`, `RuleResult`, `Recommendation`, `AdvisorReport`, `AnalysisResult`
 - `model/input.py` — `AnalysisToolInput`, `RecommendationInput` (Claude tool schema, generated via `model_json_schema()`)
 - `config.py` — `Thresholds` (rule thresholds), `AiSettings` (model, timeout, enabled flag)
-- `settings.py` — `BaseServiceSettings` (env → .env → YAML source chain), `NatsSettings` (base NATS DTO)
+- `settings.py` — `BaseServiceSettings` (env → .env → YAML source chain), `OtelSettings`, `NatsSettings` (base NATS DTO)
+- `logging.py` — `configure_logging()` (structlog setup with JSON/Console), `bind_nats_context()` (correlation context), `nats_handler_context()` (async context manager combining logging + tracing for NATS handlers)
+- `tracing.py` — `TracingConfig` (class wrapping OTel global provider), `configure_tracing()`, `get_tracer()`, `inject_trace_context()` / `extract_trace_context()` (W3C Traceparent via NATS headers), `add_otel_trace_context` (structlog processor)
 - `util/bytes.py` — `format_bytes()` (human-readable byte formatting)
 - `util/stats.py` — `percentile_value()`, `median_value()`, `quantiles_5()`
 
@@ -258,6 +262,9 @@ AI-powered analysis worker. The only service that talks to Claude API. Subscribe
 - `SA_ANALYZER_AI__MODEL` — Claude model (default: claude-sonnet-4-6)
 - `SA_ANALYZER_AI__API_TIMEOUT` — API call timeout in seconds
 - `ANTHROPIC_API_KEY` — Claude API key (via Secret, not ConfigMap)
+- `SA_ANALYZER_SERVICE_NAME` — service name for logging and tracing (default: spark-advisor-analyzer)
+- `SA_ANALYZER_OTEL__ENABLED` — enable OpenTelemetry tracing (default: false, Helm: true)
+- `SA_ANALYZER_OTEL__ENDPOINT` — OTLP gRPC endpoint (default: http://localhost:4317)
 
 **Key design decisions:**
 - `asyncio.to_thread()` wraps synchronous `orchestrator.run()` because `AnthropicClient` uses synchronous httpx
@@ -270,10 +277,10 @@ AI-powered analysis worker. The only service that talks to Claude API. Subscribe
 
 ### spark-advisor-gateway (Service)
 
-API Gateway — the only externally-exposed service. 13 REST endpoints + WebSocket + async task orchestration via NATS. Does NOT contain analysis logic or HS client.
+API Gateway — the only externally-exposed service. 18 REST endpoints + WebSocket + async task orchestration via NATS. Does NOT contain analysis logic or HS client.
 
 **Owns:**
-- `api/routes.py` — 13 REST endpoints (analyze, tasks, apps, history, rules, config, stats)
+- `api/routes.py` — 18 REST endpoints (analyze, tasks, apps, history, rules, config, stats)
 - `api/schemas.py` — 18 Pydantic response/request models with OpenAPI examples and tags
 - `api/health.py` — `GET /health/live`, `GET /health/ready` (NATS check)
 - `ws/manager.py` — `ConnectionManager` (WebSocket broadcast, heartbeat, stale cleanup)
@@ -311,6 +318,10 @@ API Gateway — the only externally-exposed service. 13 REST endpoints + WebSock
 - `SA_GATEWAY_DATABASE_URL` — SQLite database URL (default: `sqlite+aiosqlite:///data/spark_advisor.db`)
 - `SA_GATEWAY_WS_HEARTBEAT_INTERVAL` — WebSocket heartbeat (default: 30s)
 - `SA_GATEWAY_NATS__POLLING_ANALYSIS_MODE` — analysis mode for poller-submitted tasks (default: static)
+- `SA_GATEWAY_METRICS_ENABLED` — enable Prometheus metrics on `/metrics` (default: false, Helm: true)
+- `SA_GATEWAY_SERVICE_NAME` — service name for logging and tracing (default: spark-advisor-gateway)
+- `SA_GATEWAY_OTEL__ENABLED` — enable OpenTelemetry tracing (default: false, Helm: true)
+- `SA_GATEWAY_OTEL__ENDPOINT` — OTLP gRPC endpoint (default: http://localhost:4317)
 
 **Key design decisions:**
 - Uses `nats-py` (not FastStream) — gateway needs request-reply with explicit timeout control, not subscriber pattern
@@ -345,6 +356,9 @@ The sole owner of Spark History Server integration. Two responsibilities:
 - `SA_CONNECTOR_POLLING_ENABLED` — enable/disable background polling (default: false)
 - `SA_CONNECTOR_POLL_INTERVAL_SECONDS` — batch poll interval (default: 60)
 - `SA_CONNECTOR_BATCH_SIZE` — max jobs per poll (default: 50)
+- `SA_CONNECTOR_SERVICE_NAME` — service name for logging and tracing (default: spark-advisor-hs-connector)
+- `SA_CONNECTOR_OTEL__ENABLED` — enable OpenTelemetry tracing + httpx auto-instrumentation (default: false, Helm: true)
+- `SA_CONNECTOR_OTEL__ENDPOINT` — OTLP gRPC endpoint (default: http://localhost:4317)
 
 **History Server endpoints used:**
 - `GET /api/v1/applications/{app-id}` — app metadata, duration
@@ -588,11 +602,13 @@ Each service exposes health endpoints for Kubernetes probes:
 
 | Service      | Liveness                                | Readiness                                    |
 |--------------|-----------------------------------------|----------------------------------------------|
-| Gateway      | `GET /health/live` → `{"status": "ok"}` | `GET /health/ready` → checks NATS connection |
-| Analyzer     | FastStream built-in healthcheck         | NATS broker connected                        |
-| HS Connector | FastStream built-in healthcheck         | NATS broker connected                        |
+| Gateway      | `GET /health/live` → `{"status": "ok"}` | `GET /health/ready` → checks NATS + SQLite   |
+| Analyzer     | Kubernetes exec probe (stdlib socket → NATS port) | NATS broker connected              |
+| HS Connector | Kubernetes exec probe (stdlib socket → NATS port) | NATS broker connected              |
 
 Gateway readiness returns `"degraded"` if NATS is disconnected. Kubernetes will stop routing traffic until reconnection.
+
+Analyzer and HS Connector use lightweight inline socket probes in Helm charts (~44ms latency vs ~313ms for loading the Python module).
 
 ---
 
@@ -609,6 +625,43 @@ Gateway readiness returns `"degraded"` if NATS is disconnected. Kubernetes will 
 | **Large event log**           | CLI streaming parser processes line-by-line. Memory usage stays constant regardless of file size.                            |
 
 No DLQ (dead letter queue), no circuit breaker, no rate limiter. These are intentionally excluded to keep the system simple. Graceful degradation (rules-only fallback) handles the most common failure mode (Claude API issues).
+
+---
+
+## Observability
+
+All observability features are **optional** — disabled by default in docker-compose (local dev), enabled by default in Helm charts (production).
+
+### Structured Logging (structlog)
+
+All services use `configure_logging()` from `models/logging.py` with shared processors: `merge_contextvars`, `add_log_level`, `TimeStamper`, `add_otel_trace_context`. Foreign logs (uvicorn, faststream) are also structured via `ProcessorFormatter.foreign_pre_chain`.
+
+- **JSON mode** (`SA_*_JSON_LOG=true`): machine-readable, includes `trace_id` and `span_id` when OTel active
+- **Console mode** (default): human-readable with colors
+
+### Distributed Tracing (OpenTelemetry + Grafana Tempo)
+
+W3C Traceparent propagation via NATS message headers. `TracingConfig` wraps OTel's global `TracerProvider` — when disabled, `get_tracer()` returns NoOp tracer (zero overhead).
+
+- **Gateway**: `FastAPIInstrumentor` auto-instruments HTTP, manual spans: `gateway.execute_analysis`, `gateway.nats_fetch_job`, `gateway.nats_analyze`, `gateway.handle_polling`
+- **Analyzer**: span `analyzer.analyze` with `app_id` and `mode` attributes
+- **HS Connector**: `HTTPXClientInstrumentor` auto-instruments httpx, manual spans: `hs.fetch_job`, `hs.list_applications`
+- **Cross-service**: `nats_handler_context()` in `models/logging.py` combines `bind_nats_context()` + `get_tracer().start_as_current_span()` for NATS handlers
+
+### Prometheus Metrics (gateway only)
+
+Optional `/metrics` endpoint with `prometheus-fastapi-instrumentator` (auto HTTP metrics) + custom metrics:
+- `sa_tasks_total{status}` — Counter of analysis tasks by status
+- `sa_task_duration_seconds{mode}` — Histogram of analysis duration by mode
+
+### Monitoring Stack
+
+```bash
+SA_GATEWAY_METRICS_ENABLED=true SA_OTEL_ENABLED=true make up   # Enable metrics + tracing
+make monitoring-up                                               # Start Prometheus + Grafana + Tempo
+```
+
+Grafana dashboard with 8 panels at `localhost:3001`. Tempo datasource for trace exploration.
 
 ---
 
@@ -637,6 +690,9 @@ No DLQ (dead letter queue), no circuit breaker, no rate limiter. These are inten
 | **pytest**            | Testing                                                           | all                                |
 | **SQLAlchemy**        | Async ORM for task persistence (SQLite + WAL)                     | gateway                            |
 | **aiosqlite**         | Async SQLite driver for SQLAlchemy                                | gateway                            |
+| **structlog**         | Structured logging (JSON/console, contextvars correlation)        | all services (via models)          |
+| **opentelemetry**     | Distributed tracing (W3C Traceparent, Grafana Tempo)              | all services (via models)          |
+| **prometheus-client** | Prometheus metrics (counters, histograms)                         | gateway (optional)                 |
 | **respx**             | HTTP mocking for httpx                                            | hs-connector (tests)               |
 | **React 19**          | SPA framework                                                     | frontend                           |
 | **TypeScript**        | Type-safe frontend code                                           | frontend                           |
@@ -649,22 +705,24 @@ No DLQ (dead letter queue), no circuit breaker, no rate limiter. These are inten
 
 ### Helm Charts
 
-Four Helm charts in the `charts/` directory:
+Five Helm charts in the `charts/` directory:
 
 ```
 charts/
 ├── spark-advisor/       # Umbrella chart — installs everything via `helm install`
-│   ├── Chart.yaml       # Dependencies: analyzer, gateway, hs-connector, nats
+│   ├── Chart.yaml       # Dependencies: analyzer, gateway, hs-connector, frontend, nats
 │   └── values.yaml      # Global overrides (NATS URL auto-resolved from release name)
 ├── analyzer/            # NATS worker (rules + AI), ConfigMap with SA_ANALYZER_* env vars
 ├── gateway/             # REST API, Service, optional Ingress, ConfigMap with SA_GATEWAY_* env vars
-└── hs-connector/        # History Server poller, ConfigMap with SA_CONNECTOR_* env vars
+├── hs-connector/        # History Server poller, ConfigMap with SA_CONNECTOR_* env vars
+└── frontend/            # React SPA (nginx), reverse proxy /api/ → gateway
 ```
 
 **Umbrella chart dependencies:**
 - `spark-advisor-analyzer` — local subchart (`file://../analyzer`)
 - `spark-advisor-gateway` — local subchart (`file://../gateway`)
 - `spark-advisor-hs-connector` — local subchart (`file://../hs-connector`)
+- `spark-advisor-frontend` — local subchart (`file://../frontend`)
 - `nats` — official NATS Helm chart from `https://nats-io.github.io/k8s/helm/charts/`
 
 ### Resource topology
@@ -674,7 +732,9 @@ namespace: spark-advisor
 ├── Deployment: gateway          (replicas configurable, port 8080)
 ├── Deployment: analyzer         (replicas configurable)
 ├── Deployment: hs-connector     (1 replica recommended)
+├── Deployment: frontend         (nginx, port 80, reverse proxy /api/ → gateway)
 ├── Service: gateway             (ClusterIP → port 8080)
+├── Service: frontend            (ClusterIP → port 80)
 ├── Ingress: gateway             (disabled by default)
 ├── ConfigMap: gateway           (SA_GATEWAY_* env vars)
 ├── ConfigMap: analyzer          (SA_ANALYZER_* env vars)
@@ -789,7 +849,7 @@ These concepts existed in the previous Kafka-based architecture and have been in
 | **Dead Letter Queue (DLQ)**               | Graceful degradation instead — rules-only fallback on AI failure                       |
 | **Circuit Breaker**                       | Not needed — NATS request timeouts + graceful degradation suffice                      |
 | **Rate Limiter**                          | Not needed — Claude API has its own rate limiting; system throughput is bounded by API |
-| **OpenTelemetry / Jaeger / Prometheus**   | Removed stubs. Will add when actually needed (Future Extensions)                       |
+| **Jaeger**                                | Replaced by Grafana Tempo for trace storage                                            |
 | **k8s-source** (Kubernetes event watcher) | Future extension — not part of current architecture                                    |
 | **background_worker threading utility**   | Replaced by `asyncio` (FastStream is async-native)                                     |
 
@@ -800,7 +860,6 @@ These concepts existed in the previous Kafka-based architecture and have been in
 | Extension            | Description                                                                              | Impact                                            |
 |----------------------|------------------------------------------------------------------------------------------|---------------------------------------------------|
 | **k8s-source**       | Watch Kubernetes events for completed Spark jobs, publish to NATS                        | New service, depends only on models               |
-| **OpenTelemetry**    | Distributed tracing across services via NATS                                             | All services — add OTel middleware                |
 | **Additional rules** | New domain-specific rules as real-world use cases are discovered                         | rules package only                                |
 | **NATS JetStream**   | Persistent messaging with at-least-once delivery for batch flow                          | Replace NATS core subjects with JetStream streams |
 

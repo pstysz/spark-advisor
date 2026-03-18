@@ -1,0 +1,13 @@
+fullnameOverride: "spark-advisor-tempo"
+
+image:
+  repository: grafana/tempo
+  tag: "2.5.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  httpPort: 3200
+  otlpGrpcPort: 4317
+
+resources: {}

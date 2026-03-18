@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "prometheus.fullname" . }}
+  labels:
+    {{- include "prometheus.labels" . | nindent 4 }}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: "gateway"
+        static_configs:
+          - targets: ["{{ .Values.config.scrapeTarget }}"]
+        metrics_path: /metrics

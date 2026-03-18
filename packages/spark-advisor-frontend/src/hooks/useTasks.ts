@@ -22,6 +22,12 @@ export function useTasksList(params: UseTasksListParams) {
         data_source: params.data_source,
       }),
     placeholderData: keepPreviousData,
+    refetchInterval: (query) => {
+      const hasActive = query.state.data?.items.some(
+        (t) => t.status === "pending" || t.status === "running",
+      );
+      return hasActive ? 3000 : false;
+    },
   });
 }
 

@@ -3,6 +3,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict, YamlConfigSettin
 from pydantic_settings.sources import PydanticBaseSettingsSource
 
 
+class OtelSettings(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    enabled: bool = False
+    endpoint: str = "http://localhost:4317"
+
+
 class BaseServiceSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SA_",
@@ -12,7 +18,10 @@ class BaseServiceSettings(BaseSettings):
         extra="ignore",
     )
 
+    service_name: str = "spark-advisor"
     log_level: str = "INFO"
+    json_log: bool = False
+    otel: OtelSettings = OtelSettings()
 
     @classmethod
     def settings_customise_sources(

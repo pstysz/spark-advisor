@@ -1,12 +1,12 @@
-import logging
 from typing import Any
 
 import httpx
+import structlog
 from pydantic import TypeAdapter
 
 from spark_advisor_models.model import ApplicationSummary
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 _APP_LIST_ADAPTER = TypeAdapter(list[ApplicationSummary])
 

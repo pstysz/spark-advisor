@@ -4,17 +4,27 @@ from typing import Any
 from spark_advisor_hs_connector.history_server.client import HistoryServerClient
 from spark_advisor_hs_connector.history_server.mapper import map_job_analysis
 from spark_advisor_models.model import JobAnalysis
+from spark_advisor_models.tracing import get_tracer
 
 
 def fetch_job_analysis(hs_client: HistoryServerClient, app_id: str) -> JobAnalysis:
-    app_info = hs_client.get_app_info(app_id)
+    tracer = get_tracer()
+    with tracer.start_as_current_span("hs.fetch_app_info", attributes={"app_id": app_id}):
+        app_info = hs_client.get_app_info(app_id)
     base_path = resolve_base_path(app_id, app_info)
 
-    environment = hs_client.get_environment(base_path)
-    raw_stages = hs_client.get_stages(base_path)
-    stages_data = deduplicate_stages(raw_stages)
-    task_summaries = fetch_task_summaries(hs_client, base_path, stages_data)
-    executors_data = hs_client.get_executors(base_path)
+    with tracer.start_as_current_span("hs.fetch_environment"):
+        environment = hs_client.get_environment(base_path)
+
+    with tracer.start_as_current_span("hs.fetch_stages"):
+        raw_stages = hs_client.get_stages(base_path)
+        stages_data = deduplicate_stages(raw_stages)
+
+    with tracer.start_as_current_span("hs.fetch_task_summaries", attributes={"stage_count": len(stages_data)}):
+        task_summaries = fetch_task_summaries(hs_client, base_path, stages_data)
+
+    with tracer.start_as_current_span("hs.fetch_executors"):
+        executors_data = hs_client.get_executors(base_path)
 
     return map_job_analysis(
         app_id=app_id,
