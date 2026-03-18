@@ -71,6 +71,8 @@ jobs:
             dockerfile: packages/spark-advisor-gateway/Dockerfile
           - name: spark-advisor-hs-connector
             dockerfile: packages/spark-advisor-hs-connector/Dockerfile
+          - name: spark-advisor-frontend
+            dockerfile: packages/spark-advisor-frontend/Dockerfile
     steps:
       - uses: actions/checkout@v4
 

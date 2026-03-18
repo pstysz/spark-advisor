@@ -76,6 +76,15 @@ jobs:
       - name: Lint subchart — hs-connector
         run: helm lint charts/hs-connector
 
+      - name: Lint subchart — prometheus
+        run: helm lint charts/prometheus
+
+      - name: Lint subchart — grafana
+        run: helm lint charts/grafana
+
+      - name: Lint subchart — tempo
+        run: helm lint charts/tempo
+
       - name: Add NATS Helm repository
         run: helm repo add nats https://nats-io.github.io/k8s/helm/charts/
 
