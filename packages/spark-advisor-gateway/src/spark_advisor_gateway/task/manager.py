@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import logging
 import time
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+import structlog
+
+from spark_advisor_gateway.metrics import task_duration_observe, tasks_total_inc
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
 from spark_advisor_models.model import AnalysisMode, DataSource
 
@@ -26,7 +28,7 @@ if TYPE_CHECKING:
     from spark_advisor_gateway.task.store import TaskStore
     from spark_advisor_models.model import AnalysisResult, Severity
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 _TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.FAILED})
 
@@ -118,6 +120,7 @@ class TaskManager:
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.now(UTC)
         await self._store.update(task)
+        tasks_total_inc("started")
         await self._notify(task)
 
     async def mark_completed(self, task_id: str, result: AnalysisResult) -> None:
@@ -128,6 +131,10 @@ class TaskManager:
         task.completed_at = datetime.now(UTC)
         task.result = result
         await self._store.update(task)
+        tasks_total_inc("completed")
+        if task.started_at and task.completed_at:
+            duration = (task.completed_at - task.started_at).total_seconds()
+            task_duration_observe(task.mode.value, duration)
         await self._notify(task)
 
     async def mark_failed(self, task_id: str, error: str) -> None:
@@ -138,6 +145,7 @@ class TaskManager:
         task.completed_at = datetime.now(UTC)
         task.error = error
         await self._store.update(task)
+        tasks_total_inc("failed")
         await self._notify(task)
 
     async def _notify(self, task: AnalysisTask) -> None:

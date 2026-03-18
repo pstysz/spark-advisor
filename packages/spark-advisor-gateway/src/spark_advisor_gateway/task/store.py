@@ -47,6 +47,11 @@ class TaskStore:
                     text("ALTER TABLE tasks ADD COLUMN data_source VARCHAR(20) NOT NULL DEFAULT 'hs_manual'")
                 )
 
+    async def check_health(self) -> bool:
+        async with self._session_factory() as session:
+            await session.execute(text("SELECT 1"))
+        return True
+
     async def close(self) -> None:
         await self._engine.dispose()
 

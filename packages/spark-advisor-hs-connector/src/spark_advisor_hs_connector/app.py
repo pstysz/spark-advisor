@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
-import logging
 
+import structlog
 from faststream import FastStream
 from faststream.nats import NatsBroker
 
@@ -10,18 +10,19 @@ from spark_advisor_hs_connector.handlers import router
 from spark_advisor_hs_connector.history_server.client import HistoryServerClient
 from spark_advisor_hs_connector.history_server.poller import HistoryServerPoller
 from spark_advisor_hs_connector.store import PollingStore
+from spark_advisor_models.logging import configure_logging
 
 settings = ConnectorSettings()
 broker = NatsBroker(settings.nats.url)
 broker.include_router(router)
 app = FastStream(broker)
 
-logger = logging.getLogger(__name__)
+logger = structlog.stdlib.get_logger(__name__)
 
 
 @app.on_startup
 async def on_startup() -> None:
-    logging.basicConfig(level=settings.log_level)
+    configure_logging("hs-connector", settings.log_level, json_output=settings.json_log)
 
     hs_client = HistoryServerClient(settings.history_server_url, settings.history_server_timeout)
     hs_client.open()
