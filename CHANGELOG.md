@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.1.14](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.13...spark-advisor-v0.1.14) (2026-03-18)
+
+
+### Features
+
+* add agent mode with multi-turn Claude tool_use loop ([fde1128](https://github.com/pstysz/spark-advisor/commit/fde11287b39d7330af7745e7157dfd9b9ed6a932))
+* add Docker Compose infrastructure and NATS error handling ([d9ca4bd](https://github.com/pstysz/spark-advisor/commit/d9ca4bd6fb0bde13e6086143b3798b956f8eabef))
+* add helm charts ([c51cd2e](https://github.com/pstysz/spark-advisor/commit/c51cd2e026447e22c3f1ace6c34e748db9ee1f38))
+* add k8s integration ([89d982a](https://github.com/pstysz/spark-advisor/commit/89d982a662f0b7e9b3a6519b9f57dca73a448915))
+* add MCP server with 5 tools for Claude Desktop and Cursor integration ([4feee2e](https://github.com/pstysz/spark-advisor/commit/4feee2eb266844d5327ed565c07524eff276cf39))
+* add spark-advisor-gateway REST API with NATS orchestration ([32ee88c](https://github.com/pstysz/spark-advisor/commit/32ee88c22b12e0def087e3629dcefcdad66b05b6))
+* added make command to deploy the whole stack on minikube ([725240c](https://github.com/pstysz/spark-advisor/commit/725240c5e77fb037f0333fc329f9c817140a6358))
+* added rerun tasks deduplication and hs poller with gateway integration ([61ebc6c](https://github.com/pstysz/spark-advisor/commit/61ebc6cb469fbbbf223905488eaf70f320020e91))
+* added separate readme and pyproject descriptions in all modules ([67dda2e](https://github.com/pstysz/spark-advisor/commit/67dda2e28b1f701b282bf484c82a3d54ccb6ca05))
+* docker publish added ([e408874](https://github.com/pstysz/spark-advisor/commit/e4088749829fe88de078e0c9841226f6cd771eda))
+* endpoints for frontend ([ce9c952](https://github.com/pstysz/spark-advisor/commit/ce9c952f4bc282b288490581dde69b7c7c5570c8))
+* extract spark-advisor-analyzer as FastStream NATS service ([5514f22](https://github.com/pstysz/spark-advisor/commit/5514f22f96fd31ec1125080c268fd2cfbfcec6f8))
+* extract spark-advisor-cli as standalone CLI package ([3564b34](https://github.com/pstysz/spark-advisor/commit/3564b343f07e2915c0bd3b0e8963a32e6113503a))
+* extract spark-advisor-hs-connector as FastStream NATS service ([6fd6b11](https://github.com/pstysz/spark-advisor/commit/6fd6b11aff3b8677949705e2bf0f411a6d467d13))
+* extract spark-advisor-models as shared foundation package ([5600161](https://github.com/pstysz/spark-advisor/commit/56001619712053efd8828a88ca6c8f3e122ecb98))
+* extract spark-advisor-rules as dedicated rules engine package ([e9fe4a8](https://github.com/pstysz/spark-advisor/commit/e9fe4a83d913d20522eda0932d7dd0b83b41e504))
+* frontend ([566d4f4](https://github.com/pstysz/spark-advisor/commit/566d4f4284e13542849e448b7a0a8071c9b21ebe))
+* harden MVP with 5 new rules, CLI output options, and parser edge cases ([3c9fcc4](https://github.com/pstysz/spark-advisor/commit/3c9fcc4dc2651ff7370625446584163b29677329))
+* observability added ([e20534f](https://github.com/pstysz/spark-advisor/commit/e20534f1d94ab5d18d7a290180f5f5133dc226df))
+* remove legacy packages and Kafka infrastructure ([2287585](https://github.com/pstysz/spark-advisor/commit/22875856f9fd5e8cf1b2ebdebe8deb0e7d091f72))
+* switch from in memory tasks store to sqlite + sqlalchemy ([407892c](https://github.com/pstysz/spark-advisor/commit/407892c7319c72193ab68e0d410a3272ae441987))
+* versioning ([a2f3fed](https://github.com/pstysz/spark-advisor/commit/a2f3fed2ec7cd71223ad2b8f3129ebf4d55c9deb))
+
+
+### Bug Fixes
+
+* cli readme bug ([ad0a141](https://github.com/pstysz/spark-advisor/commit/ad0a141ba1d2d92935cc0c80525897126441c27d))
+* invalid logo url + docs ignore fix ([64a85ab](https://github.com/pstysz/spark-advisor/commit/64a85ab27a0c052c22d0ec2b9ad9e19c87fda57e))
+* invalid uv build directory ([c9e023d](https://github.com/pstysz/spark-advisor/commit/c9e023d449df9dac65c491d6e916e65a7643b749))
+* missing fe packages in Dockerfile ([f89f83d](https://github.com/pstysz/spark-advisor/commit/f89f83ddc3254697613b80c17957741bc960fc49))
+* missing fe packages in Dockerfile ([436e642](https://github.com/pstysz/spark-advisor/commit/436e6427999b8c360691c3b26fd87e4d3046fbab))
+* refactor + bugfixing ([21ba4a0](https://github.com/pstysz/spark-advisor/commit/21ba4a0854cac64a16e8a6828c9773c1da0e1552))
+* refactor + bugfixing ([1b73716](https://github.com/pstysz/spark-advisor/commit/1b73716738585142c8862864949763d5348cebd4))
+* release please version ([11132a5](https://github.com/pstysz/spark-advisor/commit/11132a5b323b65b513d5b7e4b4169a75fc813a1b))
+* update internal dependencies to use pinned versions ([70440ab](https://github.com/pstysz/spark-advisor/commit/70440ab3756cc1b06090734646181edbf4dc3658))
+
 ## [0.1.13](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.12...spark-advisor-v0.1.13) (2026-03-18)
 
 
