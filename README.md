@@ -21,15 +21,12 @@
   </p>
 
   <p>
-    <a href="#features">Features</a> •
-    <a href="#quick-start">Quick Start</a> •
-    <a href="#web-dashboard">Web Dashboard</a> •
-    <a href="#cli-usage">CLI Usage</a> •
-    <a href="#mcp-server">MCP Server</a> •
-    <a href="#microservices">Microservices</a> •
-    <a href="#kubernetes">Kubernetes</a> •
-    <a href="#architecture">Architecture</a> •
-    <a href="#development">Development</a>
+    <a href="#features">Features</a> &bull;
+    <a href="#quick-start">Quick Start</a> &bull;
+    <a href="#web-dashboard">Web Dashboard</a> &bull;
+    <a href="#what-it-detects">Detection Rules</a> &bull;
+    <a href="#documentation">Documentation</a> &bull;
+    <a href="#roadmap">Roadmap</a>
   </p>
 
 </div>
@@ -75,8 +72,6 @@ Event Log / History Server  →  Rules Engine (11 rules)  →  AI Advisor (optio
 2. **Rules engine** — 11 deterministic checks: data skew, disk spill, GC pressure, partition sizing, executor idle, task failures, small files, broadcast join, serializer choice, dynamic allocation, memory overhead
 3. **AI advisor** (optional) — Claude analyzes metrics + rule findings, identifies causal chains between related problems, suggests concrete config values
 
-The rules engine runs for free and catches known patterns. The AI layer adds contextual reasoning — it understands that skew in Stage 3 *causes* spill in Stage 4, which *causes* GC pressure, and recommends fixing the root cause.
-
 ## Features
 
 - **11 deterministic rules** detecting data skew, GC pressure, disk spill, wrong partition count, and more
@@ -85,9 +80,8 @@ The rules engine runs for free and catches known patterns. The AI layer adds con
 - **MCP server** — use spark-advisor as tools in Claude Desktop, Cursor, or any MCP client
 - **REST API** — 18 endpoints with pagination, filtering, statistics, config comparison, WebSocket streaming
 - **3 microservices** — NATS-based distributed pipeline (gateway, analyzer, hs-connector)
-- **Observability** — structlog structured logging, OpenTelemetry distributed tracing (W3C Traceparent via NATS, Grafana Tempo), optional Prometheus metrics + Grafana dashboard
-- **Streaming parser** — processes 100MB+ event log files line-by-line without loading into memory
-- **Web dashboard** — React 19 SPA with real-time task updates, analysis submission, statistics charts, config comparison
+- **Observability** — structlog, OpenTelemetry distributed tracing (Grafana Tempo), Prometheus metrics + Grafana dashboards
+- **Web dashboard** — React 19 SPA with real-time task updates, analysis submission, statistics charts
 - **Rich CLI** — tables, colors, severity badges, suggested spark-defaults.conf
 
 ## Quick Start
@@ -121,29 +115,21 @@ uv run spark-advisor analyze ../../sample_event_logs/sample_etl_job.json
 
 React 19 SPA with real-time updates via WebSocket, served by nginx with reverse proxy to gateway API.
 
-### Tasks — analysis results with filtering and real-time status
+```bash
+make up   # docker compose — all services + frontend on http://localhost:3000
+```
 
+### Tasks — analysis results with filtering and real-time status
 ![Tasks list](.github/screenshots/tasks.jpeg)
 
 ### Task Detail — issues, stages, and config comparison
-
 ![Task detail](.github/screenshots/task_details.jpeg)
 
 ### Analyze — submit new analysis with History Server autocomplete
-
 ![Analyze](.github/screenshots/analyze.jpeg)
 
 ### Statistics — KPI cards, charts, and trend analysis
-
 ![Statistics](.github/screenshots/statistics.jpeg)
-
-### Run
-
-```bash
-make up                          # docker compose — all services + frontend on http://localhost:3000
-cd packages/spark-advisor-frontend && npm run dev  # dev mode with hot reload on http://localhost:5173
-```
-
 
 ## What it detects
 
@@ -163,349 +149,22 @@ cd packages/spark-advisor-frontend && npm run dev  # dev mode with hot reload on
 
 All thresholds are configurable via `Thresholds` model.
 
----
-
-## CLI Usage
-
-### `analyze` — analyze a Spark job
-
-```bash
-# From event log file
-spark-advisor analyze /path/to/event-log.json.gz
-
-# From History Server
-spark-advisor analyze app-20250101120000-0001 -hs http://yarn:18080
-
-# With AI analysis (default if ANTHROPIC_API_KEY is set)
-spark-advisor analyze /path/to/event-log.json.gz
-
-# Without AI (rules only)
-spark-advisor analyze /path/to/event-log.json.gz --no-ai
-
-# Agent mode (multi-turn AI with tool use)
-spark-advisor analyze /path/to/event-log.json.gz --agent
-
-# Verbose mode (per-stage breakdown)
-spark-advisor analyze /path/to/event-log.json.gz --verbose
-
-# JSON output
-spark-advisor analyze /path/to/event-log.json.gz --format json
-
-# Save suggested config to file
-spark-advisor analyze /path/to/event-log.json.gz -o spark-defaults.conf
-
-# Use specific Claude model
-spark-advisor analyze /path/to/event-log.json.gz --model claude-sonnet-4-6
-```
-
-| Flag               | Short | Default             | Description                                   |
-|--------------------|-------|---------------------|-----------------------------------------------|
-| `source`           |       | required            | App ID (with `-hs`) or path to event log file |
-| `--history-server` | `-hs` | `None`              | Spark History Server URL                      |
-| `--no-ai`          |       | `False`             | Disable AI analysis (rules only)              |
-| `--agent`          |       | `False`             | Use agent mode (multi-turn AI with tool use)  |
-| `--model`          | `-m`  | `claude-sonnet-4-6` | Claude model for AI analysis                  |
-| `--output`         | `-o`  | `None`              | Write suggested config to file                |
-| `--format`         | `-f`  | `text`              | Output format: `text` or `json`               |
-| `--verbose`        | `-v`  | `False`             | Show per-stage breakdown                      |
-
-### `scan` — list recent jobs from History Server
-
-```bash
-spark-advisor scan -hs http://yarn:18080 --limit 20
-```
-
-### `version`
-
-```bash
-spark-advisor version
-# spark-advisor v0.1.6
-```
-
-## MCP Server
-
-spark-advisor exposes 7 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) for Claude Desktop, Cursor, and other MCP clients.
-
-**Tools:** `analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`, `get_stage_details`, `compare_jobs`
-
-### Claude Desktop config
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "spark-advisor": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/spark-advisor/packages/spark-advisor-mcp", "python", "-m", "spark_advisor_mcp"],
-      "env": {
-        "ANTHROPIC_API_KEY": "sk-ant-..."
-      }
-    }
-  }
-}
-```
-
-See [docs/mcp-setup.md](docs/mcp-setup.md) for Cursor and Claude Code configuration.
-
-## Microservices
-
-Three NATS-based services for distributed analysis:
-
-```
-User → Frontend (nginx) → Gateway (REST) → NATS → HS Connector (fetch) → NATS → Analyzer (rules + AI) → result
-```
-
-### Start
-
-```bash
-make up    # docker compose up -d (NATS + gateway + analyzer + hs-connector + frontend)
-```
-
-### Usage
-
-```bash
-# Submit analysis (async)
-curl -X POST http://localhost:8080/api/v1/analyze \
-  -H 'Content-Type: application/json' \
-  -d '{"app_id": "app-20250101120000-0001"}'
-
-# Poll result
-curl http://localhost:8080/api/v1/tasks/<task-id>
-
-# List recent apps
-curl http://localhost:8080/api/v1/applications?limit=20
-
-# Agent mode
-curl -X POST http://localhost:8080/api/v1/analyze \
-  -H 'Content-Type: application/json' \
-  -d '{"app_id": "app-123", "mode": "agent"}'
-
-# List tasks with filtering
-curl "http://localhost:8080/api/v1/tasks?status=completed&limit=10"
-
-# Get rule violations for a task
-curl http://localhost:8080/api/v1/tasks/<task-id>/rules
-
-# Get config comparison
-curl http://localhost:8080/api/v1/tasks/<task-id>/config
-
-# Application analysis history
-curl http://localhost:8080/api/v1/apps/app-123/history
-
-# Dashboard statistics
-curl "http://localhost:8080/api/v1/stats/summary?days=30"
-
-# WebSocket (real-time task updates)
-wscat -c ws://localhost:8080/api/v1/ws/tasks
-```
-
-### Stop
-
-```bash
-make down
-```
-
-## Kubernetes
-
-Helm charts for deploying to Kubernetes. An umbrella chart installs all services + NATS in a single command.
-
-### Local development with Minikube
-
-```bash
-# Start minikube
-minikube start
-
-# Set ANTHROPIC_API_KEY (e.g. via .envrc or export)
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Build images inside minikube and deploy (creates namespace spark-advisor)
-make minikube-deploy
-
-# Forward gateway port to localhost
-kubectl port-forward -n spark-advisor svc/spark-advisor-gateway 8080:8080
-
-# Test
-curl http://localhost:8080/health/live
-```
-
-### Install on a cluster
-
-```bash
-# Create secret for Claude API key
-kubectl create secret generic anthropic-api-key \
-  --from-literal=api-key=sk-ant-...
-
-# Install with Helm
-helm dependency update charts/spark-advisor
-helm install spark-advisor charts/spark-advisor \
-  --set analyzer.anthropicApiKey.existingSecret=anthropic-api-key \
-  --set hs-connector.config.historyServerUrl=http://spark-history:18080
-```
-
-### Enable Ingress
-
-```bash
-helm install spark-advisor charts/spark-advisor \
-  --set gateway.ingress.enabled=true \
-  --set gateway.ingress.hosts[0].host=spark-advisor.example.com \
-  --set gateway.ingress.hosts[0].paths[0].path=/ \
-  --set gateway.ingress.hosts[0].paths[0].pathType=Prefix
-```
-
-### Chart structure
-
-```
-charts/
-├── spark-advisor/       # Umbrella chart (installs everything)
-├── analyzer/            # Rules engine + AI worker (NATS subscriber)
-├── gateway/             # REST API (Service + optional Ingress)
-├── hs-connector/        # History Server poller (NATS subscriber)
-└── frontend/           # Web dashboard (nginx + reverse proxy)
-```
-
-Each service has a ConfigMap mapping `values.yaml` to the `SA_*` environment variables expected by pydantic-settings. NATS URL is auto-resolved from the release name when deployed via the umbrella chart.
-
-### Observability (optional)
-
-Observability is **disabled by default** for docker-compose (local dev) and **enabled by default** in Helm charts (production). Services work out-of-the-box with console logging — no extra configuration needed for local development.
-
-Helm charts ship with `jsonLog: true` and `metricsEnabled: true`. To override for debugging:
-
-```bash
-helm install spark-advisor charts/spark-advisor \
-  --set gateway.config.jsonLog=false    # console logging in pod
-```
-
-| Feature | Env var | Default (docker-compose) | Default (Helm) | Description |
-|---------|---------|-------------------------|----------------|-------------|
-| JSON logging | `SA_*_JSON_LOG` | `false` | `true` | Structured JSON logs (structlog) |
-| Prometheus metrics | `SA_GATEWAY_METRICS_ENABLED` | `false` | `true` | `/metrics` endpoint on gateway |
-| Distributed tracing | `SA_*_OTEL__ENABLED` | `false` | `true` | OpenTelemetry spans with W3C Traceparent via NATS |
-| Tracing endpoint | `SA_*_OTEL__ENDPOINT` | `http://localhost:4317` | `http://tempo:4317` | OTLP gRPC collector (Grafana Tempo) |
-| Health checks | Always on | — | — | `/health/ready` (gateway), NATS exec probes (analyzer, hs-connector) |
-
-Optional monitoring stack (requires `make up` running first):
-```bash
-SA_GATEWAY_METRICS_ENABLED=true SA_OTEL_ENABLED=true make up   # Enable metrics + tracing
-make monitoring-up                         # Start Prometheus + Grafana + Tempo
-make monitoring-down                       # Stop monitoring
-```
-
-With tracing enabled, logs include `trace_id` and `span_id` fields. Traces are visible in Grafana (localhost:3001) → Tempo datasource.
-
-Docker images are published to GitHub Container Registry on each release:
-- `ghcr.io/pstysz/spark-advisor-analyzer`
-- `ghcr.io/pstysz/spark-advisor-gateway`
-- `ghcr.io/pstysz/spark-advisor-hs-connector`
-- `ghcr.io/pstysz/spark-advisor-frontend`
-
-## Architecture
-
-```mermaid
-graph TB
-    subgraph sources["Data Sources"]
-        HS["Spark History Server"]
-        EL["Event Log File"]
-    end
-
-    subgraph packages["spark-advisor (uv monorepo, 8 packages)"]
-        MODELS["models<br/>(Pydantic contracts)"]
-        RULES["rules<br/>(11 deterministic rules)"]
-        ANALYZER["analyzer<br/>(rules + AI worker)"]
-        CONNECTOR["hs-connector<br/>(History Server client)"]
-        GATEWAY["gateway<br/>(REST API)"]
-        FRONTEND["frontend<br/>(React SPA)"]
-        CLI["cli<br/>(Typer + Rich)"]
-        MCP["mcp<br/>(MCP server)"]
-    end
-
-    NATS["NATS"]
-    CLAUDE["Claude API"]
-
-    HS --> CONNECTOR
-    HS --> CLI
-    HS --> MCP
-    EL --> CLI
-    EL --> MCP
-
-    MODELS --> RULES
-    RULES --> ANALYZER
-    RULES --> CLI
-    RULES --> MCP
-    CONNECTOR --> CLI
-    CONNECTOR --> MCP
-    ANALYZER --> CLI
-
-    FRONTEND --> GATEWAY
-    GATEWAY --> NATS
-    NATS --> CONNECTOR
-    NATS --> ANALYZER
-    ANALYZER --> CLAUDE
-```
-
-**Package dependencies:**
-- **models** — shared Pydantic contracts (`JobAnalysis`, `AnalysisResult`, `SparkConfig`), zero I/O
-- **rules** — pure business logic, depends only on models
-- **analyzer** — AI worker (rules + Claude API), depends on models + rules
-- **hs-connector** — History Server client, depends only on models
-- **gateway** — REST API + NATS orchestration, depends only on models
-- **cli** — standalone CLI, depends on models + rules + analyzer + hs-connector
-- **mcp** — MCP server, depends on models + rules + analyzer + hs-connector + cli
-- **frontend** — React SPA (TypeScript), communicates with gateway via REST API and WebSocket
-
-## Development
-
-```bash
-make check       # Lint + mypy + all tests (CI-ready)
-make test        # Run 570 tests across 7 packages
-make lint        # Ruff + mypy (strict)
-make format      # Auto-format code
-make demo-local  # Run rules-only analysis on sample event log
-make up          # Start microservices (docker compose)
-make down        # Stop microservices
-make monitoring-up   # Start Prometheus + Grafana (optional)
-make monitoring-down # Stop monitoring stack
-```
-
-### Tech Stack
-
-| Tool                  | Role                                                  |
-|-----------------------|-------------------------------------------------------|
-| **Python 3.12+**      | Language                                              |
-| **uv**                | Package manager + workspace                           |
-| **Pydantic v2**       | Data models, validation, JSON Schema for Claude tools |
-| **pydantic-settings** | Configuration (env vars, YAML, .env)                  |
-| **NATS**              | Message broker (15MB binary, replaces Kafka)          |
-| **FastStream**        | Type-safe NATS workers                                |
-| **FastAPI**           | REST API (gateway)                                    |
-| **nats-py**           | NATS client with request-reply (gateway)              |
-| **httpx**             | HTTP client for History Server                        |
-| **anthropic**         | Claude SDK for AI analysis                            |
-| **mcp**               | MCP server SDK (FastMCP, stdio)                       |
-| **Typer**             | CLI framework                                         |
-| **Rich**              | Terminal output (tables, colors, panels)              |
-| **orjson**            | Fast JSON parsing for event logs                      |
-| **Ruff**              | Linter + formatter                                    |
-| **mypy**              | Type checker (strict mode)                            |
-| **pytest**            | Testing with coverage and fixtures                    |
-| **SQLAlchemy**        | Async ORM for task persistence (SQLite + WAL mode)    |
-| **aiosqlite**         | Async SQLite driver for SQLAlchemy                    |
-| **structlog**         | Structured logging (JSON/console, correlation IDs)    |
-| **Prometheus**        | Metrics collection (gateway, optional)                |
-| **Grafana**           | Monitoring dashboard (optional)                       |
-| **OpenTelemetry**     | Distributed tracing (W3C Traceparent, Grafana Tempo)  |
-| **Helm**              | Kubernetes deployment (umbrella chart + 4 subcharts)  |
-| **Docker**            | Multi-stage builds with uv, published to ghcr.io      |
-
-### Testing
-
-570 tests across 7 packages: models (47), rules (45), cli (78), analyzer (86), hs-connector (68), gateway (171), mcp (75).
-
-```bash
-uv run pytest -v               # all packages
-cd packages/spark-advisor-rules && uv run pytest -v  # single package
-```
+## Documentation
+
+| Area | Description |
+|------|-------------|
+| [CLI Reference](packages/spark-advisor-cli/README.md) | Full CLI usage, flags, examples |
+| [Gateway / REST API](packages/spark-advisor-gateway/README.md) | 18 endpoints, curl examples, microservices setup |
+| [MCP Server](docs/mcp-setup.md) | Claude Desktop, Cursor, Claude Code integration |
+| [Frontend Dashboard](packages/spark-advisor-frontend/README.md) | React SPA development guide |
+| [Helm / Kubernetes](charts/README.md) | Deployment, Minikube, Ingress, chart structure |
+| [Monitoring](monitoring/README.md) | Prometheus, Grafana dashboards, Tempo tracing |
+| [Architecture](docs/architecture.md) | System design, data flows, NATS subjects, diagrams |
+| [Development](docs/development.md) | Tech stack, make commands, testing, environment variables |
+| [Analyzer](packages/spark-advisor-analyzer/README.md) | Rules + AI worker configuration |
+| [HS Connector](packages/spark-advisor-hs-connector/README.md) | History Server integration and polling |
+| [Models](packages/spark-advisor-models/README.md) | Pydantic data contracts |
+| [Rules Engine](packages/spark-advisor-rules/README.md) | 11 deterministic analysis rules |
 
 ## Roadmap
 
@@ -519,7 +178,7 @@ cd packages/spark-advisor-rules && uv run pytest -v  # single package
 - [x] Agent mode — multi-turn Claude analysis with 6 tools
 - [x] MCP server — Claude Desktop / Cursor integration (7 tools)
 - [x] GitHub Actions CI (lint + test + Helm lint)
-- [x] Helm charts for Kubernetes deployment (umbrella chart + 4 subcharts)
+- [x] Helm charts for Kubernetes deployment (umbrella chart + 8 subcharts)
 - [x] Docker images published to ghcr.io on release
 - [x] PyPI release (`pip install spark-advisor`)
 - [x] Task persistence (SQLite + SQLAlchemy async)
@@ -530,7 +189,7 @@ cd packages/spark-advisor-rules && uv run pytest -v  # single package
 - [x] Web dashboard — React 19 SPA with real-time updates, statistics, analysis submission
 - [x] Structured logging (structlog) with JSON/console rendering
 - [x] OpenTelemetry distributed tracing (W3C Traceparent via NATS headers, Grafana Tempo)
-- [x] Prometheus metrics + Grafana dashboard (optional)
+- [x] Prometheus metrics + Grafana dashboards (3 dashboards: main, NATS, rules)
 - [x] Extended health checks (NATS connectivity, SQLite)
 - [ ] Terminal demo GIF
 

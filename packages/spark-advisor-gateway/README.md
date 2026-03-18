@@ -1,6 +1,8 @@
+[↩ spark-advisor](../../README.md)
+
 # spark-advisor-gateway
 
-REST API gateway for spark-advisor — orchestrates analysis via NATS. Part of the [spark-advisor](https://github.com/pstysz/spark-advisor) ecosystem.
+REST API gateway for spark-advisor — orchestrates analysis via NATS. Part of the [spark-advisor](../../README.md) ecosystem.
 
 ## Install
 
@@ -15,7 +17,60 @@ FastAPI-based REST gateway that accepts analysis requests and orchestrates the f
 1. Receives `POST /api/v1/analyze` with app ID
 2. Fetches job data from History Server (via hs-connector over NATS)
 3. Sends job data for analysis (via analyzer over NATS)
-4. Returns results via polling `GET /api/v1/tasks/{id}`
+4. Returns results via polling `GET /api/v1/tasks/{id}` or WebSocket
+
+## Microservices
+
+Three NATS-based services for distributed analysis:
+
+```
+User → Frontend (nginx) → Gateway (REST) → NATS → HS Connector (fetch) → NATS → Analyzer (rules + AI) → result
+```
+
+### Start / Stop
+
+```bash
+make up    # docker compose up -d (NATS + gateway + analyzer + hs-connector + frontend)
+make down  # stop all services
+```
+
+### Usage examples
+
+```bash
+# Submit analysis (async)
+curl -X POST http://localhost:8080/api/v1/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{"app_id": "app-20250101120000-0001"}'
+
+# Poll result
+curl http://localhost:8080/api/v1/tasks/<task-id>
+
+# List recent apps
+curl http://localhost:8080/api/v1/applications?limit=20
+
+# Agent mode
+curl -X POST http://localhost:8080/api/v1/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{"app_id": "app-123", "mode": "agent"}'
+
+# List tasks with filtering
+curl "http://localhost:8080/api/v1/tasks?status=completed&limit=10"
+
+# Get rule violations for a task
+curl http://localhost:8080/api/v1/tasks/<task-id>/rules
+
+# Get config comparison
+curl http://localhost:8080/api/v1/tasks/<task-id>/config
+
+# Application analysis history
+curl http://localhost:8080/api/v1/apps/app-123/history
+
+# Dashboard statistics
+curl "http://localhost:8080/api/v1/stats/summary?days=30"
+
+# WebSocket (real-time task updates)
+wscat -c ws://localhost:8080/api/v1/ws/tasks
+```
 
 ## API endpoints
 
@@ -56,10 +111,14 @@ spark-advisor-gateway
 | `SA_GATEWAY_METRICS_ENABLED` | `false` | Enable Prometheus metrics on `/metrics` |
 | `SA_GATEWAY_OTEL__ENABLED` | `false` | Enable OpenTelemetry distributed tracing |
 
-## Links
+## See also
 
-- [Main project](https://github.com/pstysz/spark-advisor)
-- [Contributing](https://github.com/pstysz/spark-advisor/blob/main/CONTRIBUTING.md)
+- [Main project](../../README.md)
+- [Frontend dashboard](../spark-advisor-frontend/README.md)
+- [Analyzer](../spark-advisor-analyzer/README.md)
+- [HS Connector](../spark-advisor-hs-connector/README.md)
+- [Helm charts](../../charts/README.md)
+- [Contributing](../../CONTRIBUTING.md)
 
 ## License
 

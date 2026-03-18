@@ -46,7 +46,7 @@ function TaskRow({ task, handleRerun, rerunPending, showAppId }: {
       <td style={{ textAlign: "center" }}>
         <StatusBadge status={task.status} />
         {task.status === "failed" && task.error && (
-          <div style={{ fontSize: 11, color: "var(--severity-critical)", marginTop: 4, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={task.error}>
+          <div style={{ fontSize: 11, color: "var(--severity-critical)", marginTop: 4, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", margin: "4px auto 0" }} title={task.error}>
             {task.error}
           </div>
         )}
@@ -167,10 +167,10 @@ export function TasksPage() {
                   <th style={{ minWidth: 280 }}>Task ID</th>
                   <th style={{ textAlign: "center" }}>Mode</th>
                   <th style={{ textAlign: "center" }}>Source</th>
-                  <th>Status</th>
+                  <th style={{ textAlign: "center" }}>Status</th>
                   <th style={{ textAlign: "center" }}>Issues</th>
-                  <th>Duration</th>
-                  <th>Created</th>
+                  <th style={{ textAlign: "center" }}>Duration</th>
+                  <th style={{ textAlign: "center" }}>Created</th>
                   <th></th>
                 </tr>
               </thead>
