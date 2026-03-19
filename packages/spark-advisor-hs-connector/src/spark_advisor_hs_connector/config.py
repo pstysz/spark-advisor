@@ -2,8 +2,8 @@ from enum import StrEnum
 
 from pydantic_settings import SettingsConfigDict
 
-from spark_advisor_models.defaults import NATS_ANALYSIS_SUBMIT_SUBJECT, NATS_FETCH_JOB_SUBJECT
-from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
+from spark_advisor_models.defaults import NATS_FETCH_JOB_SUBJECT
+from spark_advisor_models.settings import BaseConnectorNatsSettings, BaseConnectorSettings
 
 
 class ContextKey(StrEnum):
@@ -14,12 +14,11 @@ class ContextKey(StrEnum):
     SERVICE_NAME = "service_name"
 
 
-class ConnectorNatsSettings(NatsSettings):
-    analysis_submit_subject: str = NATS_ANALYSIS_SUBMIT_SUBJECT
+class ConnectorNatsSettings(BaseConnectorNatsSettings):
     job_fetch_subject: str = NATS_FETCH_JOB_SUBJECT
 
 
-class ConnectorSettings(BaseServiceSettings):
+class ConnectorSettings(BaseConnectorSettings):
     model_config = SettingsConfigDict(
         env_prefix="SA_CONNECTOR_",
         yaml_file="/etc/spark-advisor/hs-connector/config.yaml",
@@ -27,10 +26,6 @@ class ConnectorSettings(BaseServiceSettings):
 
     service_name: str = "spark-advisor-hs-connector"
     nats: ConnectorNatsSettings = ConnectorNatsSettings()
-    polling_enabled: bool = False
     history_server_url: str = "http://localhost:18080"
     history_server_timeout: float = 30.0
-    poll_interval_seconds: int = 60
-    batch_size: int = 50
-    max_processed_apps: int = 10_000
     database_url: str = "sqlite+aiosqlite:///data/hs_connector.db"

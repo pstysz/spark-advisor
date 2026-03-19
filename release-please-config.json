@@ -36,6 +36,10 @@
         },
         {
           "type": "generic",
+          "path": "packages/spark-advisor-parser/pyproject.toml"
+        },
+        {
+          "type": "generic",
           "path": "README.md"
         },
         {

@@ -45,6 +45,7 @@ jobs:
         run: |
           uv build --package spark-advisor-models
           uv build --package spark-advisor-rules
+          uv build --package spark-advisor-parser
           uv build --package spark-advisor-hs-connector
           uv build --package spark-advisor-analyzer
           uv build --package spark-advisor-cli

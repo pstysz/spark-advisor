@@ -1,7 +1,7 @@
 # ─── Python Development ────────────────────────────────────────────────────────
 .PHONY: install dev test lint format check clean
 
-PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-cli packages/spark-advisor-analyzer packages/spark-advisor-hs-connector packages/spark-advisor-gateway packages/spark-advisor-mcp
+PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-parser packages/spark-advisor-cli packages/spark-advisor-analyzer packages/spark-advisor-hs-connector packages/spark-advisor-gateway packages/spark-advisor-mcp
 
 install:
 	uv sync

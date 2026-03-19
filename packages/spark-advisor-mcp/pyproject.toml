@@ -24,6 +24,7 @@ dependencies = [
     "spark-advisor-analyzer==0.1.13",  # x-release-please-version
     "spark-advisor-hs-connector==0.1.13",  # x-release-please-version
     "spark-advisor-cli==0.1.13",  # x-release-please-version
+    "spark-advisor-parser==0.1.13",  # x-release-please-version
     "mcp>=1.26",
 ]
 
@@ -48,6 +49,7 @@ spark-advisor-rules = { workspace = true }
 spark-advisor-analyzer = { workspace = true }
 spark-advisor-hs-connector = { workspace = true }
 spark-advisor-cli = { workspace = true }
+spark-advisor-parser = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -77,6 +79,7 @@ known-first-party = [
     "spark_advisor_analyzer",
     "spark_advisor_hs_connector",
     "spark_advisor_cli",
+    "spark_advisor_parser",
 ]
 
 [tool.ruff.lint.flake8-type-checking]
