@@ -20,7 +20,7 @@ class ConnectorNatsSettings(BaseConnectorNatsSettings):
 
 class ConnectorSettings(BaseConnectorSettings):
     model_config = SettingsConfigDict(
-        env_prefix="SA_CONNECTOR_",
+        env_prefix="SA_HS_CONNECTOR_",
         yaml_file="/etc/spark-advisor/hs-connector/config.yaml",
     )
 

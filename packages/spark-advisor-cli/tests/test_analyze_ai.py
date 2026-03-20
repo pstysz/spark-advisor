@@ -20,8 +20,8 @@ runner = CliRunner()
 
 
 def _make_ai_result(app_id: str = "application_1234567890_0001") -> AnalysisResult:
-    from spark_advisor_cli.event_log.parser import parse_event_log
     from spark_advisor_models.config import Thresholds
+    from spark_advisor_parser import parse_event_log
     from spark_advisor_rules import StaticAnalysisService, rules_for_threshold
 
     job = parse_event_log(SAMPLE_LOG)

@@ -47,6 +47,7 @@ jobs:
           uv build --package spark-advisor-rules
           uv build --package spark-advisor-parser
           uv build --package spark-advisor-hs-connector
+          uv build --package spark-advisor-storage-connector
           uv build --package spark-advisor-analyzer
           uv build --package spark-advisor-cli
           uv build --package spark-advisor-mcp
@@ -72,6 +73,8 @@ jobs:
             dockerfile: packages/spark-advisor-gateway/Dockerfile
           - name: spark-advisor-hs-connector
             dockerfile: packages/spark-advisor-hs-connector/Dockerfile
+          - name: spark-advisor-storage-connector
+            dockerfile: packages/spark-advisor-storage-connector/Dockerfile
           - name: spark-advisor-frontend
             dockerfile: packages/spark-advisor-frontend/Dockerfile
     steps:

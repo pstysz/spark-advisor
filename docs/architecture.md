@@ -2,33 +2,34 @@
 
 ## Overview
 
-spark-advisor is a distributed system for automated Apache Spark job performance analysis. It collects job metrics from Spark History Server (or local event log files), runs a deterministic rules engine, optionally invokes Claude AI for recommendations, and delivers structured results via REST API or CLI.
+spark-advisor is a distributed system for automated Apache Spark job performance analysis. It collects job metrics from Spark History Server, storage systems (HDFS/S3/GCS), or local event log files, runs a deterministic rules engine, optionally invokes Claude AI for recommendations, and delivers structured results via REST API or CLI.
 
 ```
-                          NATS Message Broker
-                 ┌────────────┬──────────────────┐
-                 │            │                  │
-            job.fetch    analysis.run     analysis.submit
-           (req-reply)   (req-reply)      (pub/sub)
-                 │            │                  │
-                 ▼            ▼                  │
- ┌──────────────────┐  ┌──────────────┐  ┌───────┴─────────┐   ┌────────────┐
- │  HS Connector    │  │   Analyzer   │  │     Gateway     │   │  Frontend  │
- │  (FastStream)    │  │ (FastStream) │  │    (FastAPI)    │◄──│  (nginx)   │
- │                  │  │              │  │                 │   │            │
- │ • fetch jobs     │  │ • rules (11) │  │ • REST API (18) │   │ • React 19 │
- │ • poll HS        │  │ • AI advisor │  │ • WebSocket     │   │ • Vite 6   │
- │ • list apps      │  │ • agent mode │  │ • task store    │   │ • Recharts │
- └────────┬─────────┘  └──────┬───────┘  └─────────────────┘   └─────┬──────┘
-          │                   │                                      │
-          ▼                   ▼                                      ▼
-     Spark History       Claude API                            User (Browser)
-       Server
-
- Event Log File ─── parse ──► CLI (standalone, no infrastructure)
+                              NATS Message Broker
+                 ┌────────────┬──────────────────┬──────────────────┐
+                 │            │                  │                  │
+            job.fetch    analysis.run     analysis.submit   storage.fetch.*
+           (req-reply)   (req-reply)      (pub/sub)         (req-reply)
+                 │            │                  │                  │
+                 ▼            ▼                  │                  ▼
+ ┌──────────────────┐  ┌──────────────┐  ┌───────┴─────────┐  ┌───────────────────┐
+ │  HS Connector    │  │   Analyzer   │  │     Gateway     │  │ Storage Connector │
+ │  (FastStream)    │  │ (FastStream) │  │    (FastAPI)    │  │   (FastStream)    │
+ │                  │  │              │  │                 │  │                   │
+ │ • fetch jobs     │  │ • rules (11) │  │ • REST API (18) │  │ • HDFS (WebHDFS)  │
+ │ • poll HS        │  │ • AI advisor │  │ • WebSocket     │  │ • S3 (aiobotocore)│
+ │ • list apps      │  │ • agent mode │  │ • task store    │  │ • GCS (gcloud-aio)│
+ └────────┬─────────┘  └──────┬───────┘  └─────────────────┘  └────────┬──────────┘
+          │                   │                  ▲                      │
+          ▼                   ▼                  │                      ▼
+     Spark History       Claude API         ┌────┴──────┐         HDFS / S3 / GCS
+       Server                               │ Frontend  │
+                                            │ (nginx)   │
+ Event Log File ─── parse ──► CLI           │ • React 19│
+   (standalone, no infrastructure)          └───────────┘
 ```
 
-Four services communicate via NATS (gateway, analyzer, hs-connector) and HTTP (frontend → gateway). Frontend serves a React SPA via nginx, proxying `/api/` requests to gateway. A standalone CLI operates without any infrastructure for local analysis.
+Five services communicate via NATS (gateway, analyzer, hs-connector, storage-connector) and HTTP (frontend → gateway). Frontend serves a React SPA via nginx, proxying `/api/` requests to gateway. A standalone CLI operates without any infrastructure for local analysis.
 
 > Diagram: [01-system-overview.mmd](diagrams/01-system-overview.mmd)
 
@@ -42,7 +43,7 @@ Four services communicate via NATS (gateway, analyzer, hs-connector) and HTTP (f
 | **DRY**                    | `BaseServiceSettings` in models — inherited by all services. `fetch_job_from_hs()` shared between handler and poller. `NatsSettings` base DTO extended per service. Test factories centralized in models. |
 | **KISS**                   | Plain JSON on NATS (no Avro/Protobuf). FastStream handles Pydantic serde automatically. SQLite task store. No DLQ, no circuit breaker, no rate limiter — graceful degradation instead.                     |
 | **Separation of Concerns** | Each service owns its domain logic and private models. Shared `models` package contains ONLY contracts and configuration DTOs — zero infrastructure.                                                      |
-| **12-Factor App**          | Config from environment (`SA_ANALYZER_*`, `SA_CONNECTOR_*`, `SA_GATEWAY_*`). Stateless services. Explicit dependencies in `pyproject.toml`. Fast startup/shutdown via FastStream lifespan.                |
+| **12-Factor App**          | Config from environment (`SA_ANALYZER_*`, `SA_HS_CONNECTOR_*`, `SA_GATEWAY_*`, `SA_STORAGE_*`). Stateless services. Explicit dependencies in `pyproject.toml`. Fast startup/shutdown via FastStream lifespan.                |
 
 ---
 
@@ -57,7 +58,9 @@ Each package owns its domain and can be independently deployed, scaled, and test
 | **analyzer**     | Service | `AdviceOrchestrator`, `LlmAnalysisService`, `AnthropicClient`, prompts, tool schema                                                                                                   | REST API, HS client, event log parsing  |
 | **gateway**      | Service | REST API, `TaskManager`, `TaskStore` (SQLAlchemy + SQLite), `TaskExecutor`                                                                                                            | Analysis logic, HS client, Claude API   |
 | **hs-connector** | Service | `HistoryServerClient`, mapper, `HistoryServerPoller`, `PollingState`, `ApplicationSummary` model                                                                                      | Analysis logic, Claude API, REST API    |
-| **cli**          | App     | Event log parser, Rich console output, `analyze` (file + HS + optional AI), `scan` (list HS apps), `version`                                                                          | NATS messaging, REST API serving        |
+| **parser**       | Library | Event log parsing with compression support (.json, .gz, .lz4, .snappy, .zstd), shared by CLI and storage-connector                                                                     | NATS messaging, REST API, storage I/O   |
+| **storage-connector** | Service | `StorageConnector` protocol (HDFS/S3/GCS strategy), `StoragePoller`, `PollingStore` (SQLite), event log builder                                                                    | Analysis logic, Claude API, REST API    |
+| **cli**          | App     | Rich console output, `analyze` (file + HS + optional AI), `scan` (list HS apps), `version`                                                                                             | NATS messaging, REST API serving        |
 | **mcp**          | App     | MCP server (stdio), 7 tools (`analyze_spark_job`, `scan_recent_jobs`, `get_job_config`, `suggest_config`, `explain_metric`, `get_stage_details`, `compare_jobs`), markdown formatting for MCP responses | NATS messaging, REST API serving        |
 | **frontend**     | SPA     | React 19 dashboard, nginx reverse proxy                                                                                                                                                                 | API logic, business rules               |
 
@@ -69,7 +72,7 @@ Each package owns its domain and can be independently deployed, scaled, and test
 spark-advisor/
 ├── pyproject.toml                           # workspace root
 ├── Makefile
-├── docker-compose.yaml                      # NATS + 4 services
+├── docker-compose.yaml                      # NATS + 5 services
 ├── packages/
 │   ├── spark-advisor-models/                # LIBRARY
 │   │   └── src/spark_advisor_models/
@@ -116,12 +119,26 @@ spark-advisor/
 │   │       ├── poller.py                    # HistoryServerPoller (batch)
 │   │       └── polling_state.py             # PollingState (in-memory)
 │   │
+│   ├── spark-advisor-parser/                # LIBRARY (shared event log parser)
+│   │   └── src/spark_advisor_parser/
+│   │       └── parser.py                    # parse_event_log(), compression support (.gz, .lz4, .snappy, .zstd)
+│   │
+│   ├── spark-advisor-storage-connector/     # SERVICE (FastStream + NATS)
+│   │   ├── Dockerfile                       # ARG CONNECTOR_TYPE — conditional extras install
+│   │   └── src/spark_advisor_storage_connector/
+│   │       ├── app.py                       # FastStream app + lazy connector import
+│   │       ├── config.py                    # StorageConnectorSettings, ConnectorType enum
+│   │       ├── handlers.py                  # create_router(subject, connector_type)
+│   │       ├── connectors/                  # protocol.py, hdfs.py, s3.py, gcs.py
+│   │       ├── event_log_builder.py         # fetch bytes → temp file → parse_event_log()
+│   │       ├── poller.py                    # StoragePoller (batch)
+│   │       └── store.py                     # PollingStore (SQLite)
+│   │
 │   ├── spark-advisor-cli/                   # APP (Typer + Rich)
 │   │   └── src/spark_advisor_cli/
 │   │       ├── app.py                       # Typer entry point
 │   │       ├── commands/                    # analyze, scan, version
-│   │       ├── output/                      # Rich console
-│   │       └── event_log/                   # streaming parser
+│   │       └── output/                      # Rich console
 │   │
 │   ├── spark-advisor-mcp/                   # APP (MCP Server, stdio)
 │   │   └── src/spark_advisor_mcp/
@@ -151,29 +168,36 @@ spark-advisor/
 
 ```
 spark-advisor-models          (contracts, ~500 lines)
-    ▲  ▲  ▲  ▲  ▲
-    │  │  │  │  │
-    │  │  │  │  spark-advisor-rules       (rules engine, ~450 lines)
-    │  │  │  │      ▲  ▲
-    │  │  │  │      │  │
-    │  │  │  │      │  spark-advisor-analyzer    (AI worker)
-    │  │  │  │      │      ▲
-    │  │  │  │      │      │
-    │  │  │  spark-advisor-hs-connector          (HS integration)
-    │  │  │       ▲        │
-    │  │  │       │        │
-    │  │  │       spark-advisor-cli              (CLI — depends on rules, analyzer, hs-connector)
-    │  │  │       spark-advisor-mcp              (MCP — depends on rules, analyzer, hs-connector, cli)
+    ▲  ▲  ▲  ▲  ▲  ▲
+    │  │  │  │  │  │
+    │  │  │  │  │  spark-advisor-rules       (rules engine, ~450 lines)
+    │  │  │  │  │      ▲  ▲
+    │  │  │  │  │      │  │
+    │  │  │  │  │      │  spark-advisor-analyzer    (AI worker)
+    │  │  │  │  │      │      ▲
+    │  │  │  │  │      │      │
+    │  │  │  │  spark-advisor-hs-connector          (HS integration)
+    │  │  │  │       ▲        │
+    │  │  │  │       │        │
+    │  │  │  │       spark-advisor-cli              (CLI — depends on rules, analyzer, hs-connector, parser)
+    │  │  │  │       spark-advisor-mcp              (MCP — depends on rules, analyzer, hs-connector, cli, parser)
+    │  │  │  │
+    │  │  │  spark-advisor-parser                   (event log parser, compression)
+    │  │  │       ▲
+    │  │  │       │
+    │  │  │       spark-advisor-storage-connector   (HDFS/S3/GCS, depends on models + parser)
     │  │  │
-    │  │  spark-advisor-gateway                  (API gateway)
+    │  │  spark-advisor-gateway                     (API gateway)
 ```
 
 Key constraints:
 - **gateway** depends ONLY on models — doesn't know about rules or AI
 - **hs-connector** depends ONLY on models — owns HS client and mapper
+- **storage-connector** depends on models and parser — owns storage clients (HDFS/S3/GCS) and polling
+- **parser** is a shared library — used by CLI, MCP, and storage-connector
 - **rules** is pure business logic — zero I/O, zero infrastructure dependencies
 - **analyzer** depends on models and rules (runs static analysis + AI)
-- **cli** depends on models, rules, analyzer, and hs-connector (reuses AdviceOrchestrator and HistoryServerClient)
+- **cli** depends on models, rules, analyzer, hs-connector, and parser
 
 > Diagram: [02-package-dependencies.mmd](diagrams/02-package-dependencies.mmd)
 
@@ -350,15 +374,15 @@ The sole owner of Spark History Server integration. Two responsibilities:
 - `model/output.py` — `ApplicationSummary`, `Attempt` (private to this service, not in models package)
 
 **Config env vars:**
-- `SA_CONNECTOR_NATS__URL` — NATS server URL
-- `SA_CONNECTOR_HISTORY_SERVER__URL` — Spark History Server URL
-- `SA_CONNECTOR_HISTORY_SERVER__TIMEOUT` — HTTP timeout (default: 30s)
-- `SA_CONNECTOR_POLLING_ENABLED` — enable/disable background polling (default: false)
-- `SA_CONNECTOR_POLL_INTERVAL_SECONDS` — batch poll interval (default: 60)
-- `SA_CONNECTOR_BATCH_SIZE` — max jobs per poll (default: 50)
-- `SA_CONNECTOR_SERVICE_NAME` — service name for logging and tracing (default: spark-advisor-hs-connector)
-- `SA_CONNECTOR_OTEL__ENABLED` — enable OpenTelemetry tracing + httpx auto-instrumentation (default: false, Helm: true)
-- `SA_CONNECTOR_OTEL__ENDPOINT` — OTLP gRPC endpoint (default: http://localhost:4317)
+- `SA_HS_CONNECTOR_NATS__URL` — NATS server URL
+- `SA_HS_CONNECTOR_HISTORY_SERVER__URL` — Spark History Server URL
+- `SA_HS_CONNECTOR_HISTORY_SERVER__TIMEOUT` — HTTP timeout (default: 30s)
+- `SA_HS_CONNECTOR_POLLING_ENABLED` — enable/disable background polling (default: false)
+- `SA_HS_CONNECTOR_POLL_INTERVAL_SECONDS` — batch poll interval (default: 60)
+- `SA_HS_CONNECTOR_BATCH_SIZE` — max jobs per poll (default: 50)
+- `SA_HS_CONNECTOR_SERVICE_NAME` — service name for logging and tracing (default: spark-advisor-hs-connector)
+- `SA_HS_CONNECTOR_OTEL__ENABLED` — enable OpenTelemetry tracing + httpx auto-instrumentation (default: false, Helm: true)
+- `SA_HS_CONNECTOR_OTEL__ENDPOINT` — OTLP gRPC endpoint (default: http://localhost:4317)
 
 **History Server endpoints used:**
 - `GET /api/v1/applications/{app-id}` — app metadata, duration
@@ -373,6 +397,65 @@ The sole owner of Spark History Server integration. Two responsibilities:
 - Poller publishes fire-and-forget to `analysis.submit` (gateway creates task, then forwards to analyzer — single persistence path)
 - `PollingState` is in-memory — acceptable because missing a poll cycle just means re-checking the same apps
 
+### spark-advisor-parser (Library)
+
+Shared event log parser used by CLI, MCP, and storage-connector. Extracts `JobAnalysis` from Spark event log files with auto-detection of compression format.
+
+**Owns:**
+- `parser.py` — `parse_event_log()` function, `_open_event_log()` context manager with compression support
+
+**Supported formats:** `.json`, `.json.gz`, `.lz4`, `.snappy`, `.zstd`, `.zst`
+
+**Key design decisions:**
+- Streams line-by-line — never loads entire file into memory (files can be 100MB+)
+- Only ~1-5% of event types are relevant (SparkListenerStageCompleted, TaskEnd, etc.) — rest are skipped
+- Compression auto-detected by file extension
+- Extracted from CLI as shared library to avoid duplicating parsing logic in storage-connector
+
+### spark-advisor-storage-connector (Service)
+
+Reads Spark event logs from cloud/distributed storage systems. Strategy pattern with 3 connector implementations (HDFS, S3, GCS). Two responsibilities:
+1. **On-demand fetch** — subscribes to NATS `storage.fetch.{type}`, returns `JobAnalysis` for a given event log URI
+2. **Batch polling** — asyncio background task periodically polls storage for new event logs, publishes to `analysis.submit`
+
+**Owns:**
+- `connectors/protocol.py` — `StorageConnector` protocol + `EventLogRef` dataclass
+- `connectors/hdfs.py` — `HdfsConnector` (httpx WebHDFS REST API)
+- `connectors/s3.py` — `S3Connector` (aiobotocore, optional dep `[s3]`)
+- `connectors/gcs.py` — `GcsConnector` (gcloud-aio-storage, optional dep `[gcs]`)
+- `handlers.py` — `create_router(subject, connector_type)` — dynamic NATS handler
+- `event_log_builder.py` — fetch bytes → temp file → `parse_event_log()` (delegates to parser package)
+- `poller.py` — `StoragePoller` (batch polling)
+- `store.py` — `PollingStore` (SQLite, tracks processed apps)
+- `config.py` — `StorageConnectorSettings`, `ConnectorType` enum, per-connector settings
+
+**Config env vars:**
+- `SA_STORAGE_NATS__URL` — NATS server URL
+- `SA_STORAGE_CONNECTOR_TYPE` — storage backend: `hdfs`, `s3`, or `gcs` (default: hdfs)
+- `SA_STORAGE_POLLING_ENABLED` — enable/disable background polling (default: false)
+- `SA_STORAGE_POLL_INTERVAL_SECONDS` — poll interval (default: 60)
+- `SA_STORAGE_BATCH_SIZE` — max event logs per poll (default: 50)
+- `SA_STORAGE_DATABASE_URL` — auto-generated per connector type (e.g. `storage_hdfs_connector.db`)
+- `SA_STORAGE_HDFS__NAMENODE_URL` — HDFS NameNode WebHDFS URL (default: http://localhost:9870)
+- `SA_STORAGE_S3__BUCKET`, `SA_STORAGE_S3__REGION`, `SA_STORAGE_S3__ENDPOINT_URL` — S3 settings
+- `SA_STORAGE_GCS__BUCKET`, `SA_STORAGE_GCS__PROJECT_ID` — GCS settings
+- `SA_STORAGE_OTEL__ENABLED` — enable OpenTelemetry tracing (default: false, Helm: true)
+
+**NATS subjects (per connector type):**
+- `storage.fetch.hdfs` — on-demand fetch from HDFS
+- `storage.fetch.s3` — on-demand fetch from S3
+- `storage.fetch.gcs` — on-demand fetch from GCS
+
+**Key design decisions:**
+- Strategy pattern — `StorageConnector` protocol with 3 implementations, selected at startup via `ConnectorType` enum
+- `app.py` lazy-imports only the selected connector — unused storage libraries are never loaded
+- Dockerfile uses `ARG CONNECTOR_TYPE` for conditional extras install (`--extra s3`, `--extra gcs`, or nothing for HDFS)
+- HDFS uses httpx WebHDFS REST API — zero extra dependency (httpx already in project)
+- S3/GCS top-level imports in their modules, but modules only imported on demand via match/case
+- Database URL auto-includes connector type (`storage_hdfs_connector.db`) — safe to swap connector type without PVC conflicts
+- Multiple instances with different `CONNECTOR_TYPE` can run on same cluster with separate NATS subjects and databases
+- OpenTelemetry span names per connector type (`storage.fetch.hdfs`, `storage.fetch.s3`, `storage.fetch.gcs`)
+
 ### spark-advisor-cli (App)
 
 Standalone CLI for Spark job analysis. Supports event log files and History Server as data sources, rules engine, and optional AI analysis via Claude.
@@ -381,16 +464,14 @@ Standalone CLI for Spark job analysis. Supports event log files and History Serv
 - `commands/analyze.py` — `analyze` command (event log file or History Server → rules + optional AI → report)
 - `commands/scan.py` — `scan` command (list recent apps from History Server)
 - `commands/version.py` — `version` command
-- `event_log/parser.py` — streaming event log parser (json/json.gz, line-by-line)
 - `output/console.py` — Rich terminal output (tables, panels, colors)
 
 **Two data source modes:**
-- File path — parses event log, runs rules (+ optional AI), prints report. Zero infrastructure needed.
+- File path — parses event log via `spark-advisor-parser`, runs rules (+ optional AI), prints report. Zero infrastructure needed.
 - `--history-server` / `-hs` — fetches from History Server via httpx, runs rules (+ optional AI). Requires running HS.
 
 **Key design decisions:**
-- Event log parser streams line-by-line — never loads entire file into memory (files can be 100MB+)
-- Only ~1-5% of event types are relevant (SparkListenerStageCompleted, TaskEnd, etc.) — rest are skipped
+- Uses `spark-advisor-parser` package for event log parsing (shared with storage-connector)
 - Both HS source and event log source produce the same `JobAnalysis` model — the entire downstream pipeline is identical
 - CLI imports `AdviceOrchestrator` from analyzer and `HistoryServerClient` from hs-connector — reuses existing logic without duplication
 
@@ -472,7 +553,7 @@ Gateway ─── HTTP 200 (poll GET /tasks/{id}) ──────────
 
 ### Batch Flow (Automatic discovery of new jobs)
 
-> Polling is disabled by default (`SA_CONNECTOR_POLLING_ENABLED=false`). When enabled, the default analysis mode for poller-submitted tasks is static (`SA_GATEWAY_NATS__POLLING_ANALYSIS_MODE=static`).
+> Polling is disabled by default (`SA_HS_CONNECTOR_POLLING_ENABLED=false`). When enabled, the default analysis mode for poller-submitted tasks is static (`SA_GATEWAY_NATS__POLLING_ANALYSIS_MODE=static`).
 
 ```
 asyncio loop (every 60s) ──► HS Connector.poll()
@@ -534,7 +615,10 @@ spark-advisor analyze app-123 --history-server http://yarn:18080
 |----------------------|----------------|--------------|--------------|-------------------------------------------------------------|
 | `job.fetch`          | request-reply  | Gateway      | HS Connector | Request: `{"app_id": "..."}` / Reply: `JobAnalysis`         |
 | `apps.list`          | request-reply  | Gateway      | HS Connector | Request: `{"limit": N}` / Reply: `list[ApplicationSummary]` |
-| `analysis.submit`    | pub-sub        | HS Connector | Gateway      | `JobAnalysis` (gateway creates task, forwards to analyzer)  |
+| `analysis.submit`    | pub-sub        | HS Connector / Storage Connector | Gateway | `JobAnalysis` (gateway creates task, forwards to analyzer)  |
+| `storage.fetch.hdfs` | request-reply  | Gateway      | Storage Connector | `StorageFetchRequest` / Reply: `JobAnalysis`           |
+| `storage.fetch.s3`   | request-reply  | Gateway      | Storage Connector | `StorageFetchRequest` / Reply: `JobAnalysis`           |
+| `storage.fetch.gcs`  | request-reply  | Gateway      | Storage Connector | `StorageFetchRequest` / Reply: `JobAnalysis`           |
 | `analysis.run`       | request-reply  | Gateway      | Analyzer     | `JobAnalysis`                                               |
 | `analysis.run.agent` | request-reply  | Gateway      | Analyzer     | `JobAnalysis` (triggers agent mode — multi-turn tool_use)   |
 | `analysis.result`    | pub-sub        | Analyzer     | Gateway      | `AnalysisResult`                                            |
@@ -568,7 +652,7 @@ Defined in `spark_advisor_models.settings`. Provides:
 | Service      | Env prefix      | YAML config path                              |
 |--------------|-----------------|-----------------------------------------------|
 | Analyzer     | `SA_ANALYZER_`  | `/etc/spark-advisor/analyzer/config.yaml`     |
-| HS Connector | `SA_CONNECTOR_` | `/etc/spark-advisor/hs-connector/config.yaml` |
+| HS Connector | `SA_HS_CONNECTOR_` | `/etc/spark-advisor/hs-connector/config.yaml` |
 | Gateway      | `SA_GATEWAY_`   | `/etc/spark-advisor/gateway/config.yaml`      |
 
 ### NatsSettings inheritance
@@ -600,15 +684,16 @@ data:
 
 Each service exposes health endpoints for Kubernetes probes:
 
-| Service      | Liveness                                | Readiness                                    |
-|--------------|-----------------------------------------|----------------------------------------------|
-| Gateway      | `GET /health/live` → `{"status": "ok"}` | `GET /health/ready` → checks NATS + SQLite   |
-| Analyzer     | Kubernetes exec probe (stdlib socket → NATS port) | NATS broker connected              |
-| HS Connector | Kubernetes exec probe (stdlib socket → NATS port) | NATS broker connected              |
+| Service           | Liveness                                | Readiness                                    |
+|-------------------|-----------------------------------------|----------------------------------------------|
+| Gateway           | `GET /health/live` → `{"status": "ok"}` | `GET /health/ready` → checks NATS + SQLite   |
+| Analyzer          | Kubernetes exec probe (stdlib socket → NATS port) | NATS broker connected              |
+| HS Connector      | Kubernetes exec probe (stdlib socket → NATS port) | NATS broker connected              |
+| Storage Connector | Kubernetes exec probe (stdlib socket → NATS port) | NATS broker connected              |
 
 Gateway readiness returns `"degraded"` if NATS is disconnected. Kubernetes will stop routing traffic until reconnection.
 
-Analyzer and HS Connector use lightweight inline socket probes in Helm charts (~44ms latency vs ~313ms for loading the Python module).
+Analyzer, HS Connector, and Storage Connector use lightweight inline socket probes in Helm charts (~44ms latency vs ~313ms for loading the Python module).
 
 ---
 
@@ -705,16 +790,17 @@ Grafana dashboard with 8 panels at `localhost:3001`. Tempo datasource for trace 
 
 ### Helm Charts
 
-Five Helm charts in the `charts/` directory:
+Six Helm charts in the `charts/` directory:
 
 ```
 charts/
 ├── spark-advisor/       # Umbrella chart — installs everything via `helm install`
-│   ├── Chart.yaml       # Dependencies: analyzer, gateway, hs-connector, frontend, nats
+│   ├── Chart.yaml       # Dependencies: analyzer, gateway, hs-connector, storage-connector, frontend, nats
 │   └── values.yaml      # Global overrides (NATS URL auto-resolved from release name)
 ├── analyzer/            # NATS worker (rules + AI), ConfigMap with SA_ANALYZER_* env vars
 ├── gateway/             # REST API, Service, optional Ingress, ConfigMap with SA_GATEWAY_* env vars
-├── hs-connector/        # History Server poller, ConfigMap with SA_CONNECTOR_* env vars
+├── hs-connector/        # History Server poller, ConfigMap with SA_HS_CONNECTOR_* env vars
+├── storage-connector/   # HDFS/S3/GCS event log reader, ConfigMap with SA_STORAGE_* env vars, PVC for SQLite
 └── frontend/            # React SPA (nginx), reverse proxy /api/ → gateway
 ```
 
@@ -722,6 +808,7 @@ charts/
 - `spark-advisor-analyzer` — local subchart (`file://../analyzer`)
 - `spark-advisor-gateway` — local subchart (`file://../gateway`)
 - `spark-advisor-hs-connector` — local subchart (`file://../hs-connector`)
+- `spark-advisor-storage-connector` — local subchart (`file://../storage-connector`), disabled by default
 - `spark-advisor-frontend` — local subchart (`file://../frontend`)
 - `nats` — official NATS Helm chart from `https://nats-io.github.io/k8s/helm/charts/`
 
@@ -729,29 +816,33 @@ charts/
 
 ```
 namespace: spark-advisor
-├── Deployment: gateway          (replicas configurable, port 8080)
-├── Deployment: analyzer         (replicas configurable)
-├── Deployment: hs-connector     (1 replica recommended)
-├── Deployment: frontend         (nginx, port 80, reverse proxy /api/ → gateway)
-├── Service: gateway             (ClusterIP → port 8080)
-├── Service: frontend            (ClusterIP → port 80)
-├── Ingress: gateway             (disabled by default)
-├── ConfigMap: gateway           (SA_GATEWAY_* env vars)
-├── ConfigMap: analyzer          (SA_ANALYZER_* env vars)
-├── ConfigMap: hs-connector      (SA_CONNECTOR_* env vars)
-├── Secret: (user-managed)       (ANTHROPIC_API_KEY)
-└── NATS StatefulSet             (from NATS Helm chart dependency)
+├── Deployment: gateway              (replicas configurable, port 8080)
+├── Deployment: analyzer             (replicas configurable)
+├── Deployment: hs-connector         (1 replica recommended)
+├── Deployment: storage-connector    (1 replica per connector type, optional)
+├── Deployment: frontend             (nginx, port 80, reverse proxy /api/ → gateway)
+├── Service: gateway                 (ClusterIP → port 8080)
+├── Service: frontend                (ClusterIP → port 80)
+├── Ingress: gateway                 (disabled by default)
+├── ConfigMap: gateway               (SA_GATEWAY_* env vars)
+├── ConfigMap: analyzer              (SA_ANALYZER_* env vars)
+├── ConfigMap: hs-connector          (SA_HS_CONNECTOR_* env vars)
+├── ConfigMap: storage-connector     (SA_STORAGE_* env vars)
+├── PVC: storage-connector-data      (SQLite polling state, named per connector type)
+├── Secret: (user-managed)           (ANTHROPIC_API_KEY)
+└── NATS StatefulSet                 (from NATS Helm chart dependency)
 ```
 
 ### ConfigMap → pydantic-settings mapping
 
 Each ConfigMap maps `values.yaml` entries to environment variables matching the service's `env_prefix` and `env_nested_delimiter="__"`:
 
-| Service      | ConfigMap env vars                                                              | Python config class |
-|--------------|---------------------------------------------------------------------------------|---------------------|
-| Analyzer     | `SA_ANALYZER_NATS__URL`, `SA_ANALYZER_AI__ENABLED`, `SA_ANALYZER_THRESHOLDS__*` | `AnalyzerSettings`  |
-| Gateway      | `SA_GATEWAY_SERVER__PORT`, `SA_GATEWAY_NATS__ANALYZE_TIMEOUT`, ...              | `GatewaySettings`   |
-| HS-Connector | `SA_CONNECTOR_HISTORY_SERVER_URL`, `SA_CONNECTOR_POLL_INTERVAL_SECONDS`, ...    | `ConnectorSettings` |
+| Service           | ConfigMap env vars                                                              | Python config class          |
+|-------------------|---------------------------------------------------------------------------------|------------------------------|
+| Analyzer          | `SA_ANALYZER_NATS__URL`, `SA_ANALYZER_AI__ENABLED`, `SA_ANALYZER_THRESHOLDS__*` | `AnalyzerSettings`           |
+| Gateway           | `SA_GATEWAY_SERVER__PORT`, `SA_GATEWAY_NATS__ANALYZE_TIMEOUT`, ...              | `GatewaySettings`            |
+| HS-Connector      | `SA_HS_CONNECTOR_HISTORY_SERVER_URL`, `SA_HS_CONNECTOR_POLL_INTERVAL_SECONDS`, ... | `ConnectorSettings`       |
+| Storage-Connector | `SA_STORAGE_CONNECTOR_TYPE`, `SA_STORAGE_HDFS__NAMENODE_URL`, ...               | `StorageConnectorSettings`   |
 
 All defaults live in `values.yaml` (single source of truth). Deployments use `envFrom: configMapRef` — no hardcoded values in templates. A config checksum annotation triggers pod restarts on ConfigMap changes.
 
@@ -785,12 +876,13 @@ helm install spark-advisor charts/spark-advisor \
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
 
-Runs on every push to `main` and on PRs. Two parallel jobs:
+Runs on every push to `main` and on PRs. Three parallel jobs:
 
 | Job           | What it does                                                                         |
 |---------------|--------------------------------------------------------------------------------------|
 | **check**     | Python matrix (3.12, 3.13): `uv sync` → `make lint` (ruff + mypy) → `make test`      |
-| **helm-lint** | `helm lint` on all 3 subcharts + umbrella chart, `helm template` to verify rendering |
+| **frontend**  | npm ci → type-check → lint → build                                                   |
+| **helm-lint** | `helm lint` on all subcharts (analyzer, gateway, hs-connector, storage-connector, frontend, prometheus, grafana, tempo) + umbrella chart, `helm template` to verify rendering |
 
 ### Release Pipeline (`.github/workflows/release.yml`)
 

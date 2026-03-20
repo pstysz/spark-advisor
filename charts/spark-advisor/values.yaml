@@ -20,6 +20,12 @@ hs-connector:
       url: "nats://spark-advisor-nats:4222"
     historyServerUrl: "http://spark-history:18080"
 
+storage-connector:
+  enabled: false
+  config:
+    nats:
+      url: "nats://spark-advisor-nats:4222"
+
 nats:
   config:
     jetstream:

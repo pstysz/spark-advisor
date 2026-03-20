@@ -40,6 +40,10 @@
         },
         {
           "type": "generic",
+          "path": "packages/spark-advisor-storage-connector/pyproject.toml"
+        },
+        {
+          "type": "generic",
           "path": "README.md"
         },
         {

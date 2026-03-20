@@ -22,6 +22,11 @@ dependencies:
     version: "0.1.13" # x-release-please-version
     repository: "file://../hs-connector"
     alias: hs-connector
+  - name: spark-advisor-storage-connector
+    version: "0.1.13" # x-release-please-version
+    repository: "file://../storage-connector"
+    alias: storage-connector
+    condition: storage-connector.enabled
   - name: nats
     version: "1.2.6"
     repository: "https://nats-io.github.io/k8s/helm/charts/"

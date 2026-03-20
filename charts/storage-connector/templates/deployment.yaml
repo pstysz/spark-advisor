@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "hs-connector.fullname" . }}
+  name: {{ include "storage-connector.fullname" . }}
   labels:
-    {{- include "hs-connector.labels" . | nindent 4 }}
+    {{- include "storage-connector.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "hs-connector.selectorLabels" . | nindent 6 }}
+      {{- include "storage-connector.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
-        {{- include "hs-connector.selectorLabels" . | nindent 8 }}
+        {{- include "storage-connector.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -41,7 +41,7 @@ spec:
               command:
                 - python
                 - -c
-                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_HS_CONNECTOR_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
+                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_STORAGE_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
             initialDelaySeconds: 15
             periodSeconds: 30
             timeoutSeconds: 5
@@ -50,13 +50,13 @@ spec:
               command:
                 - python
                 - -c
-                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_HS_CONNECTOR_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
+                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_STORAGE_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
             initialDelaySeconds: 10
             periodSeconds: 15
             timeoutSeconds: 5
           envFrom:
             - configMapRef:
-                name: {{ include "hs-connector.fullname" . }}
+                name: {{ include "storage-connector.fullname" . }}
           {{- if .Values.config.persistence.enabled }}
           volumeMounts:
             - name: data
@@ -70,5 +70,5 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: {{ include "hs-connector.fullname" . }}-data
+            claimName: {{ include "storage-connector.fullname" . }}-data
       {{- end }}

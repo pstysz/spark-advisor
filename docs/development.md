@@ -85,10 +85,10 @@ make check   # Lint + mypy + tests (full CI pipeline)
 | Gateway | `SA_GATEWAY_SERVER__PORT` | `8080` | REST API port |
 | Gateway | `SA_GATEWAY_DATABASE_URL` | `sqlite+aiosqlite:///data/spark_advisor.db` | SQLite database URL |
 | Gateway | `SA_GATEWAY_WS_HEARTBEAT_INTERVAL` | `30` | WebSocket heartbeat interval (seconds) |
-| hs-connector | `SA_CONNECTOR_HISTORY_SERVER_URL` | `http://localhost:18080` | Spark History Server URL |
-| hs-connector | `SA_CONNECTOR_POLL_INTERVAL_SECONDS` | `60` | Polling interval |
-| hs-connector | `SA_CONNECTOR_BATCH_SIZE` | `50` | Apps per poll cycle |
-| hs-connector | `SA_CONNECTOR_POLLING_ENABLED` | `false` | Enable automatic polling |
+| hs-connector | `SA_HS_CONNECTOR_HISTORY_SERVER_URL` | `http://localhost:18080` | Spark History Server URL |
+| hs-connector | `SA_HS_CONNECTOR_POLL_INTERVAL_SECONDS` | `60` | Polling interval |
+| hs-connector | `SA_HS_CONNECTOR_BATCH_SIZE` | `50` | Apps per poll cycle |
+| hs-connector | `SA_HS_CONNECTOR_POLLING_ENABLED` | `false` | Enable automatic polling |
 | Gateway | `SA_GATEWAY_NATS__POLLING_ANALYSIS_MODE` | `static` | Analysis mode for polled jobs |
 | All | `SA_*_JSON_LOG` | `false` (Helm: `true`) | Enable JSON structured logging |
 | Gateway | `SA_GATEWAY_METRICS_ENABLED` | `false` (Helm: `true`) | Enable Prometheus metrics |

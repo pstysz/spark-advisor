@@ -35,14 +35,34 @@ services:
       nats:
         condition: service_healthy
     environment:
-      SA_CONNECTOR_NATS__URL: "nats://nats:4222"
-      SA_CONNECTOR_POLLING_ENABLED: "${SA_CONNECTOR_POLLING_ENABLED:-false}"
-      SA_CONNECTOR_HISTORY_SERVER_URL: "${SPARK_HISTORY_SERVER_URL:-http://host.docker.internal:18080}"
-      SA_CONNECTOR_DATABASE_URL: "sqlite+aiosqlite:////data/hs_connector.db"
-      SA_CONNECTOR_OTEL__ENABLED: "${SA_OTEL_ENABLED:-false}"
-      SA_CONNECTOR_OTEL__ENDPOINT: "${SA_OTEL_ENDPOINT:-http://tempo:4317}"
+      SA_HS_CONNECTOR_NATS__URL: "nats://nats:4222"
+      SA_HS_CONNECTOR_POLLING_ENABLED: "${SA_HS_CONNECTOR_POLLING_ENABLED:-false}"
+      SA_HS_CONNECTOR_HISTORY_SERVER_URL: "${SPARK_HISTORY_SERVER_URL:-http://host.docker.internal:18080}"
+      SA_HS_CONNECTOR_DATABASE_URL: "sqlite+aiosqlite:////data/hs_connector.db"
+      SA_HS_CONNECTOR_OTEL__ENABLED: "${SA_OTEL_ENABLED:-false}"
+      SA_HS_CONNECTOR_OTEL__ENDPOINT: "${SA_OTEL_ENDPOINT:-http://tempo:4317}"
     volumes:
       - hs-connector-data:/data
+
+  storage-connector:
+    build:
+      context: .
+      dockerfile: packages/spark-advisor-storage-connector/Dockerfile
+      args:
+        CONNECTOR_TYPE: "${SA_STORAGE_CONNECTOR_TYPE:-hdfs}"
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      SA_STORAGE_NATS__URL: "nats://nats:4222"
+      SA_STORAGE_CONNECTOR_TYPE: "${SA_STORAGE_CONNECTOR_TYPE:-hdfs}"
+      SA_STORAGE_POLLING_ENABLED: "${SA_STORAGE_POLLING_ENABLED:-false}"
+      SA_STORAGE_HDFS__NAMENODE_URL: "${SA_STORAGE_HDFS_NAMENODE_URL:-http://host.docker.internal:9870}"
+      SA_STORAGE_DATABASE_URL: "sqlite+aiosqlite:////data/storage_${SA_STORAGE_CONNECTOR_TYPE:-hdfs}_connector.db"
+      SA_STORAGE_OTEL__ENABLED: "${SA_OTEL_ENABLED:-false}"
+      SA_STORAGE_OTEL__ENDPOINT: "${SA_OTEL_ENDPOINT:-http://tempo:4317}"
+    volumes:
+      - storage-connector-data:/data
 
   gateway:
     build:
@@ -82,3 +102,4 @@ volumes:
   nats-data:
   gateway-data:
   hs-connector-data:
+  storage-connector-data:

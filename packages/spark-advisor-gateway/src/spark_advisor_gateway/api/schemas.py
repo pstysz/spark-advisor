@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
 from spark_advisor_models.model import AnalysisMode, DataSource, Severity
@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 
 class AnalyzeRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     app_id: str = Field(
         ...,
         min_length=1,
@@ -26,6 +28,8 @@ class AnalyzeRequest(BaseModel):
 
 
 class ApplicationResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     id: str = Field(examples=["application_1234567890123_0001"])
     name: str = Field(default="", examples=["DailyETL"])
     start_time: str = Field(default="", examples=["2026-03-15T10:00:00.000GMT"])
@@ -53,6 +57,8 @@ class ApplicationResponse(BaseModel):
 
 
 class TaskResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     task_id: str = Field(examples=["a1b2c3d4-e5f6-7890-abcd-ef1234567890"])
     app_id: str = Field(examples=["application_1234567890123_0001"])
     mode: AnalysisMode = Field(examples=["ai"])
@@ -92,6 +98,8 @@ class TaskResponse(BaseModel):
 
 
 class PaginatedTaskResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[TaskResponse]
     total: int = Field(examples=[42])
     limit: int | None = Field(examples=[50])
@@ -99,6 +107,8 @@ class PaginatedTaskResponse(BaseModel):
 
 
 class PaginatedApplicationResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[ApplicationResponse]
     total: int = Field(examples=[15])
     limit: int = Field(examples=[20])
@@ -106,16 +116,22 @@ class PaginatedApplicationResponse(BaseModel):
 
 
 class AnalyzeResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     task_id: str = Field(examples=["a1b2c3d4-e5f6-7890-abcd-ef1234567890"])
     status: TaskStatus = Field(examples=["pending"])
 
 
 class TaskStatsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     counts: dict[TaskStatus, int] = Field(examples=[{"pending": 2, "running": 1, "completed": 10, "failed": 3}])
     total: int = Field(examples=[16])
 
 
 class RuleViolationResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     rule_id: str = Field(examples=["shuffle_partitions"])
     severity: Severity = Field(examples=["WARNING"])
     title: str = Field(examples=["Shuffle partitions too low"])
@@ -127,6 +143,8 @@ class RuleViolationResponse(BaseModel):
 
 
 class ConfigComparisonEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     parameter: str = Field(examples=["spark.sql.shuffle.partitions"])
     current_value: str = Field(examples=["200"])
     recommended_value: str = Field(examples=["800"])
@@ -134,11 +152,15 @@ class ConfigComparisonEntry(BaseModel):
 
 
 class ConfigComparisonResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     app_id: str = Field(examples=["application_1234567890123_0001"])
     entries: list[ConfigComparisonEntry]
 
 
 class StatsSummaryResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     total: int = Field(examples=[150])
     completed: int = Field(examples=[120])
     failed: int = Field(examples=[10])
@@ -148,6 +170,8 @@ class StatsSummaryResponse(BaseModel):
 
 
 class RuleFrequencyEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     rule_id: str = Field(examples=["shuffle_partitions"])
     title: str = Field(examples=["Shuffle partitions too low"])
     count: int = Field(examples=[42])
@@ -155,41 +179,57 @@ class RuleFrequencyEntry(BaseModel):
 
 
 class RuleFrequencyResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[RuleFrequencyEntry]
     days: int = Field(examples=[30])
 
 
 class DailyVolumeEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     date: str = Field(examples=["2026-03-15"])
     count: int = Field(examples=[12])
 
 
 class DailyVolumeResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[DailyVolumeEntry]
     days: int = Field(examples=[30])
 
 
 class ModeBreakdownEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     mode: AnalysisMode = Field(examples=["ai"])
     count: int = Field(examples=[85])
 
 
 class ModeBreakdownResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[ModeBreakdownEntry]
     days: int = Field(examples=[30])
 
 
 class DataSourceBreakdownEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     data_source: DataSource = Field(examples=["hs_manual"])
     count: int = Field(examples=[85])
 
 
 class DataSourceBreakdownResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[DataSourceBreakdownEntry]
     days: int = Field(examples=[30])
 
 
 class SeverityTrendEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     date: str = Field(examples=["2026-03-15"])
     critical: int = Field(examples=[3])
     warning: int = Field(examples=[5])
@@ -197,33 +237,45 @@ class SeverityTrendEntry(BaseModel):
 
 
 class SeverityTrendResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[SeverityTrendEntry]
     days: int = Field(examples=[30])
 
 
 class TopAppEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     app_id: str = Field(examples=["application_1234567890123_0001"])
     analysis_count: int = Field(examples=[12])
 
 
 class TopAppsResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[TopAppEntry]
     limit: int = Field(examples=[10])
     days: int = Field(examples=[30])
 
 
 class DurationByModeEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     mode: AnalysisMode = Field(examples=["ai"])
     avg_duration_seconds: float = Field(examples=[45.3])
     count: int = Field(examples=[85])
 
 
 class DurationByModeResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[DurationByModeEntry]
     days: int = Field(examples=[30])
 
 
 class FailureRateTrendEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     date: str = Field(examples=["2026-03-15"])
     total: int = Field(examples=[10])
     failed: int = Field(examples=[1])
@@ -231,11 +283,15 @@ class FailureRateTrendEntry(BaseModel):
 
 
 class FailureRateTrendResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[FailureRateTrendEntry]
     days: int = Field(examples=[30])
 
 
 class TopIssueEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     rule_id: str = Field(examples=["shuffle_partitions"])
     title: str = Field(examples=["Shuffle partitions too low"])
     message: str = Field(examples=["Default 200 partitions — adjust to data volume"])
@@ -245,6 +301,8 @@ class TopIssueEntry(BaseModel):
 
 
 class TopIssuesResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     items: list[TopIssueEntry]
     limit: int = Field(examples=[10])
     days: int = Field(examples=[30])

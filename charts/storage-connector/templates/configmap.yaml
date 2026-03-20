@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "storage-connector.fullname" . }}
+  labels:
+    {{- include "storage-connector.labels" . | nindent 4 }}
+data:
+  SA_STORAGE_SERVICE_NAME: {{ .Values.config.serviceName | quote }}
+  SA_STORAGE_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  SA_STORAGE_JSON_LOG: {{ .Values.config.jsonLog | quote }}
+  SA_STORAGE_NATS__URL: {{ .Values.config.nats.url | quote }}
+  SA_STORAGE_NATS__ANALYSIS_SUBMIT_SUBJECT: {{ .Values.config.nats.analysisSubmitSubject | quote }}
+  SA_STORAGE_OTEL__ENABLED: {{ .Values.config.otel.enabled | quote }}
+  SA_STORAGE_OTEL__ENDPOINT: {{ .Values.config.otel.endpoint | quote }}
+  SA_STORAGE_CONNECTOR_TYPE: {{ .Values.config.connectorType | quote }}
+  SA_STORAGE_POLLING_ENABLED: {{ .Values.config.pollingEnabled | quote }}
+  SA_STORAGE_POLL_INTERVAL_SECONDS: {{ .Values.config.pollIntervalSeconds | quote }}
+  SA_STORAGE_BATCH_SIZE: {{ .Values.config.batchSize | quote }}
+  SA_STORAGE_MAX_PROCESSED_APPS: {{ .Values.config.maxProcessedApps | quote }}
+  SA_STORAGE_DATABASE_URL: {{ .Values.config.databaseUrl | default (printf "sqlite+aiosqlite:////data/storage_%s_connector.db" .Values.config.connectorType) | quote }}
+  SA_STORAGE_HDFS__NAMENODE_URL: {{ .Values.config.hdfs.namenodeUrl | quote }}
+  SA_STORAGE_HDFS__EVENT_LOG_DIR: {{ .Values.config.hdfs.eventLogDir | quote }}
+  SA_STORAGE_S3__BUCKET: {{ .Values.config.s3.bucket | quote }}
+  SA_STORAGE_S3__PREFIX: {{ .Values.config.s3.prefix | quote }}
+  SA_STORAGE_S3__REGION: {{ .Values.config.s3.region | quote }}
+  SA_STORAGE_S3__ENDPOINT_URL: {{ .Values.config.s3.endpointUrl | quote }}
+  SA_STORAGE_GCS__BUCKET: {{ .Values.config.gcs.bucket | quote }}
+  SA_STORAGE_GCS__PREFIX: {{ .Values.config.gcs.prefix | quote }}
+  SA_STORAGE_GCS__PROJECT_ID: {{ .Values.config.gcs.projectId | quote }}

@@ -1,0 +1,95 @@
+[project]
+name = "spark-advisor-storage-connector"
+version = "0.1.13" # x-release-please-version
+description = "Storage connector for reading Spark event logs from HDFS, S3, and GCS"
+readme = { text = "Storage connector for spark-advisor", content-type = "text/plain" }
+license = "Apache-2.0"
+requires-python = ">=3.12"
+authors = [
+    { name = "Pawel Stysz" },
+]
+keywords = ["spark", "apache-spark", "hdfs", "s3", "gcs", "event-log"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+dependencies = [
+    "spark-advisor-models==0.1.13",  # x-release-please-version
+    "spark-advisor-parser==0.1.13",  # x-release-please-version
+    "faststream[nats]>=0.6",
+    "structlog>=24.0",
+    "httpx>=0.27",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.20",
+]
+
+[project.optional-dependencies]
+s3 = ["aiobotocore>=2.0"]
+gcs = ["gcloud-aio-storage>=9.0"]
+all = ["aiobotocore>=2.0", "gcloud-aio-storage>=9.0"]
+
+[project.urls]
+Homepage = "https://github.com/pstysz/spark-advisor"
+Repository = "https://github.com/pstysz/spark-advisor"
+
+[project.scripts]
+spark-advisor-storage-connector = "spark_advisor_storage_connector.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spark_advisor_storage_connector"]
+
+[tool.uv.sources]
+spark-advisor-models = { workspace = true }
+spark-advisor-parser = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.1",
+    "pytest-asyncio>=1.0",
+    "mypy>=1.15",
+    "ruff>=0.11",
+    "respx>=0.22",
+    "aiobotocore>=2.0",
+    "gcloud-aio-storage>=9.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+asyncio_mode = "strict"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "TCH", "RUF"]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["spark_advisor_storage_connector", "spark_advisor_models", "spark_advisor_parser"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+plugins = ["pydantic.mypy"]
