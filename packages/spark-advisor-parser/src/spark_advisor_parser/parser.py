@@ -1,10 +1,16 @@
 import gzip
+import io
 from collections import defaultdict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
+import lz4.frame  # type: ignore[import-untyped]
 import orjson
+import snappy  # type: ignore[import-untyped]
+import zstandard
 
 from spark_advisor_models.model import (
     ExecutorMetrics,
@@ -20,8 +26,7 @@ from spark_advisor_models.model import (
 def parse_event_log(path: Path) -> JobAnalysis:
     state = _ParserState()
 
-    open_fn = gzip.open if path.suffix == ".gz" else open
-    with open_fn(path, "rt", encoding="utf-8") as f:
+    with _open_event_log(path) as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -33,6 +38,30 @@ def parse_event_log(path: Path) -> JobAnalysis:
             _process_event(event, state)
 
     return state.build()
+
+
+@contextmanager
+def _open_event_log(path: Path) -> Iterator[IO[str]]:
+    suffix = path.suffix.lower()
+    suffixes = [s.lower() for s in path.suffixes]
+
+    if suffix == ".gz" or ".gz" in suffixes:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            yield f
+    elif suffix == ".lz4":
+        with lz4.frame.open(path, "rt", encoding="utf-8") as f:
+            yield f
+    elif suffix == ".snappy":
+        raw = path.read_bytes()
+        decompressed = snappy.decompress(raw)
+        yield io.StringIO(decompressed.decode("utf-8"))
+    elif suffix == ".zstd" or suffix == ".zst":
+        dctx = zstandard.ZstdDecompressor()
+        with open(path, "rb") as raw_f, dctx.stream_reader(raw_f) as reader:
+            yield io.TextIOWrapper(reader, encoding="utf-8")
+    else:
+        with open(path, encoding="utf-8") as f:
+            yield f
 
 
 def _quantiles_from_list(values: list[int]) -> Quantiles:

@@ -16,6 +16,10 @@ class DataSource(StrEnum):
     HS_POLLER = "hs_poller"
     FILE = "file"
     K8S = "k8s"
+    HDFS = "hdfs"
+    S3 = "s3"
+    GCS = "gcs"
+    STORAGE = "storage"
 
 
 class OutputFormat(StrEnum):

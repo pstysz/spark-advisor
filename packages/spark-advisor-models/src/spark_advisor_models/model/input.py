@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class RecommendationInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
     priority: int = Field(description="Priority rank, 1 = highest impact.")
     title: str = Field(description="Short title for the recommendation.")
     parameter: str = Field(
@@ -18,6 +19,7 @@ class RecommendationInput(BaseModel):
 
 
 class AnalysisToolInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
     summary: str = Field(description="1-2 sentence overview of the job's health.")
     severity: Literal["critical", "warning", "info"] = Field(description="Overall severity of findings.")
     recommendations: list[RecommendationInput] = Field(description="Prioritized list of recommendations (max 7).")
@@ -32,3 +34,9 @@ class FetchJobRequest(BaseModel):
 class ListAppsRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
     limit: int = Field(default=20, ge=1, le=500)
+
+class StorageFetchRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    app_id: str
+    event_log_uri: str
+    spark_conf: dict[str, str] = Field(default_factory=dict)

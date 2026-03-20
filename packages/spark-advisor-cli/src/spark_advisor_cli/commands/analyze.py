@@ -7,11 +7,11 @@ import typer
 from pydantic import ValidationError
 from rich.console import Console
 
-from spark_advisor_cli.event_log.parser import parse_event_log
 from spark_advisor_cli.output.console import print_analysis_result
 from spark_advisor_models.config import Thresholds
 from spark_advisor_models.defaults import DEFAULT_MODEL, DEFAULT_THRESHOLDS
 from spark_advisor_models.model import AnalysisMode, AnalysisResult, JobAnalysis, OutputFormat
+from spark_advisor_parser import parse_event_log
 
 console = Console()
 

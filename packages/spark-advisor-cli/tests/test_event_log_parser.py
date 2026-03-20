@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from spark_advisor_cli.event_log.parser import parse_event_log
+from spark_advisor_parser import parse_event_log
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SAMPLE_LOG = _REPO_ROOT / "sample_event_logs" / "sample_etl_job.json"

@@ -41,7 +41,7 @@ spec:
               command:
                 - python
                 - -c
-                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_CONNECTOR_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
+                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_HS_CONNECTOR_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
             initialDelaySeconds: 15
             periodSeconds: 30
             timeoutSeconds: 5
@@ -50,7 +50,7 @@ spec:
               command:
                 - python
                 - -c
-                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_CONNECTOR_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
+                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_HS_CONNECTOR_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
             initialDelaySeconds: 10
             periodSeconds: 15
             timeoutSeconds: 5

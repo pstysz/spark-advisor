@@ -10,6 +10,6 @@ SAMPLE_LOG = _REPO_ROOT / "sample_event_logs" / "sample_etl_job.json"
 
 @pytest.fixture
 def sample_job() -> JobAnalysis:
-    from spark_advisor_cli.event_log.parser import parse_event_log
+    from spark_advisor_parser import parse_event_log
 
     return parse_event_log(SAMPLE_LOG)

@@ -52,7 +52,7 @@ def _load_job(source: str, history_server: str | None = None) -> JobAnalysis:
     if not path.exists():
         raise FileNotFoundError(f"Event log file not found: `{source}`")
 
-    from spark_advisor_cli.event_log.parser import parse_event_log
+    from spark_advisor_parser import parse_event_log
 
     return parse_event_log(path)
 

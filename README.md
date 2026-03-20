@@ -9,7 +9,7 @@
     <a href="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml"><img src="https://github.com/pstysz/spark-advisor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
     <img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License">
-    <img src="https://img.shields.io/badge/tests-570%20passing-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-595%20passing-brightgreen" alt="Tests">
   </p>
   <p>
     <img src="https://img.shields.io/badge/Spark-E25A1C?logo=apachespark&logoColor=white" alt="Apache Spark">
@@ -78,8 +78,9 @@ Event Log / History Server  →  Rules Engine (11 rules)  →  AI Advisor (optio
 - **AI advisor** with Claude API — prioritized recommendations with causal chains and concrete config values
 - **Agent mode** — multi-turn Claude analysis where AI autonomously explores job data using 6 tools
 - **MCP server** — use spark-advisor as tools in Claude Desktop, Cursor, or any MCP client
+- **Storage connector** — read event logs from HDFS (WebHDFS), S3, or GCS with strategy pattern and conditional Docker builds
 - **REST API** — 18 endpoints with pagination, filtering, statistics, config comparison, WebSocket streaming
-- **3 microservices** — NATS-based distributed pipeline (gateway, analyzer, hs-connector)
+- **4 microservices** — NATS-based distributed pipeline (gateway, analyzer, hs-connector, storage-connector)
 - **Observability** — structlog, OpenTelemetry distributed tracing (Grafana Tempo), Prometheus metrics + Grafana dashboards
 - **Web dashboard** — React 19 SPA with real-time task updates, analysis submission, statistics charts
 - **Rich CLI** — tables, colors, severity badges, suggested spark-defaults.conf
@@ -163,6 +164,8 @@ All thresholds are configurable via `Thresholds` model.
 | [Development](docs/development.md) | Tech stack, make commands, testing, environment variables |
 | [Analyzer](packages/spark-advisor-analyzer/README.md) | Rules + AI worker configuration |
 | [HS Connector](packages/spark-advisor-hs-connector/README.md) | History Server integration and polling |
+| [Storage Connector](packages/spark-advisor-storage-connector/README.md) | HDFS/S3/GCS event log reader |
+| [Parser](packages/spark-advisor-parser/README.md) | Shared event log parser (compression support) |
 | [Models](packages/spark-advisor-models/README.md) | Pydantic data contracts |
 | [Rules Engine](packages/spark-advisor-rules/README.md) | 11 deterministic analysis rules |
 
@@ -173,12 +176,12 @@ All thresholds are configurable via `Thresholds` model.
 - [x] Rules engine (11 rules)
 - [x] AI advisor with Claude API (tool use + structured output)
 - [x] Rich CLI with suggested spark-defaults.conf
-- [x] uv monorepo (8 packages)
-- [x] 3 NATS-based microservices (gateway, analyzer, hs-connector)
+- [x] uv monorepo (9 packages)
+- [x] 4 NATS-based microservices (gateway, analyzer, hs-connector, storage-connector)
 - [x] Agent mode — multi-turn Claude analysis with 6 tools
 - [x] MCP server — Claude Desktop / Cursor integration (7 tools)
 - [x] GitHub Actions CI (lint + test + Helm lint)
-- [x] Helm charts for Kubernetes deployment (umbrella chart + 8 subcharts)
+- [x] Helm charts for Kubernetes deployment (umbrella chart + 9 subcharts)
 - [x] Docker images published to ghcr.io on release
 - [x] PyPI release (`pip install spark-advisor`)
 - [x] Task persistence (SQLite + SQLAlchemy async)
@@ -191,6 +194,8 @@ All thresholds are configurable via `Thresholds` model.
 - [x] OpenTelemetry distributed tracing (W3C Traceparent via NATS headers, Grafana Tempo)
 - [x] Prometheus metrics + Grafana dashboards (3 dashboards: main, NATS, rules)
 - [x] Extended health checks (NATS connectivity, SQLite)
+- [x] Storage connector — HDFS/S3/GCS event log reader with strategy pattern
+- [x] Event log parser as shared package (supports .json, .gz, .lz4, .snappy, .zstd)
 - [ ] Terminal demo GIF
 
 ## License

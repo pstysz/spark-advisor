@@ -26,8 +26,8 @@ Connects to Apache Spark History Server REST API to fetch job metrics, stage det
 ## Deployment
 
 ```bash
-export SA_CONNECTOR_HISTORY_SERVER_URL=http://yarn:18080
-export SA_CONNECTOR_NATS__URL=nats://localhost:4222
+export SA_HS_CONNECTOR_HISTORY_SERVER_URL=http://yarn:18080
+export SA_HS_CONNECTOR_NATS__URL=nats://localhost:4222
 spark-advisor-hs-connector
 ```
 
@@ -35,11 +35,11 @@ spark-advisor-hs-connector
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SA_CONNECTOR_HISTORY_SERVER_URL` | `http://localhost:18080` | Spark History Server URL |
-| `SA_CONNECTOR_NATS__URL` | `nats://localhost:4222` | NATS broker URL |
-| `SA_CONNECTOR_POLL_INTERVAL_SECONDS` | `60` | Polling interval |
-| `SA_CONNECTOR_BATCH_SIZE` | `50` | Apps per poll cycle |
-| `SA_CONNECTOR_OTEL__ENABLED` | `false` | Enable OpenTelemetry distributed tracing |
+| `SA_HS_CONNECTOR_HISTORY_SERVER_URL` | `http://localhost:18080` | Spark History Server URL |
+| `SA_HS_CONNECTOR_NATS__URL` | `nats://localhost:4222` | NATS broker URL |
+| `SA_HS_CONNECTOR_POLL_INTERVAL_SECONDS` | `60` | Polling interval |
+| `SA_HS_CONNECTOR_BATCH_SIZE` | `50` | Apps per poll cycle |
+| `SA_HS_CONNECTOR_OTEL__ENABLED` | `false` | Enable OpenTelemetry distributed tracing |
 
 ## Links
 

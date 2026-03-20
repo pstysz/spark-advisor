@@ -44,3 +44,16 @@ class BaseServiceSettings(BaseSettings):
 class NatsSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
     url: str = "nats://localhost:4222"
+
+
+class BaseConnectorNatsSettings(NatsSettings):
+    analysis_submit_subject: str = "analysis.submit"
+
+
+class BaseConnectorSettings(BaseServiceSettings):
+    nats: NatsSettings = NatsSettings()
+    polling_enabled: bool = False
+    poll_interval_seconds: int = 60
+    batch_size: int = 50
+    max_processed_apps: int = 10_000
+    database_url: str = "sqlite+aiosqlite:///data/connector.db"

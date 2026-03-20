@@ -1,0 +1,48 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/pstysz/spark-advisor-storage-connector
+  tag: ""
+  pullPolicy: IfNotPresent
+
+config:
+  serviceName: "spark-advisor-storage-connector"
+  logLevel: "INFO"
+  jsonLog: true
+  nats:
+    url: "nats://localhost:4222"
+    analysisSubmitSubject: "analysis.submit"
+  otel:
+    enabled: true
+    endpoint: "http://spark-advisor-tempo:4317"
+  connectorType: "hdfs"
+  pollingEnabled: false
+  pollIntervalSeconds: 60
+  batchSize: 50
+  maxProcessedApps: 10000
+  databaseUrl: ""
+  hdfs:
+    namenodeUrl: "http://localhost:9870"
+    eventLogDir: "/spark-events"
+  s3:
+    bucket: ""
+    prefix: "spark-events/"
+    region: "us-east-1"
+    endpointUrl: ""
+  gcs:
+    bucket: ""
+    prefix: "spark-events/"
+    projectId: ""
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    mountPath: /data
+
+imagePullSecrets: []
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,10 @@
+image:
+  repository: spark-advisor-storage-connector
+  tag: ""
+  pullPolicy: Never
+
+config:
+  logLevel: "DEBUG"
+  connectorType: "hdfs"
+  hdfs:
+    namenodeUrl: "http://host.minikube.internal:9870"

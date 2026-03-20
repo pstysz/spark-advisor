@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "storage-connector.fullname" . }}
+  labels:
+    {{- include "storage-connector.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "storage-connector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "storage-connector.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_STORAGE_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_STORAGE_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+          envFrom:
+            - configMapRef:
+                name: {{ include "storage-connector.fullname" . }}
+          {{- if .Values.config.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.config.persistence.mountPath }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if .Values.config.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "storage-connector.fullname" . }}-data
+      {{- end }}
