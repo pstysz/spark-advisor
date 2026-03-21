@@ -53,6 +53,9 @@ class Thresholds(BaseModel):
 
     idle_min_job_duration_ms: int = 300_000
 
+    min_task_count_for_skew: int = 10
+    spill_negligible_ratio: float = 0.01
+
 
 class AiSettings(BaseModel):
     model_config = ConfigDict(frozen=True)

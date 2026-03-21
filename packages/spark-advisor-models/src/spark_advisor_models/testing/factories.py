@@ -58,11 +58,7 @@ def make_stage(
     sched = (
         make_quantiles(max=scheduler_delay_max, median=scheduler_delay_max // 4) if scheduler_delay_max else Quantiles()
     )
-    input_io = (
-        IOQuantiles(bytes=make_quantiles(median=input_bytes_median, max=input_bytes_max))
-        if input_bytes_max
-        else IOQuantiles()
-    )
+    input_io = IOQuantiles(bytes=make_quantiles(median=input_bytes_median, max=input_bytes_max))
 
     return StageMetrics(
         stage_id=stage_id,

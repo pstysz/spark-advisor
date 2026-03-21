@@ -325,7 +325,7 @@ class TestSmallFileRule:
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
         assert results[0].rule_id == "small_files"
-        assert "Median" in results[0].message
+        assert "per task" in results[0].message
 
     def test_detects_tiny_files_critical(self):
         stage = make_stage(input_bytes_median=500 * 1024, input_bytes_max=800 * 1024)
@@ -334,13 +334,22 @@ class TestSmallFileRule:
         assert len(results) == 1
         assert results[0].severity == Severity.CRITICAL
 
-    def test_skips_zero_median(self):
-        stage = make_stage(input_bytes_median=0, input_bytes_max=0)
+    def test_skips_zero_median_and_zero_input(self):
+        stage = make_stage(input_bytes_median=0, input_bytes_max=0, input_bytes=0)
         job = make_job(stages=[stage])
         assert SmallFileRule().evaluate(job) == []
 
-    def test_skips_default_no_input_metrics(self):
-        stage = make_stage()
+    def test_fallback_to_average_when_no_median(self):
+        """Event log path: no per-task distribution, falls back to input_bytes / task_count."""
+        stage = make_stage(input_bytes=200 * 1024 * 1024, task_count=100)
+        job = make_job(stages=[stage])
+        results = SmallFileRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+        assert "2.0 MB" in results[0].message
+
+    def test_no_input_no_trigger(self):
+        stage = make_stage(input_bytes=0)
         job = make_job(stages=[stage])
         assert SmallFileRule().evaluate(job) == []
 
@@ -483,9 +492,19 @@ class TestDynamicAllocationRule:
         assert results[0].severity == Severity.WARNING
         assert "minExecutors" in results[0].message
 
-    def test_disabled_no_finding(self):
+    def test_disabled_low_utilization_suggests_da(self):
         job = make_job(
             executors=make_executors(total_task_time_ms=1_000_000),
+            config={"spark.executor.cores": "4"},
+        )
+        results = DynamicAllocationRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
+        assert "dynamic allocation" in results[0].title.lower()
+
+    def test_disabled_high_utilization_no_finding(self):
+        job = make_job(
+            executors=make_executors(total_task_time_ms=10_000_000),
             config={"spark.executor.cores": "4"},
         )
         assert DynamicAllocationRule().evaluate(job) == []

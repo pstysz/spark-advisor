@@ -54,7 +54,7 @@ class DataSkewRule(Rule):
     rule_id: ClassVar[str] = "data_skew"
 
     def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
-        if stage.tasks.task_count < 10:
+        if stage.tasks.task_count < self._thresholds.min_task_count_for_skew:
             return None
 
         ratio = stage.tasks.duration_skew_ratio
@@ -105,7 +105,7 @@ class SpillToDiskRule(Rule):
 
         if stage.input_bytes > 0:
             spill_ratio = spill_bytes / stage.input_bytes
-            if spill_ratio < 0.01:
+            if spill_ratio < self._thresholds.spill_negligible_ratio:
                 severity = Severity.INFO
 
         return self._result(
@@ -275,19 +275,24 @@ class SmallFileRule(Rule):
         if stage.total_shuffle_read_bytes > 0 and stage.input_bytes == 0:
             return None
 
-        median_input = stage.tasks.distributions.input_metrics.bytes.median
-        if median_input == 0:
+        # Prefer per-task median (HS path), fall back to average (event log path)
+        input_per_task = stage.tasks.distributions.input_metrics.bytes.median
+        if input_per_task == 0 and stage.input_bytes > 0 and stage.tasks.task_count > 0:
+            input_per_task = stage.input_bytes / stage.tasks.task_count
+        if input_per_task == 0:
             return None
-        if median_input >= self._thresholds.small_file_threshold_bytes:
+        if input_per_task >= self._thresholds.small_file_threshold_bytes:
             return None
-        severity = Severity.CRITICAL if median_input < self._thresholds.small_file_critical_bytes else Severity.WARNING
-        median_mb = median_input / (1024 * 1024)
+        severity = (
+            Severity.CRITICAL if input_per_task < self._thresholds.small_file_critical_bytes else Severity.WARNING
+        )
+        input_per_task_mb = input_per_task / (1024 * 1024)
         return self._result(
             severity,
             f"Small input partitions in Stage {stage.stage_id}",
-            f"Median input per task is {median_mb:.1f} MB across {stage.tasks.task_count} tasks",
+            f"Input per task is {input_per_task_mb:.1f} MB across {stage.tasks.task_count} tasks",
             stage_id=stage.stage_id,
-            current_value=f"{median_mb:.1f} MB/task, {stage.tasks.task_count} tasks",
+            current_value=f"{input_per_task_mb:.1f} MB/task, {stage.tasks.task_count} tasks",
             recommended_value="Use coalesce() or increase spark.sql.files.maxPartitionBytes",
             estimated_impact="Reducing task count cuts scheduler overhead and improves throughput",
         )
@@ -369,11 +374,9 @@ class SerializerChoiceRule(Rule):
         ]
 
 
-# Validates dynamic allocation configuration. Two scenarios:
-# 1) Dynamic allocation ON but without min/maxExecutors bounds — unbounded scaling can
-#    over-provision in shared clusters, wasting resources and starving other jobs.
-# 2) Dynamic allocation OFF with low slot utilization — suggests enabling it so Spark
-#    can auto-scale executors to match actual workload instead of paying for idle slots.
+# Validates dynamic allocation configuration:
+# 1) DA enabled without min/maxExecutors bounds — unbounded scaling can over-provision.
+# 2) DA disabled with low utilization — suggests enabling for auto-scaling.
 class DynamicAllocationRule(Rule):
     rule_id: ClassVar[str] = "dynamic_allocation"
 
@@ -399,14 +402,32 @@ class DynamicAllocationRule(Rule):
                         estimated_impact="Unbounded dynamic allocation can over-provision resources",
                     )
                 )
+        else:
+            if job.executors is not None:
+                utilization = job.executors.slot_utilization_percent(
+                    job.duration_ms, job.config.executor_cores
+                )
+                if utilization is not None and utilization < self._thresholds.min_slot_utilization_percent:
+                    results.append(
+                        self._result(
+                            Severity.INFO,
+                            "Consider enabling dynamic allocation",
+                            f"Slot utilization is {utilization:.0f}% with fixed executor count",
+                            current_value=(
+                                f"{job.executors.executor_count} static executors,"
+                                f" {utilization:.0f}% utilized"
+                            ),
+                            recommended_value="spark.dynamicAllocation.enabled = true",
+                            estimated_impact="Dynamic allocation auto-scales executors to match workload",
+                        )
+                    )
+
         return results
 
 
-# Detects when executor memory overhead (off-heap) is likely too low. Triggers when BOTH
-# conditions are true: GC pressure above threshold AND memory utilization above threshold.
-# High GC + high memory means the JVM heap is nearly full and struggling — increasing
-# spark.executor.memoryOverhead gives more room for off-heap data (broadcast vars, shuffle
-# buffers, internal Spark structures) and reduces container OOM kills on YARN/K8s.
+# Detects memory pressure: high GC (heap) combined with high memory utilization.
+# Recommends increasing spark.executor.memory (heap) or spark.executor.memoryOverhead
+# (off-heap, for container OOM kills on YARN/K8s).
 class ExecutorMemoryOverheadRule(Rule):
     rule_id: ClassVar[str] = "executor_memory_overhead"
 
@@ -445,6 +466,9 @@ class ExecutorMemoryOverheadRule(Rule):
         ]
 
 
+# Checks spark.driver.memory against reasonable bounds. Too low (< 512 MB) risks OOM on
+# collect/broadcast; too high (> 16 GB) wastes resources. Also detects when a large cluster
+# (> 50 executors) runs with a small driver — coordination metadata grows with cluster size.
 class DriverMemoryRule(Rule):
     rule_id: ClassVar[str] = "driver_memory"
 
@@ -499,6 +523,9 @@ class DriverMemoryRule(Rule):
         return []
 
 
+# Detects over-provisioned executor memory: peak usage below 40% of allocated means most
+# heap is wasted. Suppressed when GC pressure or spill exists — those signal the opposite
+# problem (not enough memory), and conflicting recommendations confuse users.
 class MemoryUnderutilizationRule(Rule):
     rule_id: ClassVar[str] = "memory_underutilization"
 
@@ -530,6 +557,9 @@ class MemoryUnderutilizationRule(Rule):
         ]
 
 
+# Recommends enabling Adaptive Query Execution for Spark 3.x jobs. AQE auto-handles
+# partition coalescing, skew joins, and broadcast threshold at runtime. Version-aware:
+# INFO for 3.0-3.1 (opt-in), WARNING for 3.2+ where someone explicitly disabled the default.
 class AQENotEnabledRule(Rule):
     rule_id: ClassVar[str] = "aqe_not_enabled"
 
@@ -568,6 +598,9 @@ class AQENotEnabledRule(Rule):
         ]
 
 
+# Detects DataFrame recomputation by finding duplicate stage names — when the same stage
+# appears multiple times, it usually means Spark re-executes the same lineage because
+# intermediate results weren't persisted. Threshold: >= 5 distinct duplicate names.
 class ExcessiveStagesRule(Rule):
     rule_id: ClassVar[str] = "excessive_stages"
 
@@ -591,6 +624,10 @@ class ExcessiveStagesRule(Rule):
         ]
 
 
+# Flags stages with disproportionately large shuffle writes. Two checks:
+# 1) Ratio-based: shuffle write > 3x input bytes means data explosion (e.g. cross join).
+# 2) Absolute: shuffle write > 50 GB regardless of input (safety net for huge shuffles).
+# Ratio check is preferred when both trigger, as it gives more actionable context.
 class ShuffleDataVolumeRule(Rule):
     rule_id: ClassVar[str] = "shuffle_data_volume"
 
@@ -631,11 +668,15 @@ class ShuffleDataVolumeRule(Rule):
         return absolute_result
 
 
+# Detects uneven input data distribution across tasks — when one task reads significantly
+# more than the median (> 5x), the stage is bottlenecked by that task. Complements DataSkewRule
+# which looks at duration; this rule catches skew at the source (file sizes, partition splits).
+# Requires per-task distribution data from History Server (not available from event log parser).
 class InputDataSkewRule(Rule):
     rule_id: ClassVar[str] = "input_data_skew"
 
     def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
-        if stage.tasks.task_count < 10:
+        if stage.tasks.task_count < self._thresholds.min_task_count_for_skew:
             return None
 
         if stage.total_shuffle_read_bytes > 0 and stage.input_bytes == 0:
@@ -645,6 +686,7 @@ class InputDataSkewRule(Rule):
         median_input = input_bytes.median
         max_input = input_bytes.max
 
+        # Skew detection requires per-task distribution data (available from HS, not event log parser)
         if median_input == 0:
             return None
 
