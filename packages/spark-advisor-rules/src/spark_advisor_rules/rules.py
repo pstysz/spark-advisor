@@ -1,9 +1,11 @@
 from abc import ABC
+from collections import Counter
 from typing import ClassVar
 
 from spark_advisor_models.config import Thresholds
 from spark_advisor_models.defaults import DEFAULT_THRESHOLDS
 from spark_advisor_models.model import JobAnalysis, RuleResult, Severity, StageMetrics
+from spark_advisor_models.util import format_bytes, parse_memory_string, parse_spark_version
 
 
 class Rule(ABC):
@@ -52,6 +54,9 @@ class DataSkewRule(Rule):
     rule_id: ClassVar[str] = "data_skew"
 
     def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        if stage.tasks.task_count < self._thresholds.min_task_count_for_skew:
+            return None
+
         ratio = stage.tasks.duration_skew_ratio
         if ratio < self._thresholds.skew_warning_ratio:
             return None
@@ -98,6 +103,11 @@ class SpillToDiskRule(Rule):
         else:
             severity = Severity.INFO
 
+        if stage.input_bytes > 0:
+            spill_ratio = spill_bytes / stage.input_bytes
+            if spill_ratio < self._thresholds.spill_negligible_ratio:
+                severity = Severity.INFO
+
         return self._result(
             severity,
             f"Disk spill in Stage {stage.stage_id}",
@@ -116,6 +126,9 @@ class GCPressureRule(Rule):
     rule_id: ClassVar[str] = "gc_pressure"
 
     def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        if stage.sum_executor_run_time_ms < self._thresholds.gc_min_stage_runtime_ms:
+            return None
+
         gc_pct = stage.gc_time_percent
         if gc_pct < self._thresholds.gc_warning_percent:
             return None
@@ -143,6 +156,10 @@ class ShufflePartitionsRule(Rule):
     rule_id: ClassVar[str] = "shuffle_partitions"
 
     def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        version = parse_spark_version(job.spark_version)
+        if job.config.aqe_enabled and version is not None and version >= (3, 2):
+            return []
+
         current_partitions = job.config.shuffle_partitions
 
         max_shuffle = max(
@@ -162,6 +179,9 @@ class ShufflePartitionsRule(Rule):
         if ratio < self._thresholds.partition_ratio_min:
             msg = f"Too few partitions: {current_partitions} for {shuffle_gb:.1f} GB shuffle"
             severity = Severity.WARNING
+            if job.config.aqe_enabled:
+                severity = Severity.INFO
+                msg += " (AQE may handle partition coalescing automatically)"
         else:
             msg = f"Too many partitions: {current_partitions} for {shuffle_gb:.1f} GB shuffle"
             severity = Severity.INFO
@@ -188,6 +208,9 @@ class ExecutorIdleRule(Rule):
         if job.executors is None:
             return []
 
+        if job.duration_ms < self._thresholds.idle_min_job_duration_ms:
+            return []
+
         utilization = job.executors.slot_utilization_percent(job.duration_ms, job.config.executor_cores)
         if utilization is None or utilization > self._thresholds.min_slot_utilization_percent:
             return []
@@ -197,6 +220,10 @@ class ExecutorIdleRule(Rule):
             if utilization < self._thresholds.min_slot_utilization_critical_percent
             else Severity.WARNING
         )
+
+        if job.config.dynamic_allocation_enabled:
+            severity = Severity.WARNING if severity == Severity.CRITICAL else Severity.INFO
+
         idle_pct = 100 - utilization
         cores = job.config.executor_cores
 
@@ -207,7 +234,10 @@ class ExecutorIdleRule(Rule):
                 f"Slot utilization is only {utilization:.0f}% — {idle_pct:.0f}% idle",
                 current_value=f"{job.executors.executor_count} executors x {cores} cores, {utilization:.0f}% utilized",
                 recommended_value="Reduce executor count or increase parallelism",
-                estimated_impact="Right-sizing can reduce cloud compute costs 30-50%",
+                estimated_impact=(
+                    "Right-sizing can reduce costs 30-50%"
+                    " (note: sequential stages reduce measured utilization)"
+                ),
             )
         ]
 
@@ -242,19 +272,27 @@ class SmallFileRule(Rule):
     rule_id: ClassVar[str] = "small_files"
 
     def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
-        if stage.input_bytes == 0 or stage.tasks.task_count == 0:
+        if stage.total_shuffle_read_bytes > 0 and stage.input_bytes == 0:
             return None
-        avg_input = stage.input_bytes / stage.tasks.task_count
-        if avg_input >= self._thresholds.small_file_threshold_bytes:
+
+        # Prefer per-task median (HS path), fall back to average (event log path)
+        input_per_task = stage.tasks.distributions.input_metrics.bytes.median
+        if input_per_task == 0 and stage.input_bytes > 0 and stage.tasks.task_count > 0:
+            input_per_task = stage.input_bytes / stage.tasks.task_count
+        if input_per_task == 0:
             return None
-        severity = Severity.CRITICAL if avg_input < self._thresholds.small_file_critical_bytes else Severity.WARNING
-        avg_mb = avg_input / (1024 * 1024)
+        if input_per_task >= self._thresholds.small_file_threshold_bytes:
+            return None
+        severity = (
+            Severity.CRITICAL if input_per_task < self._thresholds.small_file_critical_bytes else Severity.WARNING
+        )
+        input_per_task_mb = input_per_task / (1024 * 1024)
         return self._result(
             severity,
             f"Small input partitions in Stage {stage.stage_id}",
-            f"Average input per task is {avg_mb:.1f} MB across {stage.tasks.task_count} tasks",
+            f"Input per task is {input_per_task_mb:.1f} MB across {stage.tasks.task_count} tasks",
             stage_id=stage.stage_id,
-            current_value=f"{avg_mb:.1f} MB/task, {stage.tasks.task_count} tasks",
+            current_value=f"{input_per_task_mb:.1f} MB/task, {stage.tasks.task_count} tasks",
             recommended_value="Use coalesce() or increase spark.sql.files.maxPartitionBytes",
             estimated_impact="Reducing task count cuts scheduler overhead and improves throughput",
         )
@@ -272,7 +310,9 @@ class BroadcastJoinThresholdRule(Rule):
         has_shuffle = any(s.total_shuffle_read_bytes > 0 for s in job.stages)
 
         if threshold == -1:
-            severity = Severity.WARNING if has_shuffle else Severity.INFO
+            severity = (
+                (Severity.INFO if job.config.aqe_enabled else Severity.WARNING) if has_shuffle else Severity.INFO
+            )
             return [
                 self._result(
                     severity,
@@ -334,11 +374,9 @@ class SerializerChoiceRule(Rule):
         ]
 
 
-# Validates dynamic allocation configuration. Two scenarios:
-# 1) Dynamic allocation ON but without min/maxExecutors bounds — unbounded scaling can
-#    over-provision in shared clusters, wasting resources and starving other jobs.
-# 2) Dynamic allocation OFF with low slot utilization — suggests enabling it so Spark
-#    can auto-scale executors to match actual workload instead of paying for idle slots.
+# Validates dynamic allocation configuration:
+# 1) DA enabled without min/maxExecutors bounds — unbounded scaling can over-provision.
+# 2) DA disabled with low utilization — suggests enabling for auto-scaling.
 class DynamicAllocationRule(Rule):
     rule_id: ClassVar[str] = "dynamic_allocation"
 
@@ -366,15 +404,18 @@ class DynamicAllocationRule(Rule):
                 )
         else:
             if job.executors is not None:
-                utilization = job.executors.slot_utilization_percent(job.duration_ms, job.config.executor_cores)
+                utilization = job.executors.slot_utilization_percent(
+                    job.duration_ms, job.config.executor_cores
+                )
                 if utilization is not None and utilization < self._thresholds.min_slot_utilization_percent:
                     results.append(
                         self._result(
-                            Severity.WARNING,
+                            Severity.INFO,
                             "Consider enabling dynamic allocation",
                             f"Slot utilization is {utilization:.0f}% with fixed executor count",
                             current_value=(
-                                f"{job.executors.executor_count} static executors, {utilization:.0f}% utilized"
+                                f"{job.executors.executor_count} static executors,"
+                                f" {utilization:.0f}% utilized"
                             ),
                             recommended_value="spark.dynamicAllocation.enabled = true",
                             estimated_impact="Dynamic allocation auto-scales executors to match workload",
@@ -384,11 +425,9 @@ class DynamicAllocationRule(Rule):
         return results
 
 
-# Detects when executor memory overhead (off-heap) is likely too low. Triggers when BOTH
-# conditions are true: GC pressure above threshold AND memory utilization above threshold.
-# High GC + high memory means the JVM heap is nearly full and struggling — increasing
-# spark.executor.memoryOverhead gives more room for off-heap data (broadcast vars, shuffle
-# buffers, internal Spark structures) and reduces container OOM kills on YARN/K8s.
+# Detects memory pressure: high GC (heap) combined with high memory utilization.
+# Recommends increasing spark.executor.memory (heap) or spark.executor.memoryOverhead
+# (off-heap, for container OOM kills on YARN/K8s).
 class ExecutorMemoryOverheadRule(Rule):
     rule_id: ClassVar[str] = "executor_memory_overhead"
 
@@ -404,19 +443,272 @@ class ExecutorMemoryOverheadRule(Rule):
         if not has_gc_pressure or mem_util < self._thresholds.memory_overhead_mem_utilization_percent:
             return []
 
+        gc_pct = max(
+            s.gc_time_percent for s in job.stages
+            if s.gc_time_percent > self._thresholds.memory_overhead_gc_threshold_percent
+        )
+
         overhead = job.config.executor_memory_overhead
         current_desc = f"memoryOverhead = {overhead}" if overhead else "memoryOverhead = default (max(384MB, 10%))"
 
         return [
             self._result(
                 Severity.WARNING,
-                "Executor memory overhead may be too low",
-                f"GC pressure detected with {mem_util:.0f}% memory utilization",
+                "Executor memory pressure detected",
+                f"High GC ({gc_pct:.0f}% in hottest stage) with {mem_util:.0f}% memory utilization",
                 current_value=current_desc,
-                recommended_value="Increase spark.executor.memoryOverhead (try 20-25% of executor memory)",
-                estimated_impact="More overhead memory reduces GC pressure and OOM risk",
+                recommended_value=(
+                    "Increase spark.executor.memory to reduce heap GC pressure,"
+                    " or spark.executor.memoryOverhead if seeing container OOM kills"
+                ),
+                estimated_impact="Reducing memory pressure prevents GC thrashing and container OOM kills",
             )
         ]
+
+
+# Checks spark.driver.memory against reasonable bounds. Too low (< 512 MB) risks OOM on
+# collect/broadcast; too high (> 16 GB) wastes resources. Also detects when a large cluster
+# (> 50 executors) runs with a small driver — coordination metadata grows with cluster size.
+class DriverMemoryRule(Rule):
+    rule_id: ClassVar[str] = "driver_memory"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        memory_mb = parse_memory_string(job.config.driver_memory)
+        if memory_mb == 0:
+            return []
+
+        if memory_mb < self._thresholds.driver_memory_min_mb:
+            return [
+                self._result(
+                    Severity.WARNING,
+                    "Driver memory too low",
+                    f"Driver memory is too low: {job.config.driver_memory} ({memory_mb} MB) — risk of OOM",
+                    current_value=f"spark.driver.memory = {job.config.driver_memory}",
+                    recommended_value=f"spark.driver.memory >= {self._thresholds.driver_memory_min_mb}m",
+                    estimated_impact="Insufficient driver memory causes OOM on collect/broadcast operations",
+                )
+            ]
+
+        if (
+            job.executors is not None
+            and job.executors.executor_count > self._thresholds.driver_large_cluster_executor_count
+            and memory_mb < self._thresholds.driver_large_cluster_min_memory_mb
+        ):
+            return [
+                self._result(
+                    Severity.WARNING,
+                    "Driver memory insufficient for large cluster",
+                    (
+                        f"Driver memory {job.config.driver_memory} may be insufficient"
+                        f" for cluster with {job.executors.executor_count} executors"
+                    ),
+                    current_value=f"spark.driver.memory = {job.config.driver_memory}",
+                    recommended_value=f"spark.driver.memory >= {self._thresholds.driver_large_cluster_min_memory_mb}m",
+                    estimated_impact="Large clusters need more driver memory for coordination and metadata",
+                )
+            ]
+
+        if memory_mb > self._thresholds.driver_memory_max_mb:
+            return [
+                self._result(
+                    Severity.INFO,
+                    "Driver memory too high",
+                    f"Driver memory is too high: {job.config.driver_memory} ({memory_mb} MB) — resource waste",
+                    current_value=f"spark.driver.memory = {job.config.driver_memory}",
+                    recommended_value=f"spark.driver.memory <= {self._thresholds.driver_memory_max_mb}m",
+                    estimated_impact="Over-provisioned driver wastes cluster resources",
+                )
+            ]
+
+        return []
+
+
+# Detects over-provisioned executor memory: peak usage below 40% of allocated means most
+# heap is wasted. Suppressed when GC pressure or spill exists — those signal the opposite
+# problem (not enough memory), and conflicting recommendations confuse users.
+class MemoryUnderutilizationRule(Rule):
+    rule_id: ClassVar[str] = "memory_underutilization"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        if job.executors is None:
+            return []
+
+        has_gc_pressure = any(
+            s.gc_time_percent > self._thresholds.gc_warning_percent for s in job.stages
+            if s.sum_executor_run_time_ms >= self._thresholds.gc_min_stage_runtime_ms
+        )
+        has_spill = any(s.spill_to_disk_bytes > 0 for s in job.stages)
+        if has_gc_pressure or has_spill:
+            return []
+
+        utilization = job.executors.memory_utilization_percent
+        if utilization == 0.0 or utilization >= self._thresholds.memory_underutilization_percent:
+            return []
+
+        return [
+            self._result(
+                Severity.WARNING,
+                "Executor memory underutilized",
+                f"Peak memory usage is only {utilization:.0f}% of allocated — executors overprovisioned",
+                current_value=f"{utilization:.0f}% memory utilization",
+                recommended_value="Reduce spark.executor.memory to match actual usage + 20% buffer",
+                estimated_impact="Right-sizing executor memory frees cluster resources",
+            )
+        ]
+
+
+# Recommends enabling Adaptive Query Execution for Spark 3.x jobs. AQE auto-handles
+# partition coalescing, skew joins, and broadcast threshold at runtime. Version-aware:
+# INFO for 3.0-3.1 (opt-in), WARNING for 3.2+ where someone explicitly disabled the default.
+class AQENotEnabledRule(Rule):
+    rule_id: ClassVar[str] = "aqe_not_enabled"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        version = parse_spark_version(job.spark_version)
+        if version is None or version < (3, 0):
+            return []
+
+        if job.config.aqe_enabled:
+            return []
+
+        if version >= (3, 2) and not job.config.has_explicit_aqe_config:
+            return []
+
+        if version >= (3, 2):
+            return [
+                self._result(
+                    Severity.WARNING,
+                    "AQE explicitly disabled",
+                    "Adaptive Query Execution is disabled (enabled by default since Spark 3.2)",
+                    current_value="spark.sql.adaptive.enabled = false",
+                    recommended_value="spark.sql.adaptive.enabled = true",
+                    estimated_impact="AQE auto-handles partition coalescing, skew joins, and broadcast threshold",
+                )
+            ]
+
+        return [
+            self._result(
+                Severity.INFO,
+                "AQE not enabled",
+                "Consider enabling Adaptive Query Execution for automatic optimization",
+                current_value="spark.sql.adaptive.enabled = false",
+                recommended_value="spark.sql.adaptive.enabled = true",
+                estimated_impact="AQE auto-handles partition coalescing, skew joins, and broadcast threshold",
+            )
+        ]
+
+
+# Detects DataFrame recomputation by finding duplicate stage names — when the same stage
+# appears multiple times, it usually means Spark re-executes the same lineage because
+# intermediate results weren't persisted. Threshold: >= 5 distinct duplicate names.
+class ExcessiveStagesRule(Rule):
+    rule_id: ClassVar[str] = "excessive_stages"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        names = [s.stage_name for s in job.stages]
+        counts = Counter(names)
+        duplicates = sorted(name for name, count in counts.items() if count > 1)
+
+        if len(duplicates) < self._thresholds.min_duplicate_stages_for_warning:
+            return []
+
+        return [
+            self._result(
+                Severity.WARNING,
+                "Stages re-executed",
+                f"Stages re-executed: {duplicates} — add .persist() to avoid recomputation",
+                current_value=f"{len(duplicates)} duplicate stage names",
+                recommended_value="Use .persist() or .cache() on reused DataFrames",
+                estimated_impact="Shorter lineage reduces recomputation risk and planning overhead",
+            )
+        ]
+
+
+# Flags stages with disproportionately large shuffle writes. Two checks:
+# 1) Ratio-based: shuffle write > 3x input bytes means data explosion (e.g. cross join).
+# 2) Absolute: shuffle write > 50 GB regardless of input (safety net for huge shuffles).
+# Ratio check is preferred when both trigger, as it gives more actionable context.
+class ShuffleDataVolumeRule(Rule):
+    rule_id: ClassVar[str] = "shuffle_data_volume"
+
+    def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        shuffle_write_gb = stage.total_shuffle_write_bytes / (1024**3)
+
+        ratio_result: RuleResult | None = None
+        if stage.input_bytes > 0:
+            ratio = stage.total_shuffle_write_bytes / stage.input_bytes
+            if ratio > self._thresholds.shuffle_ratio_warning:
+                ratio_result = self._result(
+                    Severity.WARNING,
+                    f"High shuffle volume in Stage {stage.stage_id}",
+                    (
+                        f"Stage writes {shuffle_write_gb:.1f} GB shuffle data"
+                        f" ({ratio:.1f}x of input) — consider pre-partitioning or bucketing"
+                    ),
+                    stage_id=stage.stage_id,
+                    current_value=f"{shuffle_write_gb:.1f} GB shuffle write, {ratio:.1f}x input ratio",
+                    recommended_value="Use bucketing, pre-partition data, or reduce shuffle with broadcast joins",
+                    estimated_impact="Reduce disk I/O and network transfer",
+                )
+
+        absolute_result: RuleResult | None = None
+        if shuffle_write_gb > self._thresholds.shuffle_volume_absolute_gb:
+            absolute_result = self._result(
+                Severity.WARNING,
+                f"High shuffle volume in Stage {stage.stage_id}",
+                f"Stage writes {shuffle_write_gb:.1f} GB shuffle data — consider pre-partitioning or bucketing",
+                stage_id=stage.stage_id,
+                current_value=f"{shuffle_write_gb:.1f} GB shuffle write",
+                recommended_value="Use bucketing, pre-partition data, or reduce shuffle with broadcast joins",
+                estimated_impact="Reduce disk I/O and network transfer",
+            )
+
+        if ratio_result is not None:
+            return ratio_result
+        return absolute_result
+
+
+# Detects uneven input data distribution across tasks — when one task reads significantly
+# more than the median (> 5x), the stage is bottlenecked by that task. Complements DataSkewRule
+# which looks at duration; this rule catches skew at the source (file sizes, partition splits).
+# Requires per-task distribution data from History Server (not available from event log parser).
+class InputDataSkewRule(Rule):
+    rule_id: ClassVar[str] = "input_data_skew"
+
+    def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        if stage.tasks.task_count < self._thresholds.min_task_count_for_skew:
+            return None
+
+        if stage.total_shuffle_read_bytes > 0 and stage.input_bytes == 0:
+            return None
+
+        input_bytes = stage.tasks.distributions.input_metrics.bytes
+        median_input = input_bytes.median
+        max_input = input_bytes.max
+
+        # Skew detection requires per-task distribution data (available from HS, not event log parser)
+        if median_input == 0:
+            return None
+
+        ratio = max_input / median_input
+        if ratio < self._thresholds.input_skew_warning_ratio:
+            return None
+
+        severity = (
+            Severity.CRITICAL
+            if ratio >= self._thresholds.input_skew_critical_ratio
+            else Severity.WARNING
+        )
+
+        return self._result(
+            severity,
+            f"Input data skew in Stage {stage.stage_id}",
+            f"Max task input ({format_bytes(max_input)}) is {ratio:.1f}x the median ({format_bytes(median_input)})",
+            stage_id=stage.stage_id,
+            current_value=f"input skew ratio {ratio:.1f}x",
+            recommended_value="Repartition input data or use salting to distribute evenly",
+            estimated_impact=f"Stage {stage.stage_id} tasks could run ~{int((1 - 1 / ratio) * 100)}% faster",
+        )
 
 
 def rules_for_threshold(thresholds: Thresholds) -> list[Rule]:
@@ -432,4 +724,10 @@ def rules_for_threshold(thresholds: Thresholds) -> list[Rule]:
         SerializerChoiceRule(thresholds),
         DynamicAllocationRule(thresholds),
         ExecutorMemoryOverheadRule(thresholds),
+        DriverMemoryRule(thresholds),
+        MemoryUnderutilizationRule(thresholds),
+        AQENotEnabledRule(thresholds),
+        ExcessiveStagesRule(thresholds),
+        ShuffleDataVolumeRule(thresholds),
+        InputDataSkewRule(thresholds),
     ]

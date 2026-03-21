@@ -2,6 +2,7 @@ from typing import Any
 
 from spark_advisor_models.model import (
     ExecutorMetrics,
+    IOQuantiles,
     JobAnalysis,
     Quantiles,
     RuleResult,
@@ -20,6 +21,7 @@ def make_quantiles(min: int = 0, p25: int = 0, median: int = 0, p75: int = 0, ma
 def make_stage(
     stage_id: int = 0,
     *,
+    stage_name: str | None = None,
     task_count: int = 100,
     run_time_min: int = 500,
     run_time_median: int = 1000,
@@ -40,6 +42,8 @@ def make_stage(
     shuffle_write_records: int = 0,
     peak_memory_max: int = 0,
     scheduler_delay_max: int = 0,
+    input_bytes_median: int = 0,
+    input_bytes_max: int = 0,
 ) -> StageMetrics:
     run_time = make_quantiles(
         min=run_time_min,
@@ -54,10 +58,11 @@ def make_stage(
     sched = (
         make_quantiles(max=scheduler_delay_max, median=scheduler_delay_max // 4) if scheduler_delay_max else Quantiles()
     )
+    input_io = IOQuantiles(bytes=make_quantiles(median=input_bytes_median, max=input_bytes_max))
 
     return StageMetrics(
         stage_id=stage_id,
-        stage_name=f"Stage {stage_id}",
+        stage_name=stage_name if stage_name is not None else f"Stage {stage_id}",
         sum_executor_run_time_ms=computed_sum,
         total_gc_time_ms=total_gc_time_ms,
         total_shuffle_read_bytes=total_shuffle_read_bytes,
@@ -79,6 +84,7 @@ def make_stage(
                 executor_run_time=run_time,
                 peak_execution_memory=peak_mem,
                 scheduler_delay=sched,
+                input_metrics=input_io,
             ),
         ),
     )

@@ -34,6 +34,28 @@ class Thresholds(BaseModel):
 
     memory_utilization_critical_percent: float = 95.0
 
+    driver_memory_min_mb: int = 512
+    driver_memory_max_mb: int = 16384
+    driver_large_cluster_executor_count: int = 50
+    driver_large_cluster_min_memory_mb: int = 2048
+
+    memory_underutilization_percent: float = 40.0
+
+    min_duplicate_stages_for_warning: int = 5
+
+    shuffle_volume_absolute_gb: float = 50.0
+    shuffle_ratio_warning: float = 3.0
+
+    input_skew_warning_ratio: float = 5.0
+    input_skew_critical_ratio: float = 10.0
+
+    gc_min_stage_runtime_ms: int = 60_000
+
+    idle_min_job_duration_ms: int = 300_000
+
+    min_task_count_for_skew: int = 10
+    spill_negligible_ratio: float = 0.01
+
 
 class AiSettings(BaseModel):
     model_config = ConfigDict(frozen=True)

@@ -11,6 +11,7 @@ class SparkConfig(BaseModel):
 
     @property
     def executor_memory(self) -> str:
+        # 1g is Spark's default when property is not explicitly set
         return self.get("spark.executor.memory", "1g")
 
     @property
@@ -48,3 +49,16 @@ class SparkConfig(BaseModel):
     @property
     def executor_memory_overhead(self) -> str:
         return self.get("spark.executor.memoryOverhead")
+
+    @property
+    def driver_memory(self) -> str:
+        # 1g is Spark's default when property is not explicitly set
+        return self.get("spark.driver.memory", "1g")
+
+    @property
+    def driver_memory_overhead(self) -> str:
+        return self.get("spark.driver.memoryOverhead")
+
+    @property
+    def has_explicit_aqe_config(self) -> bool:
+        return "spark.sql.adaptive.enabled" in self.raw

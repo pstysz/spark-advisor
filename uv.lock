@@ -2174,7 +2174,7 @@ wheels = [
 
 [[package]]
 name = "spark-advisor-analyzer"
-version = "0.1.13"
+version = "0.1.15"
 source = { editable = "packages/spark-advisor-analyzer" }
 dependencies = [
     { name = "anthropic" },
@@ -2211,7 +2211,7 @@ dev = [
 
 [[package]]
 name = "spark-advisor-cli"
-version = "0.1.13"
+version = "0.1.15"
 source = { editable = "packages/spark-advisor-cli" }
 dependencies = [
     { name = "rich" },
@@ -2254,7 +2254,7 @@ dev = [
 
 [[package]]
 name = "spark-advisor-gateway"
-version = "0.1.13"
+version = "0.1.15"
 source = { editable = "packages/spark-advisor-gateway" }
 dependencies = [
     { name = "aiosqlite" },
@@ -2305,7 +2305,7 @@ dev = [
 
 [[package]]
 name = "spark-advisor-hs-connector"
-version = "0.1.13"
+version = "0.1.15"
 source = { editable = "packages/spark-advisor-hs-connector" }
 dependencies = [
     { name = "aiosqlite" },
@@ -2348,7 +2348,7 @@ dev = [
 
 [[package]]
 name = "spark-advisor-mcp"
-version = "0.1.13"
+version = "0.1.15"
 source = { editable = "packages/spark-advisor-mcp" }
 dependencies = [
     { name = "mcp" },
@@ -2389,7 +2389,7 @@ dev = [
 
 [[package]]
 name = "spark-advisor-models"
-version = "0.1.13"
+version = "0.1.15"
 source = { editable = "packages/spark-advisor-models" }
 dependencies = [
     { name = "opentelemetry-api" },
@@ -2430,7 +2430,7 @@ dev = [
 
 [[package]]
 name = "spark-advisor-parser"
-version = "0.1.13"
+version = "0.1.15"
 source = { editable = "packages/spark-advisor-parser" }
 dependencies = [
     { name = "lz4" },
@@ -2467,7 +2467,7 @@ dev = [
 
 [[package]]
 name = "spark-advisor-rules"
-version = "0.1.13"
+version = "0.1.15"
 source = { editable = "packages/spark-advisor-rules" }
 dependencies = [
     { name = "spark-advisor-models" },
@@ -2494,7 +2494,7 @@ dev = [
 
 [[package]]
 name = "spark-advisor-storage-connector"
-version = "0.1.13"
+version = "0.1.15"
 source = { editable = "packages/spark-advisor-storage-connector" }
 dependencies = [
     { name = "aiosqlite" },
@@ -2560,7 +2560,7 @@ dev = [
 
 [[package]]
 name = "spark-advisor-workspace"
-version = "0.1.13"
+version = "0.1.15"
 source = { virtual = "." }
 
 [[package]]
