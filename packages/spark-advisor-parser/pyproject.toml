@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-parser"
-version = "0.1.15" # x-release-please-version
+version = "0.1.16" # x-release-please-version
 description = "Spark event log parser with compression support (.gz, .lz4, .snappy, .zstd)"
 readme = { text = "Spark event log parser with compression support", content-type = "text/plain" }
 license = "Apache-2.0"
@@ -19,7 +19,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "spark-advisor-models==0.1.15",  # x-release-please-version
+    "spark-advisor-models==0.1.16",  # x-release-please-version
     "orjson>=3.10",
     "lz4>=4.0",
     "python-snappy>=0.7",

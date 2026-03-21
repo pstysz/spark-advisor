@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-models"
-version = "0.1.15" # x-release-please-version
+version = "0.1.16" # x-release-please-version
 description = "Shared Pydantic contracts for spark-advisor microservices"
 readme = "README.md"
 license = "Apache-2.0"
