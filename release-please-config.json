@@ -64,6 +64,10 @@
         },
         {
           "type": "generic",
+          "path": "charts/storage-connector/Chart.yaml"
+        },
+        {
+          "type": "generic",
           "path": "packages/spark-advisor-frontend/package.json"
         },
         {
