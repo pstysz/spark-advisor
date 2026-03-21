@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-cli"
-version = "0.1.15" # x-release-please-version
+version = "0.1.16" # x-release-please-version
 description = "AI-powered Apache Spark job analyzer and configuration advisor"
 readme = "README.md"
 license = "Apache-2.0"
@@ -23,11 +23,11 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "spark-advisor-models==0.1.15",  # x-release-please-version
-    "spark-advisor-rules==0.1.15",  # x-release-please-version
-    "spark-advisor-analyzer==0.1.15",  # x-release-please-version
-    "spark-advisor-hs-connector==0.1.15",  # x-release-please-version
-    "spark-advisor-parser==0.1.15",  # x-release-please-version
+    "spark-advisor-models==0.1.16",  # x-release-please-version
+    "spark-advisor-rules==0.1.16",  # x-release-please-version
+    "spark-advisor-analyzer==0.1.16",  # x-release-please-version
+    "spark-advisor-hs-connector==0.1.16",  # x-release-please-version
+    "spark-advisor-parser==0.1.16",  # x-release-please-version
     "typer>=0.15",
     "rich>=14",
 ]
