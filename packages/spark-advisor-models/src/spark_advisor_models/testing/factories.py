@@ -21,6 +21,7 @@ def make_quantiles(min: int = 0, p25: int = 0, median: int = 0, p75: int = 0, ma
 def make_stage(
     stage_id: int = 0,
     *,
+    stage_name: str | None = None,
     task_count: int = 100,
     run_time_min: int = 500,
     run_time_median: int = 1000,
@@ -65,7 +66,7 @@ def make_stage(
 
     return StageMetrics(
         stage_id=stage_id,
-        stage_name=f"Stage {stage_id}",
+        stage_name=stage_name if stage_name is not None else f"Stage {stage_id}",
         sum_executor_run_time_ms=computed_sum,
         total_gc_time_ms=total_gc_time_ms,
         total_shuffle_read_bytes=total_shuffle_read_bytes,

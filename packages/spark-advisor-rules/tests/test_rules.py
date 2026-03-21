@@ -54,6 +54,11 @@ class TestDataSkewRule:
         assert len(results) == 1
         assert "AQE" in results[0].recommended_value
 
+    def test_low_task_count_skipped(self):
+        stage = make_stage(task_count=5, run_time_median=10, run_time_max=100)
+        job = make_job(stages=[stage])
+        assert DataSkewRule().evaluate(job) == []
+
 
 class TestSpillToDiskRule:
     def test_no_spill(self):
@@ -82,6 +87,11 @@ class TestGCPressureRule:
         assert len(results) == 1
         assert "GC" in results[0].title
 
+    def test_skips_short_stage(self):
+        stage = make_stage(sum_executor_run_time_ms=30_000, total_gc_time_ms=15_000)
+        job = make_job(stages=[stage])
+        assert GCPressureRule().evaluate(job) == []
+
 
 class TestShufflePartitionsRule:
     def test_optimal_partitions(self):
@@ -101,6 +111,32 @@ class TestShufflePartitionsRule:
         results = ShufflePartitionsRule().evaluate(job)
         assert len(results) == 1
         assert "800" in results[0].recommended_value
+
+    def test_aqe_spark32_skips_entirely(self):
+        stage = make_stage(total_shuffle_read_bytes=800 * 128 * 1024 * 1024)
+        job = make_job(
+            spark_version="3.4.1",
+            stages=[stage],
+            config={
+                "spark.sql.shuffle.partitions": "200",
+                "spark.sql.adaptive.enabled": "true",
+            },
+        )
+        assert ShufflePartitionsRule().evaluate(job) == []
+
+    def test_too_few_partitions_aqe_downgrades_to_info(self):
+        stage = make_stage(total_shuffle_read_bytes=800 * 128 * 1024 * 1024)
+        job = make_job(
+            stages=[stage],
+            config={
+                "spark.sql.shuffle.partitions": "200",
+                "spark.sql.adaptive.enabled": "true",
+            },
+        )
+        results = ShufflePartitionsRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
+        assert "AQE" in results[0].message
 
 
 class TestSpillToDiskSeverityLevels:
@@ -124,6 +160,13 @@ class TestSpillToDiskSeverityLevels:
         results = SpillToDiskRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.CRITICAL
+
+    def test_negligible_spill_relative_to_input_downgraded_to_info(self):
+        stage = make_stage(spill_to_disk_bytes=500 * 1024**2, input_bytes=10 * 1024**4)
+        job = make_job(stages=[stage])
+        results = SpillToDiskRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
 
 
 class TestTaskFailureRule:
@@ -155,8 +198,6 @@ class TestExecutorIdleRule:
         assert ExecutorIdleRule().evaluate(job) == []
 
     def test_high_utilization_no_warning(self):
-        # 10 executors x 4 cores x 300_000ms = 12_000_000 total slot time
-        # 8_000_000 task time = 66.7% utilization → above 40% threshold
         job = make_job(
             executors=make_executors(total_task_time_ms=8_000_000),
             config={"spark.executor.cores": "4"},
@@ -164,8 +205,6 @@ class TestExecutorIdleRule:
         assert ExecutorIdleRule().evaluate(job) == []
 
     def test_low_utilization_triggers_critical(self):
-        # 10 executors x 4 cores x 300_000ms = 12_000_000 total slot time
-        # 1_000_000 task time = 8.3% utilization → below 20% critical threshold
         job = make_job(
             executors=make_executors(total_task_time_ms=1_000_000),
             config={"spark.executor.cores": "4"},
@@ -176,8 +215,6 @@ class TestExecutorIdleRule:
         assert "8%" in results[0].message
 
     def test_moderate_low_utilization_triggers_warning(self):
-        # 10 executors x 4 cores x 300_000ms = 12_000_000 total slot time
-        # 3_600_000 task time = 30% utilization → below 40% but above 20%
         job = make_job(
             executors=make_executors(total_task_time_ms=3_600_000),
             config={"spark.executor.cores": "4"},
@@ -196,9 +233,6 @@ class TestExecutorIdleRule:
         assert "0%" in results[0].message
 
     def test_default_cores_one(self):
-        # No spark.executor.cores set → defaults to 1
-        # 10 executors x 1 core x 300_000ms = 3_000_000 total slot time
-        # 500_000 task time = 16.7% → below 20% critical threshold
         job = make_job(
             executors=make_executors(total_task_time_ms=500_000),
             config={"spark.executor.memory": "4g"},
@@ -206,6 +240,47 @@ class TestExecutorIdleRule:
         results = ExecutorIdleRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.CRITICAL
+
+    def test_short_job_skipped(self):
+        job = make_job(
+            duration_ms=60_000,
+            executors=make_executors(total_task_time_ms=0),
+            config={"spark.executor.cores": "4"},
+        )
+        assert ExecutorIdleRule().evaluate(job) == []
+
+    def test_sequential_stages_note_in_impact(self):
+        job = make_job(
+            executors=make_executors(total_task_time_ms=1_000_000),
+            config={"spark.executor.cores": "4"},
+        )
+        results = ExecutorIdleRule().evaluate(job)
+        assert len(results) == 1
+        assert "sequential stages" in results[0].estimated_impact
+
+    def test_dynamic_allocation_downgrades_critical_to_warning(self):
+        job = make_job(
+            executors=make_executors(total_task_time_ms=1_000_000),
+            config={
+                "spark.executor.cores": "4",
+                "spark.dynamicAllocation.enabled": "true",
+            },
+        )
+        results = ExecutorIdleRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+
+    def test_dynamic_allocation_downgrades_warning_to_info(self):
+        job = make_job(
+            executors=make_executors(total_task_time_ms=3_600_000),
+            config={
+                "spark.executor.cores": "4",
+                "spark.dynamicAllocation.enabled": "true",
+            },
+        )
+        results = ExecutorIdleRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
 
 
 class TestRunRules:
@@ -239,34 +314,43 @@ class TestRunRules:
 
 class TestSmallFileRule:
     def test_normal_input_size(self):
-        stage = make_stage(input_bytes=200 * 1024 * 1024, task_count=10)
+        stage = make_stage(input_bytes_median=20 * 1024 * 1024, input_bytes_max=30 * 1024 * 1024)
         job = make_job(stages=[stage])
         assert SmallFileRule().evaluate(job) == []
 
     def test_detects_small_files_warning(self):
-        # 50MB / 100 tasks = 0.5MB per task → below 10MB threshold but above 1MB
-        stage = make_stage(input_bytes=500 * 1024 * 1024, task_count=100)
+        stage = make_stage(input_bytes_median=5 * 1024 * 1024, input_bytes_max=8 * 1024 * 1024)
         job = make_job(stages=[stage])
         results = SmallFileRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
         assert results[0].rule_id == "small_files"
+        assert "Median" in results[0].message
 
     def test_detects_tiny_files_critical(self):
-        # 50MB / 100 tasks = 0.5MB per task → below 1MB critical threshold
-        stage = make_stage(input_bytes=50 * 1024 * 1024, task_count=100)
+        stage = make_stage(input_bytes_median=500 * 1024, input_bytes_max=800 * 1024)
         job = make_job(stages=[stage])
         results = SmallFileRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.CRITICAL
 
-    def test_skips_zero_input(self):
-        stage = make_stage(input_bytes=0, task_count=100)
+    def test_skips_zero_median(self):
+        stage = make_stage(input_bytes_median=0, input_bytes_max=0)
         job = make_job(stages=[stage])
         assert SmallFileRule().evaluate(job) == []
 
-    def test_skips_zero_tasks(self):
-        stage = make_stage(input_bytes=100 * 1024 * 1024, task_count=0)
+    def test_skips_default_no_input_metrics(self):
+        stage = make_stage()
+        job = make_job(stages=[stage])
+        assert SmallFileRule().evaluate(job) == []
+
+    def test_skips_shuffle_read_stage(self):
+        stage = make_stage(
+            total_shuffle_read_bytes=500 * 1024 * 1024,
+            input_bytes=0,
+            input_bytes_median=2 * 1024 * 1024,
+            input_bytes_max=3 * 1024 * 1024,
+        )
         job = make_job(stages=[stage])
         assert SmallFileRule().evaluate(job) == []
 
@@ -287,6 +371,19 @@ class TestBroadcastJoinThresholdRule:
     def test_disabled_without_shuffle_is_info(self):
         stage = make_stage(total_shuffle_read_bytes=0)
         job = make_job(stages=[stage], config={"spark.sql.autoBroadcastJoinThreshold": "-1"})
+        results = BroadcastJoinThresholdRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
+
+    def test_disabled_with_shuffle_aqe_enabled_is_info(self):
+        stage = make_stage(total_shuffle_read_bytes=500 * 1024 * 1024)
+        job = make_job(
+            stages=[stage],
+            config={
+                "spark.sql.autoBroadcastJoinThreshold": "-1",
+                "spark.sql.adaptive.enabled": "true",
+            },
+        )
         results = BroadcastJoinThresholdRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.INFO
@@ -314,6 +411,11 @@ class TestSerializerChoiceRule:
         results = SerializerChoiceRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.INFO
+
+    def test_java_serializer_without_shuffle(self):
+        stage = make_stage(total_shuffle_read_bytes=0, total_shuffle_write_bytes=0)
+        job = make_job(stages=[stage], config={})
+        assert SerializerChoiceRule().evaluate(job) == []
 
 
 class TestAQENotEnabledRule:
@@ -362,11 +464,6 @@ class TestAQENotEnabledRule:
         )
         assert AQENotEnabledRule().evaluate(job) == []
 
-    def test_java_serializer_without_shuffle(self):
-        stage = make_stage(total_shuffle_read_bytes=0, total_shuffle_write_bytes=0)
-        job = make_job(stages=[stage], config={})
-        assert SerializerChoiceRule().evaluate(job) == []
-
 
 class TestDynamicAllocationRule:
     def test_enabled_with_bounds(self):
@@ -386,18 +483,9 @@ class TestDynamicAllocationRule:
         assert results[0].severity == Severity.WARNING
         assert "minExecutors" in results[0].message
 
-    def test_disabled_with_idle_executors(self):
+    def test_disabled_no_finding(self):
         job = make_job(
             executors=make_executors(total_task_time_ms=1_000_000),
-            config={"spark.executor.cores": "4"},
-        )
-        results = DynamicAllocationRule().evaluate(job)
-        assert len(results) == 1
-        assert "dynamicAllocation" in results[0].recommended_value
-
-    def test_disabled_high_utilization_no_warning(self):
-        job = make_job(
-            executors=make_executors(total_task_time_ms=8_000_000),
             config={"spark.executor.cores": "4"},
         )
         assert DynamicAllocationRule().evaluate(job) == []
@@ -424,6 +512,9 @@ class TestExecutorMemoryOverheadRule:
         results = ExecutorMemoryOverheadRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
+        assert "Executor memory pressure detected" in results[0].title
+        assert "High GC" in results[0].message
+        assert "memory utilization" in results[0].message
 
     def test_gc_pressure_low_memory_no_warning(self):
         stage = make_stage(sum_executor_run_time_ms=100_000, total_gc_time_ms=30_000)
@@ -461,15 +552,40 @@ class TestDriverMemoryRule:
         assert results[0].rule_id == "driver_memory"
         assert "too low" in results[0].message.lower()
 
-    def test_memory_too_high_warning(self) -> None:
-        job = make_job(config={"spark.driver.memory": "16g"})
+    def test_memory_too_high_info(self) -> None:
+        job = make_job(config={"spark.driver.memory": "32g"})
         results = DriverMemoryRule().evaluate(job)
         assert len(results) == 1
-        assert results[0].severity == Severity.WARNING
+        assert results[0].severity == Severity.INFO
         assert "too high" in results[0].message.lower()
 
     def test_default_memory_no_finding(self) -> None:
         job = make_job(config={})
+        assert DriverMemoryRule().evaluate(job) == []
+
+    def test_large_cluster_insufficient_driver_memory(self) -> None:
+        job = make_job(
+            config={"spark.driver.memory": "1g"},
+            executors=make_executors(executor_count=100),
+        )
+        results = DriverMemoryRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+        assert "100 executors" in results[0].message
+        assert "insufficient" in results[0].message.lower()
+
+    def test_large_cluster_sufficient_memory_no_finding(self) -> None:
+        job = make_job(
+            config={"spark.driver.memory": "4g"},
+            executors=make_executors(executor_count=100),
+        )
+        assert DriverMemoryRule().evaluate(job) == []
+
+    def test_small_cluster_low_memory_no_large_cluster_warning(self) -> None:
+        job = make_job(
+            config={"spark.driver.memory": "1g"},
+            executors=make_executors(executor_count=10),
+        )
         assert DriverMemoryRule().evaluate(job) == []
 
 
@@ -497,6 +613,24 @@ class TestMemoryUnderutilizationRule:
         job = make_job(executors=None)
         assert MemoryUnderutilizationRule().evaluate(job) == []
 
+    def test_suppressed_when_gc_pressure(self) -> None:
+        stage = make_stage(sum_executor_run_time_ms=100_000, total_gc_time_ms=30_000)
+        executors = make_executors(
+            peak_memory_bytes_sum=1 * 1024**3,
+            allocated_memory_bytes_sum=4 * 1024**3,
+        )
+        job = make_job(stages=[stage], executors=executors)
+        assert MemoryUnderutilizationRule().evaluate(job) == []
+
+    def test_suppressed_when_spill_exists(self) -> None:
+        stage = make_stage(spill_to_disk_bytes=1 * 1024**3)
+        executors = make_executors(
+            peak_memory_bytes_sum=1 * 1024**3,
+            allocated_memory_bytes_sum=4 * 1024**3,
+        )
+        job = make_job(stages=[stage], executors=executors)
+        assert MemoryUnderutilizationRule().evaluate(job) == []
+
     def test_zero_allocated_skip(self) -> None:
         executors = make_executors(
             peak_memory_bytes_sum=0,
@@ -507,22 +641,39 @@ class TestMemoryUnderutilizationRule:
 
 
 class TestExcessiveStagesRule:
-    def test_few_stages_no_finding(self) -> None:
+    def test_no_duplicates_no_finding(self) -> None:
         stages = [make_stage(i) for i in range(10)]
         job = make_job(stages=stages)
         assert ExcessiveStagesRule().evaluate(job) == []
 
-    def test_excessive_stages_warning(self) -> None:
-        stages = [make_stage(i) for i in range(60)]
+    def test_duplicate_stages_warning(self) -> None:
+        stages = [
+            make_stage(0, stage_name="scan parquet"),
+            make_stage(1, stage_name="scan parquet"),
+            make_stage(2, stage_name="shuffle"),
+            make_stage(3, stage_name="shuffle"),
+            make_stage(4, stage_name="aggregate"),
+            make_stage(5, stage_name="aggregate"),
+            make_stage(6, stage_name="filter"),
+            make_stage(7, stage_name="filter"),
+            make_stage(8, stage_name="join"),
+            make_stage(9, stage_name="join"),
+        ]
         job = make_job(stages=stages)
         results = ExcessiveStagesRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
         assert results[0].rule_id == "excessive_stages"
-        assert "60" in results[0].message
+        assert "5" in results[0].current_value
 
-    def test_exactly_threshold_no_finding(self) -> None:
-        stages = [make_stage(i) for i in range(50)]
+    def test_below_threshold_no_finding(self) -> None:
+        stages = [
+            make_stage(0, stage_name="scan parquet"),
+            make_stage(1, stage_name="scan parquet"),
+            make_stage(2, stage_name="shuffle"),
+            make_stage(3, stage_name="shuffle"),
+            make_stage(4, stage_name="aggregate"),
+        ]
         job = make_job(stages=stages)
         assert ExcessiveStagesRule().evaluate(job) == []
 
@@ -533,31 +684,45 @@ class TestExcessiveStagesRule:
 
 class TestShuffleDataVolumeRule:
     def test_small_shuffle_no_finding(self) -> None:
-        stage = make_stage(0, total_shuffle_write_bytes=1 * 1024**3)
+        stage = make_stage(0, total_shuffle_write_bytes=2 * 1024**3, input_bytes=10 * 1024**3)
         job = make_job(stages=[stage])
         assert ShuffleDataVolumeRule().evaluate(job) == []
 
-    def test_large_shuffle_warning(self) -> None:
-        stage = make_stage(0, total_shuffle_write_bytes=15 * 1024**3)
+    def test_ratio_based_warning(self) -> None:
+        stage = make_stage(0, total_shuffle_write_bytes=40 * 1024**3, input_bytes=10 * 1024**3)
         job = make_job(stages=[stage])
         results = ShuffleDataVolumeRule().evaluate(job)
         assert len(results) == 1
         assert results[0].severity == Severity.WARNING
-        assert results[0].rule_id == "shuffle_data_volume"
-        assert "15.0" in results[0].message
+        assert "x of input" in results[0].message.lower()
+        assert "4.0x" in results[0].message
+
+    def test_absolute_threshold_warning(self) -> None:
+        stage = make_stage(0, total_shuffle_write_bytes=60 * 1024**3, input_bytes=200 * 1024**3)
+        job = make_job(stages=[stage])
+        results = ShuffleDataVolumeRule().evaluate(job)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
         assert results[0].stage_id == 0
+
+    def test_ratio_preferred_over_absolute(self) -> None:
+        stage = make_stage(0, total_shuffle_write_bytes=60 * 1024**3, input_bytes=10 * 1024**3)
+        job = make_job(stages=[stage])
+        results = ShuffleDataVolumeRule().evaluate(job)
+        assert len(results) == 1
+        assert "x of input" in results[0].message.lower()
 
     def test_zero_shuffle_no_finding(self) -> None:
         stage = make_stage(0, total_shuffle_write_bytes=0)
         job = make_job(stages=[stage])
         assert ShuffleDataVolumeRule().evaluate(job) == []
 
-    def test_multiple_stages_detects_each(self) -> None:
-        s1 = make_stage(0, total_shuffle_write_bytes=15 * 1024**3)
-        s2 = make_stage(1, total_shuffle_write_bytes=20 * 1024**3)
-        job = make_job(stages=[s1, s2])
+    def test_zero_input_only_absolute_check(self) -> None:
+        stage = make_stage(0, total_shuffle_write_bytes=60 * 1024**3, input_bytes=0)
+        job = make_job(stages=[stage])
         results = ShuffleDataVolumeRule().evaluate(job)
-        assert len(results) == 2
+        assert len(results) == 1
+        assert "ratio" not in results[0].message.lower()
 
 
 class TestInputDataSkewRule:
@@ -583,6 +748,22 @@ class TestInputDataSkewRule:
 
     def test_zero_median_skip(self) -> None:
         stage = make_stage(0, input_bytes_median=0, input_bytes_max=0)
+        job = make_job(stages=[stage])
+        assert InputDataSkewRule().evaluate(job) == []
+
+    def test_low_task_count_skipped(self) -> None:
+        stage = make_stage(0, task_count=5, input_bytes_median=100 * 1024**2, input_bytes_max=700 * 1024**2)
+        job = make_job(stages=[stage])
+        assert InputDataSkewRule().evaluate(job) == []
+
+    def test_shuffle_only_stage_skipped(self) -> None:
+        stage = make_stage(
+            0,
+            total_shuffle_read_bytes=500 * 1024 * 1024,
+            input_bytes=0,
+            input_bytes_median=100 * 1024**2,
+            input_bytes_max=700 * 1024**2,
+        )
         job = make_job(stages=[stage])
         assert InputDataSkewRule().evaluate(job) == []
 

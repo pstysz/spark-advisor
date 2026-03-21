@@ -1,30 +1,30 @@
 dependencies:
 - name: spark-advisor-analyzer
   repository: file://../analyzer
-  version: 0.1.13
+  version: 0.1.15
 - name: spark-advisor-gateway
   repository: file://../gateway
-  version: 0.1.13
+  version: 0.1.15
 - name: spark-advisor-frontend
   repository: file://../frontend
-  version: 0.1.13
+  version: 0.1.15
 - name: spark-advisor-hs-connector
   repository: file://../hs-connector
-  version: 0.1.13
+  version: 0.1.15
 - name: spark-advisor-storage-connector
   repository: file://../storage-connector
-  version: 0.1.13
+  version: 0.1.15
 - name: nats
   repository: https://nats-io.github.io/k8s/helm/charts/
   version: 1.2.6
 - name: spark-advisor-prometheus
   repository: file://../prometheus
-  version: 0.1.13
+  version: 0.1.15
 - name: spark-advisor-tempo
   repository: file://../tempo
-  version: 0.1.13
+  version: 0.1.15
 - name: spark-advisor-grafana
   repository: file://../grafana
-  version: 0.1.13
-digest: sha256:cdf8f0e3aad2be9218e6e94a6e5cb52256f25d7690a09f0bb3d675be2c25d2cb
-generated: "2026-03-20T16:23:39.651748+01:00"
+  version: 0.1.15
+digest: sha256:f55570b9f7db2aa7543ed22b1c73394f2d9a9e0b75200da329bb7140aa6f2e51
+generated: "2026-03-21T13:10:46.438286+01:00"
