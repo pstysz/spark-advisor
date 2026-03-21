@@ -1,6 +1,6 @@
 [project]
 name = "spark-advisor-storage-connector"
-version = "0.1.14" # x-release-please-version
+version = "0.1.15" # x-release-please-version
 description = "Storage connector for reading Spark event logs from HDFS, S3, and GCS"
 readme = { text = "Storage connector for spark-advisor", content-type = "text/plain" }
 license = "Apache-2.0"
@@ -19,8 +19,8 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "spark-advisor-models==0.1.14",  # x-release-please-version
-    "spark-advisor-parser==0.1.14",  # x-release-please-version
+    "spark-advisor-models==0.1.15",  # x-release-please-version
+    "spark-advisor-parser==0.1.15",  # x-release-please-version
     "faststream[nats]>=0.6",
     "structlog>=24.0",
     "httpx>=0.27",
