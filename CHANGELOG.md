@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.15](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.14...spark-advisor-v0.1.15) (2026-03-21)
+
+
+### Bug Fixes
+
+* release please config after new package add ([4d5577a](https://github.com/pstysz/spark-advisor/commit/4d5577aadd9b96d7224953e36093a7341771e473))
+
 ## [0.1.14](https://github.com/pstysz/spark-advisor/compare/spark-advisor-v0.1.13...spark-advisor-v0.1.14) (2026-03-20)
 
 
