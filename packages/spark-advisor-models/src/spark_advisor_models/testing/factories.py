@@ -2,6 +2,7 @@ from typing import Any
 
 from spark_advisor_models.model import (
     ExecutorMetrics,
+    IOQuantiles,
     JobAnalysis,
     Quantiles,
     RuleResult,
@@ -40,6 +41,8 @@ def make_stage(
     shuffle_write_records: int = 0,
     peak_memory_max: int = 0,
     scheduler_delay_max: int = 0,
+    input_bytes_median: int = 0,
+    input_bytes_max: int = 0,
 ) -> StageMetrics:
     run_time = make_quantiles(
         min=run_time_min,
@@ -53,6 +56,11 @@ def make_stage(
     peak_mem = make_quantiles(max=peak_memory_max, median=peak_memory_max // 2) if peak_memory_max else Quantiles()
     sched = (
         make_quantiles(max=scheduler_delay_max, median=scheduler_delay_max // 4) if scheduler_delay_max else Quantiles()
+    )
+    input_io = (
+        IOQuantiles(bytes=make_quantiles(median=input_bytes_median, max=input_bytes_max))
+        if input_bytes_max
+        else IOQuantiles()
     )
 
     return StageMetrics(
@@ -79,6 +87,7 @@ def make_stage(
                 executor_run_time=run_time,
                 peak_execution_memory=peak_mem,
                 scheduler_delay=sched,
+                input_metrics=input_io,
             ),
         ),
     )

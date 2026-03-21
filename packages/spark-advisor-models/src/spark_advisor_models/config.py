@@ -34,6 +34,18 @@ class Thresholds(BaseModel):
 
     memory_utilization_critical_percent: float = 95.0
 
+    driver_memory_min_mb: int = 512
+    driver_memory_max_mb: int = 8192
+
+    memory_underutilization_percent: float = 40.0
+
+    excessive_stages_count: int = 50
+
+    shuffle_volume_warning_gb: float = 10.0
+
+    input_skew_warning_ratio: float = 5.0
+    input_skew_critical_ratio: float = 10.0
+
 
 class AiSettings(BaseModel):
     model_config = ConfigDict(frozen=True)

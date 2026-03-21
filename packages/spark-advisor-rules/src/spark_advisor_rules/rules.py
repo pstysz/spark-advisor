@@ -4,6 +4,7 @@ from typing import ClassVar
 from spark_advisor_models.config import Thresholds
 from spark_advisor_models.defaults import DEFAULT_THRESHOLDS
 from spark_advisor_models.model import JobAnalysis, RuleResult, Severity, StageMetrics
+from spark_advisor_models.util import format_bytes, parse_memory_string, parse_spark_version
 
 
 class Rule(ABC):
@@ -419,6 +420,173 @@ class ExecutorMemoryOverheadRule(Rule):
         ]
 
 
+class DriverMemoryRule(Rule):
+    rule_id: ClassVar[str] = "driver_memory"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        memory_mb = parse_memory_string(job.config.driver_memory)
+        if memory_mb == 0:
+            return []
+
+        if memory_mb < self._thresholds.driver_memory_min_mb:
+            return [
+                self._result(
+                    Severity.WARNING,
+                    "Driver memory too low",
+                    f"Driver memory is too low: {job.config.driver_memory} ({memory_mb} MB) — risk of OOM",
+                    current_value=f"spark.driver.memory = {job.config.driver_memory}",
+                    recommended_value=f"spark.driver.memory >= {self._thresholds.driver_memory_min_mb}m",
+                    estimated_impact="Insufficient driver memory causes OOM on collect/broadcast operations",
+                )
+            ]
+
+        if memory_mb > self._thresholds.driver_memory_max_mb:
+            return [
+                self._result(
+                    Severity.WARNING,
+                    "Driver memory too high",
+                    f"Driver memory is too high: {job.config.driver_memory} ({memory_mb} MB) — resource waste",
+                    current_value=f"spark.driver.memory = {job.config.driver_memory}",
+                    recommended_value=f"spark.driver.memory <= {self._thresholds.driver_memory_max_mb}m",
+                    estimated_impact="Over-provisioned driver wastes cluster resources",
+                )
+            ]
+
+        return []
+
+
+class MemoryUnderutilizationRule(Rule):
+    rule_id: ClassVar[str] = "memory_underutilization"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        if job.executors is None:
+            return []
+
+        utilization = job.executors.memory_utilization_percent
+        if utilization == 0.0 or utilization >= self._thresholds.memory_underutilization_percent:
+            return []
+
+        return [
+            self._result(
+                Severity.WARNING,
+                "Executor memory underutilized",
+                f"Peak memory usage is only {utilization:.0f}% of allocated — executors overprovisioned",
+                current_value=f"{utilization:.0f}% memory utilization",
+                recommended_value="Reduce spark.executor.memory to match actual usage + 20% buffer",
+                estimated_impact="Right-sizing executor memory frees cluster resources",
+            )
+        ]
+
+
+class AQENotEnabledRule(Rule):
+    rule_id: ClassVar[str] = "aqe_not_enabled"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        version = parse_spark_version(job.spark_version)
+        if version is None or version < (3, 0):
+            return []
+
+        if job.config.aqe_enabled:
+            return []
+
+        if version >= (3, 2) and not job.config.has_explicit_aqe_config:
+            return []
+
+        if version >= (3, 2):
+            return [
+                self._result(
+                    Severity.WARNING,
+                    "AQE explicitly disabled",
+                    "Adaptive Query Execution is disabled (enabled by default since Spark 3.2)",
+                    current_value="spark.sql.adaptive.enabled = false",
+                    recommended_value="spark.sql.adaptive.enabled = true",
+                    estimated_impact="AQE auto-handles partition coalescing, skew joins, and broadcast threshold",
+                )
+            ]
+
+        return [
+            self._result(
+                Severity.INFO,
+                "AQE not enabled",
+                "Consider enabling Adaptive Query Execution for automatic optimization",
+                current_value="spark.sql.adaptive.enabled = false",
+                recommended_value="spark.sql.adaptive.enabled = true",
+                estimated_impact="AQE auto-handles partition coalescing, skew joins, and broadcast threshold",
+            )
+        ]
+
+
+class ExcessiveStagesRule(Rule):
+    rule_id: ClassVar[str] = "excessive_stages"
+
+    def evaluate(self, job: JobAnalysis) -> list[RuleResult]:
+        stage_count = len(job.stages)
+        if stage_count <= self._thresholds.excessive_stages_count:
+            return []
+
+        return [
+            self._result(
+                Severity.WARNING,
+                "Excessive number of stages",
+                f"Job has {stage_count} stages — consider persisting intermediate results to break lineage",
+                current_value=f"{stage_count} stages",
+                recommended_value="Use .persist() or .cache() on reused DataFrames",
+                estimated_impact="Shorter lineage reduces recomputation risk and planning overhead",
+            )
+        ]
+
+
+class ShuffleDataVolumeRule(Rule):
+    rule_id: ClassVar[str] = "shuffle_data_volume"
+
+    def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        shuffle_write_gb = stage.total_shuffle_write_bytes / (1024**3)
+        if shuffle_write_gb <= self._thresholds.shuffle_volume_warning_gb:
+            return None
+
+        return self._result(
+            Severity.WARNING,
+            f"High shuffle volume in Stage {stage.stage_id}",
+            f"Stage writes {shuffle_write_gb:.1f} GB shuffle data — consider pre-partitioning or bucketing",
+            stage_id=stage.stage_id,
+            current_value=f"{shuffle_write_gb:.1f} GB shuffle write",
+            recommended_value="Use bucketing, pre-partition data, or reduce shuffle with broadcast joins",
+            estimated_impact="Reduce disk I/O and network transfer",
+        )
+
+
+class InputDataSkewRule(Rule):
+    rule_id: ClassVar[str] = "input_data_skew"
+
+    def _check_stage(self, stage: StageMetrics, job: JobAnalysis) -> RuleResult | None:
+        input_bytes = stage.tasks.distributions.input_metrics.bytes
+        median_input = input_bytes.median
+        max_input = input_bytes.max
+
+        if median_input == 0:
+            return None
+
+        ratio = max_input / median_input
+        if ratio < self._thresholds.input_skew_warning_ratio:
+            return None
+
+        severity = (
+            Severity.CRITICAL
+            if ratio >= self._thresholds.input_skew_critical_ratio
+            else Severity.WARNING
+        )
+
+        return self._result(
+            severity,
+            f"Input data skew in Stage {stage.stage_id}",
+            f"Max task input ({format_bytes(max_input)}) is {ratio:.1f}x the median ({format_bytes(median_input)})",
+            stage_id=stage.stage_id,
+            current_value=f"input skew ratio {ratio:.1f}x",
+            recommended_value="Repartition input data or use salting to distribute evenly",
+            estimated_impact=f"Stage {stage.stage_id} tasks could run ~{int((1 - 1 / ratio) * 100)}% faster",
+        )
+
+
 def rules_for_threshold(thresholds: Thresholds) -> list[Rule]:
     return [
         DataSkewRule(thresholds),
@@ -432,4 +600,10 @@ def rules_for_threshold(thresholds: Thresholds) -> list[Rule]:
         SerializerChoiceRule(thresholds),
         DynamicAllocationRule(thresholds),
         ExecutorMemoryOverheadRule(thresholds),
+        DriverMemoryRule(thresholds),
+        MemoryUnderutilizationRule(thresholds),
+        AQENotEnabledRule(thresholds),
+        ExcessiveStagesRule(thresholds),
+        ShuffleDataVolumeRule(thresholds),
+        InputDataSkewRule(thresholds),
     ]
