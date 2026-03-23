@@ -22,6 +22,11 @@ data:
   SA_GATEWAY_NATS__LIST_APPS_TIMEOUT: {{ .Values.config.nats.listAppsTimeout | quote }}
   SA_GATEWAY_NATS__ANALYSIS_SUBMIT_SUBJECT: {{ .Values.config.nats.analysisSubmitSubject | quote }}
   SA_GATEWAY_NATS__POLLING_ANALYSIS_MODE: {{ .Values.config.nats.pollingAnalysisMode | quote }}
+  SA_GATEWAY_NATS__K8S_FETCH_SUBJECT: {{ .Values.config.nats.k8sFetchSubject | default "job.fetch.k8s" | quote }}
+  SA_GATEWAY_NATS__K8S_LIST_APPS_SUBJECT: {{ .Values.config.nats.k8sListAppsSubject | default "k8s.applications.list" | quote }}
+  SA_GATEWAY_NATS__K8S_FETCH_TIMEOUT: {{ .Values.config.nats.k8sFetchTimeout | default "60" | quote }}
+  SA_GATEWAY_NATS__K8S_LIST_APPS_TIMEOUT: {{ .Values.config.nats.k8sListAppsTimeout | default "10" | quote }}
+  SA_GATEWAY_ENABLED_CONNECTORS: {{ .Values.config.enabledConnectors | default "hs" | quote }}
   SA_GATEWAY_OTEL__ENABLED: {{ .Values.config.otel.enabled | quote }}
   SA_GATEWAY_OTEL__ENDPOINT: {{ .Values.config.otel.endpoint | quote }}
   SA_GATEWAY_DATABASE_URL: {{ .Values.config.databaseUrl | quote }}

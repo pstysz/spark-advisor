@@ -1,0 +1,12 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "k8s-connector.fullname" . }}
+  labels:
+    {{- include "k8s-connector.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["sparkoperator.k8s.io"]
+    resources: ["sparkapplications"]
+    verbs: ["get", "list", "watch"]
+{{- end }}

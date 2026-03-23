@@ -67,10 +67,20 @@ export function TaskDetailPage() {
             <button
               className="btn-rerun"
               disabled={rerunPending}
-              onClick={() => rerun(
-                { app_id: task.app_id, mode: task.mode, rerun: true },
-                { onSuccess: (result) => { if (result.status === 202) navigate(`/tasks/${result.data.task_id}`); } },
-              )}
+              onClick={() => {
+                const isK8s = task.data_source === "k8s";
+                if (isK8s) {
+                  rerun(
+                    { source: "k8s", request: { app_id: task.app_id, mode: task.mode } },
+                    { onSuccess: (result) => { if (result.status === 202) navigate(`/tasks/${result.data.task_id}`); } },
+                  );
+                } else {
+                  rerun(
+                    { source: "hs", request: { app_id: task.app_id, mode: task.mode, rerun: true } },
+                    { onSuccess: (result) => { if (result.status === 202) navigate(`/tasks/${result.data.task_id}`); } },
+                  );
+                }
+              }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />

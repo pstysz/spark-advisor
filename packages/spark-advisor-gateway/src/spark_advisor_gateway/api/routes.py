@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Annotated, Any
 
 import structlog
@@ -16,6 +17,7 @@ from spark_advisor_gateway.api.schemas import (
     DataSourceBreakdownResponse,
     DurationByModeResponse,
     FailureRateTrendResponse,
+    K8sAnalyzeRequest,
     ModeBreakdownResponse,
     PaginatedApplicationResponse,
     PaginatedTaskResponse,
@@ -34,6 +36,7 @@ from spark_advisor_gateway.task.models import DataSource, TaskStatus
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from spark_advisor_gateway.config import GatewaySettings
     from spark_advisor_gateway.task.executor import TaskExecutor
     from spark_advisor_gateway.task.manager import TaskManager
 
@@ -49,17 +52,18 @@ def _from_state(key: StateKey) -> Callable[..., Any]:
 
 ManagerDep = Annotated["TaskManager", Depends(_from_state(StateKey.TASK_MANAGER))]
 ExecutorDep = Annotated["TaskExecutor", Depends(_from_state(StateKey.TASK_EXECUTOR))]
+SettingsDep = Annotated["GatewaySettings", Depends(_from_state(StateKey.SETTINGS))]
 
 
 def create_router() -> APIRouter:
     router = APIRouter(prefix="/api/v1")
 
     @router.get(
-        "/applications",
+        "/hs/applications",
         summary="List Spark applications from History Server",
-        tags=["applications"],
+        tags=["history-server"],
     )
-    async def list_applications(
+    async def list_hs_applications(
             executor: ExecutorDep,
             manager: ManagerDep,
             limit: int = Query(default=20, ge=1, le=500, description="Maximum number of applications to return"),
@@ -80,12 +84,12 @@ def create_router() -> APIRouter:
         )
 
     @router.post(
-        "/analyze",
-        summary="Submit analysis request",
+        "/hs/analyze",
+        summary="Submit History Server analysis request",
         description="Creates an async analysis task. Returns 202 for new tasks, 409 if a task is already active.",
-        tags=["analysis"],
+        tags=["history-server"],
     )
-    async def analyze(
+    async def hs_analyze(
             body: AnalyzeRequest,
             manager: ManagerDep,
             executor: ExecutorDep,
@@ -103,6 +107,114 @@ def create_router() -> APIRouter:
         executor.submit(task.task_id, body.app_id, body.mode)
         response.status_code = 202
         return AnalyzeResponse(task_id=task.task_id, status=task.status)
+
+    @router.get(
+        "/k8s/applications",
+        summary="List Spark applications from Kubernetes",
+        tags=["kubernetes"],
+    )
+    async def list_k8s_applications(
+            executor: ExecutorDep,
+            manager: ManagerDep,
+            limit: int = Query(default=20, ge=1, le=500, description="Maximum number of applications to return"),
+            offset: int = Query(default=0, ge=0, description="Number of applications to skip"),
+            namespace: str | None = Query(default=None, description="Filter by namespace"),
+            state: str | None = Query(default=None, description="Filter by state"),
+            search: str | None = Query(default=None, description="Search by name"),
+    ) -> PaginatedApplicationResponse:
+        all_refs = await executor.list_k8s_applications(offset + limit, namespace=namespace, state=state, search=search)
+        page = all_refs[offset:offset + limit]
+        app_ids = [ref.app_id or f"{ref.namespace}/{ref.name}" for ref in page]
+        counts = await manager.count_by_app_ids(app_ids)
+        return PaginatedApplicationResponse(
+            items=[
+                ApplicationResponse.from_k8s_ref(
+                    ref, analysis_count=counts.get(ref.app_id or f"{ref.namespace}/{ref.name}", 0),
+                )
+                for ref in page
+            ],
+            total=len(all_refs),
+            limit=limit,
+            offset=offset,
+        )
+
+    @router.post(
+        "/k8s/analyze",
+        summary="Submit Kubernetes analysis request",
+        description="Creates an async analysis task for a K8s SparkApplication. 202 for new, 409 if active.",
+        tags=["kubernetes"],
+    )
+    async def k8s_analyze(
+            body: K8sAnalyzeRequest,
+            manager: ManagerDep,
+            executor: ExecutorDep,
+            response: Response,
+    ) -> AnalyzeResponse:
+        display_id = body.app_id or f"{body.namespace}/{body.name}"
+        result = await manager.create_if_not_active(
+            display_id, rerun=False, mode=body.mode, data_source=DataSource.K8S,
+        )
+        if result is None:
+            raise HTTPException(status_code=409, detail="Task is still running, cannot rerun")
+        task, created = result
+        if not created:
+            response.status_code = 409
+            return AnalyzeResponse(task_id=task.task_id, status=task.status)
+        executor.submit_k8s(task.task_id, body.namespace, body.name, body.app_id, body.mode)
+        response.status_code = 202
+        return AnalyzeResponse(task_id=task.task_id, status=task.status)
+
+    @router.get(
+        "/applications",
+        summary="List applications from all enabled connectors",
+        tags=["applications"],
+    )
+    async def list_all_applications(
+            executor: ExecutorDep,
+            manager: ManagerDep,
+            settings: SettingsDep,
+            limit: int = Query(default=20, ge=1, le=500, description="Maximum number of applications to return"),
+            offset: int = Query(default=0, ge=0, description="Number of applications to skip"),
+    ) -> PaginatedApplicationResponse:
+        tasks_list: list[tuple[str, Any]] = []
+        if "hs" in settings.enabled_connectors:
+            tasks_list.append(("hs", executor.list_applications(offset + limit)))
+        if "k8s" in settings.enabled_connectors:
+            tasks_list.append(("k8s", executor.list_k8s_applications(offset + limit)))
+
+        gathered = await asyncio.gather(*[t[1] for t in tasks_list], return_exceptions=True)
+
+        all_items: list[ApplicationResponse] = []
+        for (source_name, _), result in zip(tasks_list, gathered, strict=True):
+            if isinstance(result, BaseException):
+                logger.warning("Failed to fetch from %s: %s", source_name, result)
+                continue
+            if source_name == "hs":
+                app_ids = [app.id for app in result]
+                counts = await manager.count_by_app_ids(app_ids)
+                all_items.extend(
+                    ApplicationResponse.from_summary(app, analysis_count=counts.get(app.id, 0))
+                    for app in result
+                )
+            elif source_name == "k8s":
+                app_ids = [ref.app_id or f"{ref.namespace}/{ref.name}" for ref in result]
+                counts = await manager.count_by_app_ids(app_ids)
+                all_items.extend(
+                    ApplicationResponse.from_k8s_ref(
+                        ref, analysis_count=counts.get(ref.app_id or f"{ref.namespace}/{ref.name}", 0),
+                    )
+                    for ref in result
+                )
+
+        all_items.sort(key=lambda a: a.end_time, reverse=True)
+        total = len(all_items)
+        page = all_items[offset:offset + limit]
+        return PaginatedApplicationResponse(
+            items=page,
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
 
     @router.get(
         "/tasks/stats",

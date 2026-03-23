@@ -11,6 +11,7 @@ from spark_advisor_hs_connector.history_server.client import HistoryServerClient
 from spark_advisor_hs_connector.history_server.poller import HistoryServerPoller
 from spark_advisor_hs_connector.store import PollingStore
 from spark_advisor_models.logging import configure_logging
+from spark_advisor_models.polling import polling_loop
 from spark_advisor_models.tracing import configure_tracing
 
 settings = ConnectorSettings()
@@ -83,19 +84,8 @@ async def start_polling() -> None:
         logger.info("Polling disabled (SA_HS_CONNECTOR_POLLING_ENABLED=false)")
         return
     poller: HistoryServerPoller = app.context.get(ContextKey.POLLER)
-    polling_task = asyncio.create_task(_polling_loop(poller, settings.poll_interval_seconds))
+    polling_task = asyncio.create_task(polling_loop(poller, settings.poll_interval_seconds))
     app.context.set_global(ContextKey.POLLING_TASK, polling_task)
-
-
-async def _polling_loop(poller: HistoryServerPoller, interval: int) -> None:
-    while True:
-        try:
-            count = await poller.poll()
-            if count > 0:
-                logger.info("Published %d new jobs", count)
-        except Exception:
-            logger.exception("Poll cycle failed")
-        await asyncio.sleep(interval)
 
 
 def main() -> None:

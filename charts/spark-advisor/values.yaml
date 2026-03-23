@@ -26,6 +26,12 @@ storage-connector:
     nats:
       url: "nats://spark-advisor-nats:4222"
 
+k8s-connector:
+  enabled: false
+  config:
+    nats:
+      url: "nats://spark-advisor-nats:4222"
+
 nats:
   config:
     jetstream:

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: spark-advisor-k8s-connector
+description: Spark Advisor K8s Connector — discovers SparkApplication CRDs and delegates analysis
+type: application
+version: 0.1.16 # x-release-please-version
+appVersion: "0.1.16" # x-release-please-version

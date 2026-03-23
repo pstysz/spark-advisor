@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { SourceBadge } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { useApplicationsList } from "@/hooks/useApplications";
 import { formatDurationMs, formatDateTime } from "@/lib/format";
@@ -44,6 +45,7 @@ export function ApplicationsPage() {
                 <tr>
                   <th>App ID</th>
                   <th>Name</th>
+                  <th>Source</th>
                   <th>Status</th>
                   <th>Duration</th>
                   <th>Analyses</th>
@@ -54,18 +56,19 @@ export function ApplicationsPage() {
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={7}><div className="empty-state">Loading...</div></td>
+                    <td colSpan={8}><div className="empty-state">Loading...</div></td>
                   </tr>
                 )}
                 {!isLoading && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7}><div className="empty-state">No applications found</div></td>
+                    <td colSpan={8}><div className="empty-state">No applications found</div></td>
                   </tr>
                 )}
                 {filtered.map((app) => (
                   <tr key={app.id}>
                     <td className="font-mono" style={{ fontSize: 13 }}>{app.id}</td>
                     <td>{app.name || "—"}</td>
+                    <td>{app.data_source && <SourceBadge source={app.data_source} />}</td>
                     <td>
                       <span className={`badge ${app.completed ? "badge-completed" : "badge-running"}`}>
                         <span className="badge-dot" />

@@ -1,0 +1,55 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/pstysz/spark-advisor-k8s-connector
+  tag: ""
+  pullPolicy: IfNotPresent
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: ""
+
+kubeconfig:
+  inCluster: true
+  secretName: ""
+  secretKey: "config"
+
+config:
+  serviceName: "spark-advisor-k8s-connector"
+  logLevel: "INFO"
+  jsonLog: true
+  nats:
+    url: "nats://localhost:4222"
+    analysisSubmitSubject: "analysis.submit"
+    fetchSubject: "job.fetch.k8s"
+    listAppsSubject: "k8s.applications.list"
+  otel:
+    enabled: true
+    endpoint: "http://spark-advisor-tempo:4317"
+  pollingEnabled: false
+  pollIntervalSeconds: 60
+  batchSize: 50
+  maxProcessedApps: 10000
+  namespaces: "default"
+  labelSelector: ""
+  applicationStates: "COMPLETED,FAILED"
+  maxAgeDays: 7
+  defaultEventLogDir: ""
+  defaultStorageType: "hdfs"
+  databaseUrl: "sqlite+aiosqlite:////data/k8s_connector.db"
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    mountPath: /data
+
+imagePullSecrets: []
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

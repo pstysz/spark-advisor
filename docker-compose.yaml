@@ -75,6 +75,7 @@ services:
         condition: service_healthy
     environment:
       SA_GATEWAY_NATS__URL: "nats://nats:4222"
+      SA_GATEWAY_ENABLED_CONNECTORS: '["hs"]'
       SA_GATEWAY_DATABASE_URL: "sqlite+aiosqlite:////data/spark_advisor.db"
       SA_GATEWAY_OTEL__ENABLED: "${SA_OTEL_ENABLED:-false}"
       SA_GATEWAY_OTEL__ENDPOINT: "${SA_OTEL_ENDPOINT:-http://tempo:4317}"

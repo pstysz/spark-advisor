@@ -79,6 +79,9 @@ jobs:
       - name: Lint subchart — storage-connector
         run: helm lint charts/storage-connector
 
+      - name: Lint subchart — k8s-connector
+        run: helm lint charts/k8s-connector
+
       - name: Lint subchart — prometheus
         run: helm lint charts/prometheus
 

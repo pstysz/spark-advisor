@@ -6,6 +6,7 @@ from faststream import FastStream
 from faststream.nats import NatsBroker
 
 from spark_advisor_models.logging import configure_logging
+from spark_advisor_models.polling import polling_loop
 from spark_advisor_models.tracing import configure_tracing
 from spark_advisor_storage_connector.config import (
     CONNECTOR_FETCH_SUBJECTS,
@@ -95,19 +96,8 @@ async def start_polling() -> None:
         logger.info("Polling disabled (SA_STORAGE_POLLING_ENABLED=false)")
         return
     poller: StoragePoller = app.context.get(ContextKey.POLLER)
-    polling_task = asyncio.create_task(_polling_loop(poller, settings.poll_interval_seconds))
+    polling_task = asyncio.create_task(polling_loop(poller, settings.poll_interval_seconds))
     app.context.set_global(ContextKey.POLLING_TASK, polling_task)
-
-
-async def _polling_loop(poller: StoragePoller, interval: int) -> None:
-    while True:
-        try:
-            count = await poller.poll()
-            if count > 0:
-                logger.info("Published %d new event logs", count)
-        except Exception:
-            logger.exception("Poll cycle failed")
-        await asyncio.sleep(interval)
 
 
 def main() -> None:

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 @pytest.mark.asyncio
 async def test_analyze_returns_202(client: AsyncClient) -> None:
-    response = await client.post("/api/v1/analyze", json={"app_id": "app-123"})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": "app-123"})
     assert response.status_code == 202
     data = response.json()
     assert data["status"] == "pending"
@@ -36,7 +36,7 @@ async def test_analyze_returns_202(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_analyze_with_agent_mode(client: AsyncClient, task_executor: TaskExecutor) -> None:
     with patch.object(task_executor, "submit") as mock_submit:
-        response = await client.post("/api/v1/analyze", json={"app_id": "app-123", "mode": "agent"})
+        response = await client.post("/api/v1/hs/analyze", json={"app_id": "app-123", "mode": "agent"})
     assert response.status_code == 202
     call_args = mock_submit.call_args
     assert call_args.args[2] == AnalysisMode.AGENT
@@ -45,7 +45,7 @@ async def test_analyze_with_agent_mode(client: AsyncClient, task_executor: TaskE
 @pytest.mark.asyncio
 async def test_analyze_default_mode_is_standard(client: AsyncClient, task_executor: TaskExecutor) -> None:
     with patch.object(task_executor, "submit") as mock_submit:
-        response = await client.post("/api/v1/analyze", json={"app_id": "app-123"})
+        response = await client.post("/api/v1/hs/analyze", json={"app_id": "app-123"})
     assert response.status_code == 202
     call_args = mock_submit.call_args
     assert call_args.args[2] == AnalysisMode.AI
@@ -194,7 +194,7 @@ async def test_list_applications_returns_apps(client: AsyncClient, mock_nc: Asyn
             {"id": "app-002", "name": "ETL Job", "attempts": []},
         ]
     )
-    response = await client.get("/api/v1/applications")
+    response = await client.get("/api/v1/hs/applications")
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 2
@@ -231,7 +231,7 @@ async def test_list_applications_includes_analysis_count(
             {"id": "app-003", "name": "Job3", "attempts": []},
         ]
     )
-    response = await client.get("/api/v1/applications")
+    response = await client.get("/api/v1/hs/applications")
     assert response.status_code == 200
     items = {i["id"]: i for i in response.json()["items"]}
     assert items["app-001"]["analysis_count"] == 2
@@ -290,15 +290,15 @@ async def test_list_applications_offset_beyond_total(client: AsyncClient, mock_n
 @pytest.mark.asyncio
 async def test_list_applications_returns_502_on_error(client: AsyncClient, mock_nc: AsyncMock) -> None:
     mock_nc.request.return_value = _nats_reply({"error": "Connection refused"})
-    response = await client.get("/api/v1/applications")
+    response = await client.get("/api/v1/hs/applications")
     assert response.status_code == 502
     assert "Connection refused" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
 async def test_analyze_duplicate_pending_returns_409(client: AsyncClient) -> None:
-    await client.post("/api/v1/analyze", json={"app_id": "app-dup"})
-    response = await client.post("/api/v1/analyze", json={"app_id": "app-dup"})
+    await client.post("/api/v1/hs/analyze", json={"app_id": "app-dup"})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": "app-dup"})
     assert response.status_code == 409
     data = response.json()
     assert data["status"] == "pending"
@@ -306,11 +306,11 @@ async def test_analyze_duplicate_pending_returns_409(client: AsyncClient) -> Non
 
 @pytest.mark.asyncio
 async def test_analyze_duplicate_running_returns_409(client: AsyncClient, task_manager: TaskManager) -> None:
-    r1 = await client.post("/api/v1/analyze", json={"app_id": "app-run"})
+    r1 = await client.post("/api/v1/hs/analyze", json={"app_id": "app-run"})
     task_id = r1.json()["task_id"]
     await task_manager.mark_running(task_id)
 
-    response = await client.post("/api/v1/analyze", json={"app_id": "app-run"})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": "app-run"})
     assert response.status_code == 409
     assert response.json()["status"] == "running"
 
@@ -320,13 +320,13 @@ async def test_analyze_after_completed_creates_new(
     client: AsyncClient, task_manager: TaskManager, task_executor: TaskExecutor
 ) -> None:
     with patch.object(task_executor, "submit"):
-        r1 = await client.post("/api/v1/analyze", json={"app_id": "app-done"})
+        r1 = await client.post("/api/v1/hs/analyze", json={"app_id": "app-done"})
     task_id = r1.json()["task_id"]
     job = make_job(app_id="app-done")
     result = AnalysisResult(app_id="app-done", job=job, rule_results=[])
     await task_manager.mark_completed(task_id, result)
 
-    response = await client.post("/api/v1/analyze", json={"app_id": "app-done"})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": "app-done"})
     assert response.status_code == 202
     assert response.json()["task_id"] != task_id
 
@@ -336,51 +336,51 @@ async def test_analyze_rerun_completed_creates_new(
     client: AsyncClient, task_manager: TaskManager, task_executor: TaskExecutor
 ) -> None:
     with patch.object(task_executor, "submit"):
-        r1 = await client.post("/api/v1/analyze", json={"app_id": "app-rerun"})
+        r1 = await client.post("/api/v1/hs/analyze", json={"app_id": "app-rerun"})
     task_id = r1.json()["task_id"]
     job = make_job(app_id="app-rerun")
     result = AnalysisResult(app_id="app-rerun", job=job, rule_results=[])
     await task_manager.mark_completed(task_id, result)
 
-    response = await client.post("/api/v1/analyze", json={"app_id": "app-rerun", "rerun": True})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": "app-rerun", "rerun": True})
     assert response.status_code == 202
     assert response.json()["task_id"] != task_id
 
 
 @pytest.mark.asyncio
 async def test_analyze_rerun_running_returns_409(client: AsyncClient, task_manager: TaskManager) -> None:
-    r1 = await client.post("/api/v1/analyze", json={"app_id": "app-busy"})
+    r1 = await client.post("/api/v1/hs/analyze", json={"app_id": "app-busy"})
     task_id = r1.json()["task_id"]
     await task_manager.mark_running(task_id)
 
-    response = await client.post("/api/v1/analyze", json={"app_id": "app-busy", "rerun": True})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": "app-busy", "rerun": True})
     assert response.status_code == 409
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("app_id", ["app-123", "application_1234567890123_0001", "my_app-v2"])
 async def test_analyze_valid_app_id_formats(client: AsyncClient, app_id: str) -> None:
-    response = await client.post("/api/v1/analyze", json={"app_id": app_id})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": app_id})
     assert response.status_code == 202
 
 
 @pytest.mark.asyncio
 async def test_analyze_app_id_too_long_returns_422(client: AsyncClient) -> None:
-    response = await client.post("/api/v1/analyze", json={"app_id": "a" * 129})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": "a" * 129})
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("app_id", ["../etc/passwd", "app/../secret", "app/../../root"])
 async def test_analyze_app_id_traversal_returns_422(client: AsyncClient, app_id: str) -> None:
-    response = await client.post("/api/v1/analyze", json={"app_id": app_id})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": app_id})
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("app_id", ["app id", "app@host", "app;rm -rf", "app&cmd", "app<script>"])
 async def test_analyze_app_id_special_chars_returns_422(client: AsyncClient, app_id: str) -> None:
-    response = await client.post("/api/v1/analyze", json={"app_id": app_id})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": app_id})
     assert response.status_code == 422
 
 
@@ -844,14 +844,14 @@ async def test_stats_failure_rate_with_data(client: AsyncClient, task_manager: T
 @pytest.mark.asyncio
 async def test_analyze_with_explicit_data_source(client: AsyncClient) -> None:
     response = await client.post(
-        "/api/v1/analyze", json={"app_id": "app-ds1", "data_source": "hs_poller"},
+        "/api/v1/hs/analyze", json={"app_id": "app-ds1", "data_source": "hs_poller"},
     )
     assert response.status_code == 202
 
 
 @pytest.mark.asyncio
 async def test_analyze_default_data_source(client: AsyncClient, task_manager: TaskManager) -> None:
-    response = await client.post("/api/v1/analyze", json={"app_id": "app-ds2"})
+    response = await client.post("/api/v1/hs/analyze", json={"app_id": "app-ds2"})
     assert response.status_code == 202
     task_id = response.json()["task_id"]
     task = await task_manager.get(task_id)

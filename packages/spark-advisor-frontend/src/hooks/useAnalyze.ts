@@ -1,13 +1,20 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { post, ApiError } from "@/lib/api";
 import { toast } from "@/hooks/useToast";
-import type { AnalyzeRequest, AnalyzeResponse } from "@/lib/types";
+import type { AnalyzeRequest, AnalyzeResponse, K8sAnalyzeRequest } from "@/lib/types";
+
+type SubmitRequest =
+  | { source: "hs"; request: AnalyzeRequest }
+  | { source: "k8s"; request: K8sAnalyzeRequest };
 
 export function useSubmitAnalysis() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (request: AnalyzeRequest) => post<AnalyzeResponse>("/analyze", request),
+    mutationFn: (params: SubmitRequest) => {
+      const path = params.source === "k8s" ? "/k8s/analyze" : "/hs/analyze";
+      return post<AnalyzeResponse>(path, params.request);
+    },
     onSuccess: () => {
       toast.success("Analysis submitted successfully");
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });

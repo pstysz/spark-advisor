@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "k8s-connector.fullname" . }}
+  labels:
+    {{- include "k8s-connector.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "k8s-connector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "k8s-connector.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name | default (include "k8s-connector.fullname" .) }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_K8S_CONNECTOR_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import socket,os,urllib.parse as u; p=u.urlparse(os.environ['SA_K8S_CONNECTOR_NATS__URL']); s=socket.create_connection((p.hostname,p.port or 4222),timeout=3); s.close()"
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+          envFrom:
+            - configMapRef:
+                name: {{ include "k8s-connector.fullname" . }}
+          {{- if or .Values.config.persistence.enabled .Values.kubeconfig.secretName }}
+          volumeMounts:
+            {{- if .Values.config.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.config.persistence.mountPath }}
+            {{- end }}
+            {{- if .Values.kubeconfig.secretName }}
+            - name: kubeconfig
+              mountPath: /etc/kubernetes
+              readOnly: true
+            {{- end }}
+          {{- end }}
+          {{- if .Values.kubeconfig.secretName }}
+          env:
+            - name: SA_K8S_CONNECTOR_KUBECONFIG_PATH
+              value: "/etc/kubernetes/{{ .Values.kubeconfig.secretKey }}"
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if or .Values.config.persistence.enabled .Values.kubeconfig.secretName }}
+      volumes:
+        {{- if .Values.config.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "k8s-connector.fullname" . }}-data
+        {{- end }}
+        {{- if .Values.kubeconfig.secretName }}
+        - name: kubeconfig
+          secret:
+            secretName: {{ .Values.kubeconfig.secretName }}
+        {{- end }}
+      {{- end }}

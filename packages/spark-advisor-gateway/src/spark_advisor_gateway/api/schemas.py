@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from spark_advisor_gateway.task.models import AnalysisTask, TaskStatus
 from spark_advisor_models.model import AnalysisMode, DataSource, Severity
 
 if TYPE_CHECKING:
-    from spark_advisor_models.model import ApplicationSummary
+    from spark_advisor_models.model import ApplicationSummary, SparkApplicationRef
 
 
 class AnalyzeRequest(BaseModel):
@@ -27,6 +27,23 @@ class AnalyzeRequest(BaseModel):
     rerun: bool = Field(default=False, examples=[False])
 
 
+class K8sAnalyzeRequest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    namespace: str | None = Field(default=None, examples=["spark-prod"])
+    name: str | None = Field(default=None, examples=["my-etl-job"])
+    app_id: str | None = Field(default=None, examples=["spark-abc123"])
+    mode: AnalysisMode = Field(default=AnalysisMode.AI, examples=["ai"])
+
+    @model_validator(mode="after")
+    def validate_identifier(self) -> Self:
+        has_k8s_id = self.namespace is not None and self.name is not None
+        has_app_id = self.app_id is not None
+        if not has_k8s_id and not has_app_id:
+            raise ValueError("Either (namespace + name) or app_id must be provided")
+        return self
+
+
 class ApplicationResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -39,9 +56,12 @@ class ApplicationResponse(BaseModel):
     spark_version: str = Field(default="", examples=["3.5.1"])
     user: str = Field(default="", examples=["hdfs"])
     analysis_count: int = Field(default=0, examples=[3])
+    data_source: DataSource = Field(default=DataSource.HS_MANUAL, examples=["hs_manual"])
 
     @classmethod
-    def from_summary(cls, app: ApplicationSummary, *, analysis_count: int = 0) -> ApplicationResponse:
+    def from_summary(
+        cls, app: ApplicationSummary, *, analysis_count: int = 0, data_source: DataSource = DataSource.HS_MANUAL,
+    ) -> ApplicationResponse:
         latest = app.latest_attempt
         return cls(
             id=app.id,
@@ -53,6 +73,24 @@ class ApplicationResponse(BaseModel):
             spark_version=latest.app_spark_version if latest else "",
             user=latest.spark_user if latest else "",
             analysis_count=analysis_count,
+            data_source=data_source,
+        )
+
+    @classmethod
+    def from_k8s_ref(cls, ref: SparkApplicationRef, *, analysis_count: int = 0) -> ApplicationResponse:
+        return cls(
+            id=ref.app_id or f"{ref.namespace}/{ref.name}",
+            name=ref.name,
+            start_time=ref.submitted_at.isoformat() if ref.submitted_at else "",
+            end_time=ref.completed_at.isoformat() if ref.completed_at else "",
+            duration_ms=int((ref.completed_at - ref.submitted_at).total_seconds() * 1000)
+            if ref.completed_at and ref.submitted_at
+            else 0,
+            completed=ref.state == "COMPLETED",
+            spark_version=ref.spark_version or "",
+            user="",
+            analysis_count=analysis_count,
+            data_source=DataSource.K8S,
         )
 
 

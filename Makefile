@@ -1,7 +1,7 @@
 # ─── Python Development ────────────────────────────────────────────────────────
 .PHONY: install dev test lint format check clean
 
-PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-parser packages/spark-advisor-cli packages/spark-advisor-analyzer packages/spark-advisor-hs-connector packages/spark-advisor-storage-connector packages/spark-advisor-gateway packages/spark-advisor-mcp
+PACKAGES = packages/spark-advisor-models packages/spark-advisor-rules packages/spark-advisor-parser packages/spark-advisor-cli packages/spark-advisor-analyzer packages/spark-advisor-hs-connector packages/spark-advisor-storage-connector packages/spark-advisor-k8s-connector packages/spark-advisor-gateway packages/spark-advisor-mcp
 
 install:
 	uv sync
@@ -68,7 +68,7 @@ compose-monitoring-down:
 # ─── Docker Build (minikube) ─────────────────────────────────────────────────
 .PHONY: docker-build
 
-SERVICES = spark-advisor-analyzer spark-advisor-gateway spark-advisor-hs-connector spark-advisor-storage-connector
+SERVICES = spark-advisor-analyzer spark-advisor-gateway spark-advisor-hs-connector spark-advisor-storage-connector spark-advisor-k8s-connector
 LOCAL_TAG := $(shell git rev-parse --short HEAD)-$(shell date +%s)
 
 docker-build:
@@ -109,7 +109,8 @@ helm-install-minikube: docker-build
 		--set gateway.image.tag=$(LOCAL_TAG) \
 		--set frontend.image.tag=$(LOCAL_TAG) \
 		--set hs-connector.image.tag=$(LOCAL_TAG) \
-		--set storage-connector.image.tag=$(LOCAL_TAG)
+		--set storage-connector.image.tag=$(LOCAL_TAG) \
+		--set k8s-connector.image.tag=$(LOCAL_TAG)
 
 helm-uninstall:
 	helm uninstall spark-advisor --namespace spark-advisor

@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import SettingsConfigDict
 
 from spark_advisor_models.defaults import (
@@ -8,7 +8,9 @@ from spark_advisor_models.defaults import (
     NATS_ANALYSIS_RUN_SUBJECT,
     NATS_ANALYSIS_SUBMIT_SUBJECT,
     NATS_APPLICATIONS_LIST_SUBJECT,
+    NATS_FETCH_JOB_K8S_SUBJECT,
     NATS_FETCH_JOB_SUBJECT,
+    NATS_K8S_APPLICATIONS_LIST_SUBJECT,
 )
 from spark_advisor_models.model import AnalysisMode
 from spark_advisor_models.settings import BaseServiceSettings, NatsSettings
@@ -34,6 +36,10 @@ class GatewayNatsSettings(NatsSettings):
     list_apps_timeout: float = 10.0
     analysis_submit_subject: str = NATS_ANALYSIS_SUBMIT_SUBJECT
     polling_analysis_mode: AnalysisMode = AnalysisMode.STATIC
+    k8s_fetch_subject: str = NATS_FETCH_JOB_K8S_SUBJECT
+    k8s_list_apps_subject: str = NATS_K8S_APPLICATIONS_LIST_SUBJECT
+    k8s_fetch_timeout: float = 60.0
+    k8s_list_apps_timeout: float = 10.0
 
 
 class ServerSettings(BaseModel):
@@ -54,3 +60,4 @@ class GatewaySettings(BaseServiceSettings):
     database_url: str = "sqlite+aiosqlite:///data/spark_advisor.db"
     ws_heartbeat_interval: float = 30.0
     metrics_enabled: bool = False
+    enabled_connectors: list[str] = Field(default_factory=lambda: ["hs"])

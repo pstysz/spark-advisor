@@ -99,10 +99,12 @@ export function TasksPage() {
   const { data: stats } = useTaskStats();
 
   const handleRerun = (task: TaskResponse) => {
-    rerun(
-      { app_id: task.app_id, mode: task.mode, rerun: true },
-      {},
-    );
+    const isK8s = task.data_source === "k8s";
+    if (isK8s) {
+      rerun({ source: "k8s", request: { app_id: task.app_id, mode: task.mode } });
+    } else {
+      rerun({ source: "hs", request: { app_id: task.app_id, mode: task.mode, rerun: true } });
+    }
   };
   const { data, isLoading } = useTasksList({
     limit: PAGE_SIZE,

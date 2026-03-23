@@ -1,5 +1,6 @@
 from spark_advisor_models.model.history_server import ApplicationSummary, Attempt
 from spark_advisor_models.model.input import AnalysisToolInput, RecommendationInput
+from spark_advisor_models.model.k8s import SparkApplicationRef
 from spark_advisor_models.model.metrics import (
     ExecutorMetrics,
     IOQuantiles,
@@ -44,6 +45,7 @@ __all__ = [
     "Severity",
     "ShuffleReadQuantiles",
     "ShuffleWriteQuantiles",
+    "SparkApplicationRef",
     "SparkConfig",
     "StageMetrics",
     "TaskMetrics",

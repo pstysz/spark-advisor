@@ -5,6 +5,13 @@ import { useSubmitAnalysis } from "@/hooks/useAnalyze";
 import { useApplicationsList } from "@/hooks/useApplications";
 import type { AnalysisMode } from "@/lib/types";
 
+type AnalysisSource = "hs" | "k8s";
+
+const sources: { id: AnalysisSource; title: string }[] = [
+  { id: "hs", title: "History Server" },
+  { id: "k8s", title: "Kubernetes" },
+];
+
 const modes: { id: AnalysisMode; title: string; description: string }[] = [
   { id: "static", title: "Static", description: "Rules engine only. Fast, no API key needed. Checks 11 rules for common Spark issues." },
   { id: "ai", title: "AI", description: "Rules + Claude AI analysis. Provides deeper insights, causal chains, and prioritized recommendations." },
@@ -13,7 +20,10 @@ const modes: { id: AnalysisMode; title: string; description: string }[] = [
 
 export function AnalyzePage() {
   const navigate = useNavigate();
+  const [source, setSource] = useState<AnalysisSource>("hs");
   const [appId, setAppId] = useState("");
+  const [k8sNamespace, setK8sNamespace] = useState("");
+  const [k8sName, setK8sName] = useState("");
   const [mode, setMode] = useState<AnalysisMode>("ai");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -35,19 +45,41 @@ export function AnalyzePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const canSubmit = source === "hs"
+    ? appId.trim().length > 0
+    : (k8sNamespace.trim().length > 0 && k8sName.trim().length > 0) || appId.trim().length > 0;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!appId.trim()) return;
-    mutate(
-      { app_id: appId.trim(), mode },
-      {
-        onSuccess: (result) => {
-          if (result.status === 202) {
-            // don't navigate - show success state
-          }
+    if (!canSubmit) return;
+
+    if (source === "k8s") {
+      mutate(
+        {
+          source: "k8s",
+          request: {
+            ...(k8sNamespace.trim() ? { namespace: k8sNamespace.trim() } : {}),
+            ...(k8sName.trim() ? { name: k8sName.trim() } : {}),
+            ...(appId.trim() ? { app_id: appId.trim() } : {}),
+            mode,
+          },
         },
-      },
-    );
+        {
+          onSuccess: (result) => {
+            if (result.status === 202) { /* show success state */ }
+          },
+        },
+      );
+    } else {
+      mutate(
+        { source: "hs", request: { app_id: appId.trim(), mode } },
+        {
+          onSuccess: (result) => {
+            if (result.status === 202) { /* show success state */ }
+          },
+        },
+      );
+    }
   };
 
   const isConflict = error && "status" in error && (error as { status: number }).status === 409;
@@ -63,61 +95,116 @@ export function AnalyzePage() {
             <p className="analyze-subtitle">Submit a Spark application for performance analysis and optimization recommendations.</p>
 
             <form onSubmit={handleSubmit}>
-              <div className="form-group" style={{ marginBottom: 20 }} ref={wrapperRef}>
-                <label className="form-label">Application ID</label>
-                <div className="combobox-wrapper">
-                  <input
-                    className="form-input"
-                    type="text"
-                    placeholder="Type or select from History Server..."
-                    value={appId}
-                    onChange={(e) => {
-                      setAppId(e.target.value);
-                      setDropdownOpen(true);
-                    }}
-                    onFocus={() => setDropdownOpen(true)}
-                    autoComplete="off"
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="combobox-toggle"
-                    onClick={() => setDropdownOpen(!dropdownOpen)}
-                    tabIndex={-1}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  {dropdownOpen && (
-                    <div className="combobox-dropdown">
-                      {appsLoading && (
-                        <div className="combobox-empty">Loading applications...</div>
-                      )}
-                      {appsError && (
-                        <div className="combobox-empty">History Server unavailable — type ID manually</div>
-                      )}
-                      {!appsLoading && !appsError && filtered.length === 0 && (
-                        <div className="combobox-empty">No matching applications</div>
-                      )}
-                      {filtered.slice(0, 20).map((app) => (
-                        <div
-                          key={app.id}
-                          className="combobox-option"
-                          onClick={() => {
-                            setAppId(app.id);
-                            setDropdownOpen(false);
-                          }}
-                        >
-                          <span className="combobox-option-id">{app.id}</span>
-                          <span className="combobox-option-name">{app.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <span className="form-hint">Type to filter or select from available applications</span>
+              <div className="form-group" style={{ marginBottom: 20 }}>
+                <label className="form-label">Data Source</label>
+                <select
+                  className="filter-select"
+                  value={source}
+                  onChange={(e) => setSource(e.target.value as AnalysisSource)}
+                  style={{ width: "100%" }}
+                >
+                  {sources.map((s) => (
+                    <option key={s.id} value={s.id}>{s.title}</option>
+                  ))}
+                </select>
               </div>
+
+              {source === "hs" && (
+                <div className="form-group" style={{ marginBottom: 20 }} ref={wrapperRef}>
+                  <label className="form-label">Application ID</label>
+                  <div className="combobox-wrapper">
+                    <input
+                      className="form-input"
+                      type="text"
+                      placeholder="Type or select from History Server..."
+                      value={appId}
+                      onChange={(e) => {
+                        setAppId(e.target.value);
+                        setDropdownOpen(true);
+                      }}
+                      onFocus={() => setDropdownOpen(true)}
+                      autoComplete="off"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="combobox-toggle"
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      tabIndex={-1}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    {dropdownOpen && (
+                      <div className="combobox-dropdown">
+                        {appsLoading && (
+                          <div className="combobox-empty">Loading applications...</div>
+                        )}
+                        {appsError && (
+                          <div className="combobox-empty">History Server unavailable — type ID manually</div>
+                        )}
+                        {!appsLoading && !appsError && filtered.length === 0 && (
+                          <div className="combobox-empty">No matching applications</div>
+                        )}
+                        {filtered.slice(0, 20).map((app) => (
+                          <div
+                            key={app.id}
+                            className="combobox-option"
+                            onClick={() => {
+                              setAppId(app.id);
+                              setDropdownOpen(false);
+                            }}
+                          >
+                            <span className="combobox-option-id">{app.id}</span>
+                            <span className="combobox-option-name">{app.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <span className="form-hint">Type to filter or select from available applications</span>
+                </div>
+              )}
+
+              {source === "k8s" && (
+                <>
+                  <div className="form-group" style={{ marginBottom: 20 }}>
+                    <label className="form-label">Namespace</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      placeholder="spark-jobs"
+                      value={k8sNamespace}
+                      onChange={(e) => setK8sNamespace(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 20 }}>
+                    <label className="form-label">Application Name</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      placeholder="my-spark-app"
+                      value={k8sName}
+                      onChange={(e) => setK8sName(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 20 }}>
+                    <label className="form-label">Application ID (optional)</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      placeholder="spark-abc123..."
+                      value={appId}
+                      onChange={(e) => setAppId(e.target.value)}
+                      autoComplete="off"
+                    />
+                    <span className="form-hint">Provide namespace + name, or application ID, or both</span>
+                  </div>
+                </>
+              )}
 
               <div className="form-group" style={{ marginBottom: 20 }}>
                 <label className="form-label">Analysis Mode</label>
@@ -150,7 +237,7 @@ export function AnalyzePage() {
                 </div>
               )}
 
-              <button type="submit" className="submit-btn" disabled={isPending || !appId.trim()}>
+              <button type="submit" className="submit-btn" disabled={isPending || !canSubmit}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="6 3 20 12 6 21 6 3" />
                 </svg>

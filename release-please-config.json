@@ -72,6 +72,14 @@
         },
         {
           "type": "generic",
+          "path": "packages/spark-advisor-k8s-connector/pyproject.toml"
+        },
+        {
+          "type": "generic",
+          "path": "charts/k8s-connector/Chart.yaml"
+        },
+        {
+          "type": "generic",
           "path": "charts/spark-advisor/Chart.yaml"
         },
         {

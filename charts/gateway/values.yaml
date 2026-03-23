@@ -25,6 +25,11 @@ config:
     analyzeTimeout: 120.0
     analyzeAgentTimeout: 300.0
     listAppsTimeout: 10.0
+    k8sFetchSubject: "job.fetch.k8s"
+    k8sListAppsSubject: "k8s.applications.list"
+    k8sFetchTimeout: 60.0
+    k8sListAppsTimeout: 10.0
+  enabledConnectors: "hs"
   otel:
     enabled: true
     endpoint: "http://spark-advisor-tempo:4317"

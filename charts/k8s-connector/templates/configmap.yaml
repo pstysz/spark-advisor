@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "k8s-connector.fullname" . }}
+  labels:
+    {{- include "k8s-connector.labels" . | nindent 4 }}
+data:
+  SA_K8S_CONNECTOR_SERVICE_NAME: {{ .Values.config.serviceName | quote }}
+  SA_K8S_CONNECTOR_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  SA_K8S_CONNECTOR_JSON_LOG: {{ .Values.config.jsonLog | quote }}
+  SA_K8S_CONNECTOR_NATS__URL: {{ .Values.config.nats.url | quote }}
+  SA_K8S_CONNECTOR_NATS__ANALYSIS_SUBMIT_SUBJECT: {{ .Values.config.nats.analysisSubmitSubject | quote }}
+  SA_K8S_CONNECTOR_NATS__FETCH_SUBJECT: {{ .Values.config.nats.fetchSubject | quote }}
+  SA_K8S_CONNECTOR_NATS__LIST_APPS_SUBJECT: {{ .Values.config.nats.listAppsSubject | quote }}
+  SA_K8S_CONNECTOR_OTEL__ENABLED: {{ .Values.config.otel.enabled | quote }}
+  SA_K8S_CONNECTOR_OTEL__ENDPOINT: {{ .Values.config.otel.endpoint | quote }}
+  SA_K8S_CONNECTOR_POLLING_ENABLED: {{ .Values.config.pollingEnabled | quote }}
+  SA_K8S_CONNECTOR_POLL_INTERVAL_SECONDS: {{ .Values.config.pollIntervalSeconds | quote }}
+  SA_K8S_CONNECTOR_BATCH_SIZE: {{ .Values.config.batchSize | quote }}
+  SA_K8S_CONNECTOR_MAX_PROCESSED_APPS: {{ .Values.config.maxProcessedApps | quote }}
+  SA_K8S_CONNECTOR_NAMESPACES: {{ .Values.config.namespaces | quote }}
+  SA_K8S_CONNECTOR_LABEL_SELECTOR: {{ .Values.config.labelSelector | quote }}
+  SA_K8S_CONNECTOR_APPLICATION_STATES: {{ .Values.config.applicationStates | quote }}
+  SA_K8S_CONNECTOR_MAX_AGE_DAYS: {{ .Values.config.maxAgeDays | quote }}
+  SA_K8S_CONNECTOR_DEFAULT_EVENT_LOG_DIR: {{ .Values.config.defaultEventLogDir | quote }}
+  SA_K8S_CONNECTOR_DEFAULT_STORAGE_TYPE: {{ .Values.config.defaultStorageType | quote }}
+  SA_K8S_CONNECTOR_DATABASE_URL: {{ .Values.config.databaseUrl | quote }}

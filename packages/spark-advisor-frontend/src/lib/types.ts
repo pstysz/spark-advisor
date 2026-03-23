@@ -34,6 +34,7 @@ export interface ApplicationResponse {
   spark_version: string;
   user: string;
   analysis_count: number;
+  data_source?: DataSource;
 }
 
 export interface PaginatedApplicationResponse {
@@ -48,6 +49,13 @@ export interface AnalyzeRequest {
   mode: AnalysisMode;
   data_source?: DataSource;
   rerun?: boolean;
+}
+
+export interface K8sAnalyzeRequest {
+  namespace?: string;
+  name?: string;
+  app_id?: string;
+  mode: AnalysisMode;
 }
 
 export interface AnalyzeResponse {
